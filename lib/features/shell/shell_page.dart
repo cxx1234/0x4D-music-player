@@ -7,20 +7,21 @@ import '../search/search_page.dart';
 import '../settings/settings_page.dart';
 
 enum NavigationItem {
-  library('音乐库', Icons.library_music, LibraryPage.new),
-  playlists('播放列表', Icons.playlist_play, PlaylistPage.new),
-  search('搜索', Icons.search, SearchPage.new),
-  settings('设置', Icons.settings, SettingsPage.new);
+  library('音乐库', Icons.library_music),
+  playlists('播放列表', Icons.playlist_play),
+  search('搜索', Icons.search),
+  settings('设置', Icons.settings);
 
   final String label;
   final IconData icon;
-  final Widget Function() pageBuilder;
 
-  const NavigationItem(this.label, this.icon, this.pageBuilder);
+  const NavigationItem(this.label, this.icon);
 }
 
 class ShellPage extends StatefulWidget {
-  const ShellPage({super.key});
+  final bool isInitialized;
+
+  const ShellPage({super.key, this.isInitialized = false});
 
   @override
   State<ShellPage> createState() => _ShellPageState();
@@ -30,9 +31,22 @@ class _ShellPageState extends State<ShellPage> {
   NavigationItem _selected = NavigationItem.library;
 
   void _openPlayer() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const PlayerPage()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const PlayerPage()));
+  }
+
+  Widget _buildPage() {
+    switch (_selected) {
+      case NavigationItem.library:
+        return LibraryPage(isInitialized: widget.isInitialized);
+      case NavigationItem.playlists:
+        return const PlaylistPage();
+      case NavigationItem.search:
+        return const SearchPage();
+      case NavigationItem.settings:
+        return const SettingsPage();
+    }
   }
 
   @override
@@ -68,9 +82,7 @@ class _ShellPageState extends State<ShellPage> {
                   ],
                 ),
                 const VerticalDivider(width: 1),
-                Expanded(
-                  child: _selected.pageBuilder(),
-                ),
+                Expanded(child: _buildPage()),
               ],
             ),
           ),

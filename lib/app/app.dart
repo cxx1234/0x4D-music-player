@@ -2,10 +2,28 @@ import 'package:flutter/material.dart';
 
 import 'theme.dart';
 import 'router.dart';
+import '../core/services/service_locator.dart';
 import '../features/shell/shell_page.dart';
 
-class App extends StatelessWidget {
+class App extends StatefulWidget {
   const App({super.key});
+
+  @override
+  State<App> createState() => _AppState();
+}
+
+class _AppState extends State<App> {
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    ServiceLocator.initialize().then((_) {
+      if (mounted) {
+        setState(() => _initialized = true);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,7 +32,7 @@ class App extends StatelessWidget {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
-      home: const ShellPage(),
+      home: ShellPage(isInitialized: _initialized),
       onGenerateRoute: AppRouter.generateRoute,
       debugShowCheckedModeBanner: false,
     );
