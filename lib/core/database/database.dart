@@ -14,7 +14,18 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
   FlutterMusicDatabase(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration {
+    return MigrationStrategy(
+      onUpgrade: (Migrator m, int from, int to) async {
+        if (from == 1) {
+          await m.addColumn(songs, songs.isAvailable);
+        }
+      },
+    );
+  }
 
   static Future<FlutterMusicDatabase> create() async {
     final dir = await getApplicationDocumentsDirectory();
@@ -82,5 +93,46 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
         SongsCompanion(playCount: Value(song.playCount + 1)),
       );
     });
+  }
+
+  // ─── File state sync ────────────────────────────────────
+
+  Future<List<String>> getAllFilePaths() async {
+    return (select(
+      songs,
+    )..where((t) => t.isAvailable.equals(1))).map((s) => s.filePath).get();
+  }
+
+  Future<List<String>> getFolderFilePaths(String folderPath) async {
+    final pattern = '$folderPath%';
+    return (select(songs)
+          ..where((t) => t.filePath.like(pattern) & t.isAvailable.equals(1)))
+        .map((s) => s.filePath)
+        .get();
+  }
+
+  Future<int> markAsUnavailable(List<String> filePaths) async {
+    return (update(songs)..where((t) => t.filePath.isIn(filePaths))).write(
+      SongsCompanion(isAvailable: const Value(0)),
+    );
+  }
+
+  Future<int> markAsAvailable(String filePath) async {
+    return (update(songs)..where((t) => t.filePath.equals(filePath))).write(
+      SongsCompanion(isAvailable: const Value(1)),
+    );
+  }
+
+  Future<int> deleteFolderSongs(String folderPath) async {
+    final pattern = '$folderPath%';
+    return (delete(songs)..where((t) => t.filePath.like(pattern))).go();
+  }
+
+  Future<List<Song>> getUnavailableSongs() {
+    return (select(songs)..where((t) => t.isAvailable.equals(0))).get();
+  }
+
+  Future<List<Song>> getAvailableSongs() {
+    return (select(songs)..where((t) => t.isAvailable.equals(1))).get();
   }
 }

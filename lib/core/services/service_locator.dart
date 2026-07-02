@@ -1,7 +1,9 @@
 import '../database/database.dart';
+import 'folder_watcher_service.dart';
 import 'settings_service.dart';
+import 'song_repository.dart';
 
-/// 简单的服务定位器，用于全局访问 Database 和 Settings。
+/// 简单的服务定位器，用于全局访问各项服务。
 ///
 /// 在 App 启动时调用 [initialize] 完成初始化。
 class ServiceLocator {
@@ -9,6 +11,8 @@ class ServiceLocator {
 
   static FlutterMusicDatabase? _database;
   static SettingsService? _settings;
+  static SongRepository? _songRepo;
+  static FolderWatcherService? _folderWatcher;
 
   static FlutterMusicDatabase get database {
     if (_database == null) {
@@ -28,9 +32,29 @@ class ServiceLocator {
     return _settings!;
   }
 
+  static SongRepository get songRepo {
+    if (_songRepo == null) {
+      throw StateError(
+        'SongRepository not initialized. Call ServiceLocator.initialize() first.',
+      );
+    }
+    return _songRepo!;
+  }
+
+  static FolderWatcherService get folderWatcher {
+    if (_folderWatcher == null) {
+      throw StateError(
+        'FolderWatcherService not initialized. Call ServiceLocator.initialize() first.',
+      );
+    }
+    return _folderWatcher!;
+  }
+
   static Future<void> initialize() async {
     _settings = SettingsService();
     await _settings!.initialize();
     _database = await FlutterMusicDatabase.create();
+    _songRepo = SongRepository();
+    _folderWatcher = FolderWatcherService();
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:metadata_god/metadata_god.dart';
 
 import 'theme.dart';
 import 'router.dart';
@@ -19,6 +20,7 @@ class _AppState extends State<App> {
   void initState() {
     super.initState();
     ServiceLocator.initialize().then((_) {
+      MetadataGod.initialize();
       if (mounted) {
         setState(() => _initialized = true);
       }

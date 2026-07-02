@@ -23,4 +23,5 @@ class Songs extends Table {
   DateTimeColumn get dateAdded => dateTime()();
   IntColumn get playCount => integer().withDefault(const Constant(0))();
   IntColumn get isFavorite => integer().withDefault(const Constant(0))();
+  IntColumn get isAvailable => integer().withDefault(const Constant(1))();
 }

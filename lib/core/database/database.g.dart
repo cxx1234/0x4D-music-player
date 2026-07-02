@@ -251,6 +251,18 @@ class $SongsTable extends Songs with TableInfo<$SongsTable, Song> {
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _isAvailableMeta = const VerificationMeta(
+    'isAvailable',
+  );
+  @override
+  late final GeneratedColumn<int> isAvailable = GeneratedColumn<int>(
+    'is_available',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(1),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -275,6 +287,7 @@ class $SongsTable extends Songs with TableInfo<$SongsTable, Song> {
     dateAdded,
     playCount,
     isFavorite,
+    isAvailable,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -440,6 +453,15 @@ class $SongsTable extends Songs with TableInfo<$SongsTable, Song> {
         isFavorite.isAcceptableOrUnknown(data['is_favorite']!, _isFavoriteMeta),
       );
     }
+    if (data.containsKey('is_available')) {
+      context.handle(
+        _isAvailableMeta,
+        isAvailable.isAcceptableOrUnknown(
+          data['is_available']!,
+          _isAvailableMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -537,6 +559,10 @@ class $SongsTable extends Songs with TableInfo<$SongsTable, Song> {
         DriftSqlType.int,
         data['${effectivePrefix}is_favorite'],
       )!,
+      isAvailable: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}is_available'],
+      )!,
     );
   }
 
@@ -569,6 +595,7 @@ class Song extends DataClass implements Insertable<Song> {
   final DateTime dateAdded;
   final int playCount;
   final int isFavorite;
+  final int isAvailable;
   const Song({
     required this.id,
     required this.title,
@@ -592,6 +619,7 @@ class Song extends DataClass implements Insertable<Song> {
     required this.dateAdded,
     required this.playCount,
     required this.isFavorite,
+    required this.isAvailable,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -644,6 +672,7 @@ class Song extends DataClass implements Insertable<Song> {
     map['date_added'] = Variable<DateTime>(dateAdded);
     map['play_count'] = Variable<int>(playCount);
     map['is_favorite'] = Variable<int>(isFavorite);
+    map['is_available'] = Variable<int>(isAvailable);
     return map;
   }
 
@@ -695,6 +724,7 @@ class Song extends DataClass implements Insertable<Song> {
       dateAdded: Value(dateAdded),
       playCount: Value(playCount),
       isFavorite: Value(isFavorite),
+      isAvailable: Value(isAvailable),
     );
   }
 
@@ -726,6 +756,7 @@ class Song extends DataClass implements Insertable<Song> {
       dateAdded: serializer.fromJson<DateTime>(json['dateAdded']),
       playCount: serializer.fromJson<int>(json['playCount']),
       isFavorite: serializer.fromJson<int>(json['isFavorite']),
+      isAvailable: serializer.fromJson<int>(json['isAvailable']),
     );
   }
   @override
@@ -754,6 +785,7 @@ class Song extends DataClass implements Insertable<Song> {
       'dateAdded': serializer.toJson<DateTime>(dateAdded),
       'playCount': serializer.toJson<int>(playCount),
       'isFavorite': serializer.toJson<int>(isFavorite),
+      'isAvailable': serializer.toJson<int>(isAvailable),
     };
   }
 
@@ -780,6 +812,7 @@ class Song extends DataClass implements Insertable<Song> {
     DateTime? dateAdded,
     int? playCount,
     int? isFavorite,
+    int? isAvailable,
   }) => Song(
     id: id ?? this.id,
     title: title ?? this.title,
@@ -807,6 +840,7 @@ class Song extends DataClass implements Insertable<Song> {
     dateAdded: dateAdded ?? this.dateAdded,
     playCount: playCount ?? this.playCount,
     isFavorite: isFavorite ?? this.isFavorite,
+    isAvailable: isAvailable ?? this.isAvailable,
   );
   Song copyWithCompanion(SongsCompanion data) {
     return Song(
@@ -850,6 +884,9 @@ class Song extends DataClass implements Insertable<Song> {
       isFavorite: data.isFavorite.present
           ? data.isFavorite.value
           : this.isFavorite,
+      isAvailable: data.isAvailable.present
+          ? data.isAvailable.value
+          : this.isAvailable,
     );
   }
 
@@ -877,7 +914,8 @@ class Song extends DataClass implements Insertable<Song> {
           ..write('hasEmbeddedLyrics: $hasEmbeddedLyrics, ')
           ..write('dateAdded: $dateAdded, ')
           ..write('playCount: $playCount, ')
-          ..write('isFavorite: $isFavorite')
+          ..write('isFavorite: $isFavorite, ')
+          ..write('isAvailable: $isAvailable')
           ..write(')'))
         .toString();
   }
@@ -906,6 +944,7 @@ class Song extends DataClass implements Insertable<Song> {
     dateAdded,
     playCount,
     isFavorite,
+    isAvailable,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -932,7 +971,8 @@ class Song extends DataClass implements Insertable<Song> {
           other.hasEmbeddedLyrics == this.hasEmbeddedLyrics &&
           other.dateAdded == this.dateAdded &&
           other.playCount == this.playCount &&
-          other.isFavorite == this.isFavorite);
+          other.isFavorite == this.isFavorite &&
+          other.isAvailable == this.isAvailable);
 }
 
 class SongsCompanion extends UpdateCompanion<Song> {
@@ -958,6 +998,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
   final Value<DateTime> dateAdded;
   final Value<int> playCount;
   final Value<int> isFavorite;
+  final Value<int> isAvailable;
   const SongsCompanion({
     this.id = const Value.absent(),
     this.title = const Value.absent(),
@@ -981,6 +1022,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
     this.dateAdded = const Value.absent(),
     this.playCount = const Value.absent(),
     this.isFavorite = const Value.absent(),
+    this.isAvailable = const Value.absent(),
   });
   SongsCompanion.insert({
     this.id = const Value.absent(),
@@ -1005,6 +1047,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
     required DateTime dateAdded,
     this.playCount = const Value.absent(),
     this.isFavorite = const Value.absent(),
+    this.isAvailable = const Value.absent(),
   }) : title = Value(title),
        filePath = Value(filePath),
        fileName = Value(fileName),
@@ -1032,6 +1075,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
     Expression<DateTime>? dateAdded,
     Expression<int>? playCount,
     Expression<int>? isFavorite,
+    Expression<int>? isAvailable,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1056,6 +1100,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
       if (dateAdded != null) 'date_added': dateAdded,
       if (playCount != null) 'play_count': playCount,
       if (isFavorite != null) 'is_favorite': isFavorite,
+      if (isAvailable != null) 'is_available': isAvailable,
     });
   }
 
@@ -1082,6 +1127,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
     Value<DateTime>? dateAdded,
     Value<int>? playCount,
     Value<int>? isFavorite,
+    Value<int>? isAvailable,
   }) {
     return SongsCompanion(
       id: id ?? this.id,
@@ -1106,6 +1152,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
       dateAdded: dateAdded ?? this.dateAdded,
       playCount: playCount ?? this.playCount,
       isFavorite: isFavorite ?? this.isFavorite,
+      isAvailable: isAvailable ?? this.isAvailable,
     );
   }
 
@@ -1178,6 +1225,9 @@ class SongsCompanion extends UpdateCompanion<Song> {
     if (isFavorite.present) {
       map['is_favorite'] = Variable<int>(isFavorite.value);
     }
+    if (isAvailable.present) {
+      map['is_available'] = Variable<int>(isAvailable.value);
+    }
     return map;
   }
 
@@ -1205,7 +1255,8 @@ class SongsCompanion extends UpdateCompanion<Song> {
           ..write('hasEmbeddedLyrics: $hasEmbeddedLyrics, ')
           ..write('dateAdded: $dateAdded, ')
           ..write('playCount: $playCount, ')
-          ..write('isFavorite: $isFavorite')
+          ..write('isFavorite: $isFavorite, ')
+          ..write('isAvailable: $isAvailable')
           ..write(')'))
         .toString();
   }
@@ -1247,6 +1298,7 @@ typedef $$SongsTableCreateCompanionBuilder =
       required DateTime dateAdded,
       Value<int> playCount,
       Value<int> isFavorite,
+      Value<int> isAvailable,
     });
 typedef $$SongsTableUpdateCompanionBuilder =
     SongsCompanion Function({
@@ -1272,6 +1324,7 @@ typedef $$SongsTableUpdateCompanionBuilder =
       Value<DateTime> dateAdded,
       Value<int> playCount,
       Value<int> isFavorite,
+      Value<int> isAvailable,
     });
 
 class $$SongsTableFilterComposer
@@ -1390,6 +1443,11 @@ class $$SongsTableFilterComposer
 
   ColumnFilters<int> get isFavorite => $composableBuilder(
     column: $table.isFavorite,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get isAvailable => $composableBuilder(
+    column: $table.isAvailable,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -1512,6 +1570,11 @@ class $$SongsTableOrderingComposer
     column: $table.isFavorite,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get isAvailable => $composableBuilder(
+    column: $table.isAvailable,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$SongsTableAnnotationComposer
@@ -1606,6 +1669,11 @@ class $$SongsTableAnnotationComposer
     column: $table.isFavorite,
     builder: (column) => column,
   );
+
+  GeneratedColumn<int> get isAvailable => $composableBuilder(
+    column: $table.isAvailable,
+    builder: (column) => column,
+  );
 }
 
 class $$SongsTableTableManager
@@ -1658,6 +1726,7 @@ class $$SongsTableTableManager
                 Value<DateTime> dateAdded = const Value.absent(),
                 Value<int> playCount = const Value.absent(),
                 Value<int> isFavorite = const Value.absent(),
+                Value<int> isAvailable = const Value.absent(),
               }) => SongsCompanion(
                 id: id,
                 title: title,
@@ -1681,6 +1750,7 @@ class $$SongsTableTableManager
                 dateAdded: dateAdded,
                 playCount: playCount,
                 isFavorite: isFavorite,
+                isAvailable: isAvailable,
               ),
           createCompanionCallback:
               ({
@@ -1706,6 +1776,7 @@ class $$SongsTableTableManager
                 required DateTime dateAdded,
                 Value<int> playCount = const Value.absent(),
                 Value<int> isFavorite = const Value.absent(),
+                Value<int> isAvailable = const Value.absent(),
               }) => SongsCompanion.insert(
                 id: id,
                 title: title,
@@ -1729,6 +1800,7 @@ class $$SongsTableTableManager
                 dateAdded: dateAdded,
                 playCount: playCount,
                 isFavorite: isFavorite,
+                isAvailable: isAvailable,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
