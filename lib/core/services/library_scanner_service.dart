@@ -53,10 +53,16 @@ class LibraryScannerService {
 
   /// Scans one or more [folderPaths] and syncs results to the database.
   ///
+  /// When [markMissing] is `false` (default `true`), files present in the
+  /// database but not found on disk will **not** be marked unavailable.
+  /// Use this for quick/background scans where missing permissions could
+  /// falsely indicate file deletion (e.g. macOS sandbox restart).
+  ///
   /// [onProgress] is called throughout the scan to report progress.
   Future<ScanResult> scanFolders(
     List<String> folderPaths, {
     void Function(ScanProgress)? onProgress,
+    bool markMissing = true,
   }) async {
     if (folderPaths.isEmpty) {
       return const ScanResult(
@@ -134,7 +140,7 @@ class LibraryScannerService {
 
     // ── Phase 3c: Mark missing files ─────────────────────
     final markedMissing = <String>[];
-    if (trulyMissing.isNotEmpty) {
+    if (markMissing && trulyMissing.isNotEmpty) {
       await _songRepository.markMissingFiles(dbFiles, diskFiles);
       markedMissing.addAll(trulyMissing);
     }

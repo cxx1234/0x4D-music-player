@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/services/service_locator.dart';
 import '../library/library_page.dart';
 import '../player/player_page.dart';
 import '../playlist/playlist_page.dart';
@@ -102,80 +103,104 @@ class _NowPlayingBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Material(
-      color: theme.colorScheme.surfaceContainerLow,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          height: 64,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  color: theme.colorScheme.primaryContainer,
-                  child: Icon(
-                    Icons.music_note_rounded,
-                    color: theme.colorScheme.onPrimaryContainer,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '未在播放',
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      '选择一首歌曲',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+    if (!ServiceLocator.isReady) {
+      return const SizedBox(height: 64);
+    }
+
+    final player = ServiceLocator.player;
+
+    return ListenableBuilder(
+      listenable: player,
+      builder: (context, _) {
+        final song = player.currentSong;
+
+        return Material(
+          color: theme.colorScheme.surfaceContainerLow,
+          child: InkWell(
+            onTap: song != null ? onTap : null,
+            child: Container(
+              height: 64,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.skip_previous_rounded),
-                    onPressed: null,
-                    tooltip: '上一首',
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.play_circle_filled_rounded,
-                      color: theme.colorScheme.primary,
+                  // Album art placeholder
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      color: theme.colorScheme.primaryContainer,
+                      child: Icon(
+                        Icons.music_note_rounded,
+                        color: theme.colorScheme.onPrimaryContainer,
+                      ),
                     ),
-                    iconSize: 36,
-                    onPressed: null,
-                    tooltip: '播放',
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.skip_next_rounded),
-                    onPressed: null,
-                    tooltip: '下一首',
+                  const SizedBox(width: 12),
+
+                  // Song info
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          song?.title ?? '未在播放',
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          song?.artist ?? '选择一首歌曲',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Controls
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.skip_previous_rounded),
+                        onPressed: song != null
+                            ? () => player.previous()
+                            : null,
+                        tooltip: '上一首',
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          player.isPlaying
+                              ? Icons.pause_circle_filled_rounded
+                              : Icons.play_circle_filled_rounded,
+                          color: theme.colorScheme.primary,
+                        ),
+                        iconSize: 36,
+                        onPressed: song != null
+                            ? () => player.togglePlay()
+                            : null,
+                        tooltip: player.isPlaying ? '暂停' : '播放',
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.skip_next_rounded),
+                        onPressed: song != null ? () => player.next() : null,
+                        tooltip: '下一首',
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

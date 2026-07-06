@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/library_scanner_service.dart';
+import '../../core/services/player_service.dart';
 import '../../core/services/service_locator.dart';
 
 /// Possible states of the library scan.
@@ -39,6 +40,22 @@ class LibraryViewModel extends ChangeNotifier {
   bool get isScanning => _scanState == LibraryScanState.scanning;
   bool get isDone => _scanState == LibraryScanState.done;
 
+  // ─── Player delegation ────────────────────────────────
+
+  Song? get currentSong => ServiceLocator.player.currentSong;
+  bool get isPlaying => ServiceLocator.player.isPlaying;
+  PlayerRepeatMode get repeatMode => ServiceLocator.player.repeatMode;
+
+  /// Play all songs starting from [index].
+  Future<void> playSongFromList(int index) {
+    return ServiceLocator.player.playFromList(_songs, startIndex: index);
+  }
+
+  /// Play a single [song].
+  Future<void> playSong(Song song) {
+    return ServiceLocator.player.playFromSong(song);
+  }
+
   final _scanner = LibraryScannerService();
 
   // ─── Initialization ────────────────────────────────────
@@ -46,14 +63,24 @@ class LibraryViewModel extends ChangeNotifier {
   /// Called when the Library page is first shown.
   ///
   /// Starts folder watchers and runs a quick consistency check.
+  /// Resolves macOS security-scoped bookmarks first to restore sandbox
+  /// file access across app restarts.
   Future<void> initialize() async {
+    ServiceLocator.player.addListener(notifyListeners);
     final folders = ServiceLocator.settings.musicFolders;
     if (folders.isNotEmpty) {
+      // Resolve any stored macOS security-scoped bookmarks so the
+      // app can read these folders (sandbox permission restoration).
+      await _resolveBookmarks();
+
       _startWatching(folders);
-      // Quick check: scan without re-parsing existing files
+      // Quick check: scan without re-parsing existing files.
+      // markMissing:false ensures we never falsely delete data even if
+      // sandbox permissions happen to be unavailable.
       await _quickSync(folders);
     }
     await _loadSongs();
+    notifyListeners();
   }
 
   // ─── Scanning ──────────────────────────────────────────
@@ -113,9 +140,26 @@ class LibraryViewModel extends ChangeNotifier {
 
   Future<void> _quickSync(List<String> folders) async {
     try {
-      await _scanner.scanFolders(folders);
+      await _scanner.scanFolders(folders, markMissing: false);
     } catch (_) {
       // Silently handle quick sync errors
+    }
+  }
+
+  /// Resolves macOS security-scoped bookmarks to restore sandbox access.
+  ///
+  /// Iterates over all stored [MusicFolder] items and resolves their
+  /// bookmark data so the app can read those folders after a restart.
+  Future<void> _resolveBookmarks() async {
+    final items = ServiceLocator.settings.musicFolderItems;
+    for (final item in items) {
+      if (item.bookmark.isEmpty) continue;
+      try {
+        await ServiceLocator.sandbox.resolveBookmark(item.bookmark);
+      } catch (_) {
+        // Stale or invalid bookmark — will be re-created next time the
+        // user picks the folder.  Not fatal.
+      }
     }
   }
 
@@ -129,6 +173,7 @@ class LibraryViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
+    ServiceLocator.player.removeListener(notifyListeners);
     super.dispose();
   }
 }

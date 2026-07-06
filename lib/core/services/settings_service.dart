@@ -4,39 +4,81 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+/// A music folder with an optional macOS security-scoped bookmark.
+///
+/// The [bookmark] field stores a base64-encoded `NSData` security-scoped
+/// bookmark that allows the app to access this folder across restarts.
+/// It is only used on macOS with App Sandbox enabled.
+class MusicFolder {
+  final String path;
+  final String bookmark;
+
+  const MusicFolder({required this.path, this.bookmark = ''});
+
+  Map<String, dynamic> toJson() => {
+    'path': path,
+    if (bookmark.isNotEmpty) 'bookmark': bookmark,
+  };
+
+  factory MusicFolder.fromJson(Map<String, dynamic> json) {
+    return MusicFolder(
+      path: json['path'] as String,
+      bookmark: json['bookmark'] as String? ?? '',
+    );
+  }
+}
+
 class AppSettings {
-  final List<String> musicFolders;
+  final List<MusicFolder> musicFolders;
   final String themeMode;
 
   const AppSettings({this.musicFolders = const [], this.themeMode = 'system'});
 
+  /// The raw folder paths (convenience getter).
+  List<String> get folderPaths => musicFolders.map((f) => f.path).toList();
+
   Map<String, dynamic> toJson() => {
-    'musicFolders': musicFolders,
+    'musicFolders': musicFolders.map((f) => f.toJson()).toList(),
     'themeMode': themeMode,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
+    final rawFolders = json['musicFolders'];
+    final List<MusicFolder> folders;
+
+    if (rawFolders is List) {
+      folders = rawFolders.map((e) {
+        if (e is String) {
+          // Legacy format: just a path string
+          return MusicFolder(path: e);
+        }
+        return MusicFolder.fromJson(e as Map<String, dynamic>);
+      }).toList();
+    } else {
+      folders = [];
+    }
+
     return AppSettings(
-      musicFolders: List<String>.from(json['musicFolders'] ?? []),
+      musicFolders: folders,
       themeMode: json['themeMode'] as String? ?? 'system',
     );
   }
 
-  AppSettings copyWith({List<String>? musicFolders, String? themeMode}) {
+  AppSettings copyWith({List<MusicFolder>? musicFolders, String? themeMode}) {
     return AppSettings(
       musicFolders: musicFolders ?? this.musicFolders,
       themeMode: themeMode ?? this.themeMode,
     );
   }
 
-  AppSettings addMusicFolder(String path) {
-    if (musicFolders.contains(path)) return this;
-    return copyWith(musicFolders: [...musicFolders, path]);
+  AppSettings addMusicFolder(MusicFolder folder) {
+    if (musicFolders.any((f) => f.path == folder.path)) return this;
+    return copyWith(musicFolders: [...musicFolders, folder]);
   }
 
   AppSettings removeMusicFolder(String path) {
     return copyWith(
-      musicFolders: musicFolders.where((f) => f != path).toList(),
+      musicFolders: musicFolders.where((f) => f.path != path).toList(),
     );
   }
 }
@@ -48,6 +90,12 @@ class SettingsService {
 
   AppSettings get settings => _settings;
   bool get isInitialized => _initialized;
+
+  /// Convenience getter for raw folder paths.
+  List<String> get musicFolders => _settings.folderPaths;
+
+  /// The full list of music folders including security-scoped bookmarks.
+  List<MusicFolder> get musicFolderItems => _settings.musicFolders;
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -75,8 +123,11 @@ class SettingsService {
     );
   }
 
-  Future<void> addMusicFolder(String path) async {
-    _settings = _settings.addMusicFolder(path);
+  /// Adds a music folder with an optional security-scoped [bookmark].
+  Future<void> addMusicFolder(String path, {String bookmark = ''}) async {
+    _settings = _settings.addMusicFolder(
+      MusicFolder(path: path, bookmark: bookmark),
+    );
     await _save();
   }
 
@@ -84,8 +135,6 @@ class SettingsService {
     _settings = _settings.removeMusicFolder(path);
     await _save();
   }
-
-  List<String> get musicFolders => _settings.musicFolders;
 
   Future<void> setThemeMode(String mode) async {
     _settings = _settings.copyWith(themeMode: mode);
