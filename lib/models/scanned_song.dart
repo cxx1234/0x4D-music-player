@@ -15,6 +15,15 @@ class ScannedSong {
   final int? sampleRate;
   final String mimeType;
 
+  /// Path to the cached album art image on disk, if any.
+  final String? albumArtFilePath;
+
+  /// Whether the source audio file contains embedded album art.
+  final bool hasEmbeddedArt;
+
+  /// Path to an external `.lrc` lyrics file found alongside the audio file.
+  final String? lyricsFilePath;
+
   const ScannedSong({
     required this.filePath,
     required this.fileName,
@@ -30,5 +39,8 @@ class ScannedSong {
     this.bitrate,
     this.sampleRate,
     required this.mimeType,
+    this.albumArtFilePath,
+    this.hasEmbeddedArt = false,
+    this.lyricsFilePath,
   });
 }

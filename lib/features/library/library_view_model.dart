@@ -118,6 +118,7 @@ class LibraryViewModel extends ChangeNotifier {
     try {
       final result = await _scanner.scanFolders(
         folders,
+        updateExisting: true,
         onProgress: (progress) {
           _scanProgress = progress;
           notifyListeners();

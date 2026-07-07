@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/services/service_locator.dart';
+import '../../widgets/cached_album_art.dart';
 import '../library/library_page.dart';
 import '../player/player_page.dart';
 import '../playlist/playlist_page.dart';
@@ -123,16 +124,17 @@ class _NowPlayingBar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  // Album art placeholder
+                  // Album art
                   ClipRRect(
                     borderRadius: BorderRadius.circular(6),
-                    child: Container(
+                    child: SizedBox(
                       width: 44,
                       height: 44,
-                      color: theme.colorScheme.primaryContainer,
-                      child: Icon(
-                        Icons.music_note_rounded,
-                        color: theme.colorScheme.onPrimaryContainer,
+                      child: CachedAlbumArt(
+                        albumArtFilePath: song?.albumArtFilePath,
+                        hasEmbeddedArt: (song?.hasEmbeddedArt ?? 0) == 1,
+                        size: 44,
+                        borderRadius: 6,
                       ),
                     ),
                   ),

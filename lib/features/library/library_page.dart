@@ -1,10 +1,10 @@
-import 'dart:math';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'dart:math' show sin;
 
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
+import '../../widgets/cached_album_art.dart';
 import 'library_view_model.dart';
 
 class LibraryPage extends StatefulWidget {
@@ -340,18 +340,50 @@ class _SongTile extends StatelessWidget {
     return ListTile(
       selected: isCurrentSong,
       selectedTileColor: primaryColor.withValues(alpha: 0.1),
-      leading: CircleAvatar(
-        backgroundColor: isCurrentSong
-            ? primaryColor
-            : theme.colorScheme.secondaryContainer,
-        child: isPlaying
-            ? _AnimatedPlayingIcon(color: theme.colorScheme.onPrimary)
-            : Icon(
-                isCurrentSong ? Icons.music_note : Icons.music_note,
-                color: isCurrentSong
-                    ? theme.colorScheme.onPrimary
-                    : theme.colorScheme.onSecondaryContainer,
+      leading: SizedBox(
+        width: 44,
+        height: 44,
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: CachedAlbumArt(
+                albumArtFilePath: song.albumArtFilePath,
+                hasEmbeddedArt: song.hasEmbeddedArt == 1,
+                size: 44,
+                borderRadius: 6,
               ),
+            ),
+            if (isPlaying)
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black26,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: _AnimatedPlayingIcon(color: Colors.white),
+                ),
+              ),
+            if (isCurrentSong && !isPlaying)
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: primaryColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.music_note,
+                    size: 8,
+                    color: theme.colorScheme.onPrimary,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
       title: Text(
         song.title,

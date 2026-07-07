@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/player_service.dart';
+import '../../widgets/cached_album_art.dart';
 import 'player_view_model.dart';
 
 class PlayerPage extends StatefulWidget {
@@ -102,7 +103,7 @@ class _LeftPanel extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // ── Album art ──────────────────────────────────
-          _AlbumArt(song: song, theme: theme),
+          _AlbumArt(song: song),
           const SizedBox(height: 32),
 
           // ── Song info ──────────────────────────────────
@@ -125,26 +126,21 @@ class _LeftPanel extends StatelessWidget {
 
 class _AlbumArt extends StatelessWidget {
   final Song song;
-  final ThemeData theme;
 
-  const _AlbumArt({required this.song, required this.theme});
+  const _AlbumArt({required this.song});
 
   @override
   Widget build(BuildContext context) {
-    // TODO: Replace placeholder with actual album art once cover extraction is implemented.
     return AspectRatio(
       aspectRatio: 1,
       child: Container(
         width: double.infinity,
         constraints: const BoxConstraints(maxWidth: 300, maxHeight: 300),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.primaryContainer,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(
-          Icons.music_note_rounded,
-          size: 100,
-          color: theme.colorScheme.onPrimaryContainer,
+        child: CachedAlbumArt(
+          albumArtFilePath: song.albumArtFilePath,
+          hasEmbeddedArt: song.hasEmbeddedArt == 1,
+          size: 300,
+          borderRadius: 12,
         ),
       ),
     );

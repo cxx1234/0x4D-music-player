@@ -82,7 +82,7 @@ packages:
     source: hosted
     version: "4.1.1"
   build_runner:
-    dependency: "direct dev"
+    dependency: "direct overridden"
     description:
       name: build_runner
       sha256: "1523ce62448ebac2c15a8ba5fbad8acac169788658a7dd2a1c2d9c2a9318b9a6"
@@ -218,7 +218,7 @@ packages:
     source: hosted
     version: "2.34.0"
   drift_dev:
-    dependency: "direct dev"
+    dependency: "direct overridden"
     description:
       name: drift_dev
       sha256: "042a5fb507ab5697f67eb55b75cfff2f665701f6606926136d6d4e85f81ff837"
@@ -271,7 +271,7 @@ packages:
     source: sdk
     version: "0.0.0"
   flutter_lints:
-    dependency: "direct dev"
+    dependency: "direct overridden"
     description:
       name: flutter_lints
       sha256: "3105dc8492f6183fb076ccf1f351ac3d60564bff92e20bfc4af9cc1651f4e7e1"
@@ -287,13 +287,13 @@ packages:
     source: hosted
     version: "2.0.35"
   flutter_rust_bridge:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
       name: flutter_rust_bridge
-      sha256: e87d6b9ee934dcd24a128ccb2bd91905d2d5fe5c06245d6a8f5477d4907a437a
+      sha256: "37ef40bc6f863652e865f0b2563ea07f0d3c58d8efad803cc01933a4b2ee067e"
       url: "https://pub.dev"
     source: hosted
-    version: "2.12.0"
+    version: "2.11.1"
   flutter_test:
     dependency: "direct dev"
     description: flutter

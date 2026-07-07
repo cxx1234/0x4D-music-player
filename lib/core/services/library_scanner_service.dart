@@ -58,11 +58,16 @@ class LibraryScannerService {
   /// Use this for quick/background scans where missing permissions could
   /// falsely indicate file deletion (e.g. macOS sandbox restart).
   ///
+  /// When [updateExisting] is `true` (default `false`), files that already
+  /// exist in the database will also be re-parsed and their metadata
+  /// (album art, lyrics, etc.) updated. Set this for full/refresh scans.
+  ///
   /// [onProgress] is called throughout the scan to report progress.
   Future<ScanResult> scanFolders(
     List<String> folderPaths, {
     void Function(ScanProgress)? onProgress,
     bool markMissing = true,
+    bool updateExisting = false,
   }) async {
     if (folderPaths.isEmpty) {
       return const ScanResult(
@@ -94,6 +99,7 @@ class LibraryScannerService {
     final dbFiles = await _songRepository.getExistingFilePaths();
 
     final newFiles = diskFiles.difference(dbFiles).toList()..sort();
+    final existingFiles = dbFiles.intersection(diskFiles).toList()..sort();
     final restoredFiles = dbFiles
         .where((path) => !diskFiles.contains(path) && File(path).existsSync())
         .toSet();
@@ -101,23 +107,29 @@ class LibraryScannerService {
     // Remove restored files from the "missing" set
     final trulyMissing = missingFromDb.difference(restoredFiles);
 
-    final skipped = dbFiles.intersection(diskFiles).length;
+    final skippedCount = existingFiles.length;
+
+    // Determine which files to parse: new files + optionally existing ones.
+    final filesToParse = <String>[
+      ...newFiles,
+      if (updateExisting) ...existingFiles,
+    ];
 
     onProgress?.call(
       ScanProgress(
         processed: 0,
-        total: newFiles.length,
+        total: filesToParse.length,
         currentFile: '',
         phase: 'parsing',
       ),
     );
 
-    // ── Phase 3: Parse new files ──────────────────────────
+    // ── Phase 3: Parse files ──────────────────────────────
     final errorDetails = <String>[];
 
-    if (newFiles.isNotEmpty) {
+    if (filesToParse.isNotEmpty) {
       final scanned = await _metadataService.parseAll(
-        newFiles,
+        filesToParse,
         onProgress: (processed, total, currentFile) {
           onProgress?.call(
             ScanProgress(
@@ -147,17 +159,20 @@ class LibraryScannerService {
 
     onProgress?.call(
       ScanProgress(
-        processed: newFiles.length,
-        total: newFiles.length,
+        processed: filesToParse.length,
+        total: filesToParse.length,
         currentFile: '',
         phase: 'done',
       ),
     );
 
+    // Count newly added (or updated) files for the result summary.
+    final addedCount = updateExisting ? filesToParse.length : newFiles.length;
+
     return ScanResult(
-      added: newFiles.length,
+      added: addedCount,
       markedMissing: markedMissing.length,
-      skipped: skipped,
+      skipped: skippedCount,
       errors: errorDetails.length,
       errorDetails: errorDetails,
     );

@@ -19,8 +19,13 @@ class _AppState extends State<App> {
   @override
   void initState() {
     super.initState();
-    ServiceLocator.initialize().then((_) {
-      MetadataGod.initialize();
+    ServiceLocator.initialize().then((_) async {
+      try {
+        await MetadataGod.initialize();
+        debugPrint('MetadataGod initialized successfully');
+      } catch (e) {
+        debugPrint('MetadataGod initialization failed: $e');
+      }
       if (mounted) {
         setState(() => _initialized = true);
       }

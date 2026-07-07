@@ -53,6 +53,12 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
+
+# metadata_god 1.1.0 的内置原生库是用 flutter_rust_bridge 2.11.1 codegen 编译的，
+# 但 ^2.11.1 会解析到最新的 2.12.x，导致运行时版本不匹配。
+# 这里固定为 2.11.1 以匹配 metadata_god 的编译版本。
+dependency_overrides:
+  flutter_rust_bridge: 2.11.1
   flutter_lints: ^6.0.0
   drift_dev: ^2.26.0
   build_runner: ^2.4.0
