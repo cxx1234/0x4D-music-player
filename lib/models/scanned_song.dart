@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 /// Represents a scanned audio file with its metadata.
 class ScannedSong {
   final String filePath;
@@ -15,8 +17,14 @@ class ScannedSong {
   final int? sampleRate;
   final String mimeType;
 
-  /// Path to the cached album art image on disk, if any.
-  final String? albumArtFilePath;
+  /// Raw embedded album art bytes, if any.
+  ///
+  /// The caller (e.g. [SongRepository]) is responsible for caching this
+  /// to disk with an album-keyed hash to avoid duplicates.
+  final Uint8List? pictureBytes;
+
+  /// MIME type of [pictureBytes], e.g. `"image/jpeg"`, `"image/png"`.
+  final String? pictureMimeType;
 
   /// Whether the source audio file contains embedded album art.
   final bool hasEmbeddedArt;
@@ -39,7 +47,8 @@ class ScannedSong {
     this.bitrate,
     this.sampleRate,
     required this.mimeType,
-    this.albumArtFilePath,
+    this.pictureBytes,
+    this.pictureMimeType,
     this.hasEmbeddedArt = false,
     this.lyricsFilePath,
   });

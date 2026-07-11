@@ -5,6 +5,8 @@ class Songs extends Table {
   TextColumn get title => text().withLength(max: 500)();
   TextColumn get artist => text().withLength(max: 500).nullable()();
   TextColumn get album => text().withLength(max: 500).nullable()();
+  IntColumn get artistId => integer().nullable()();
+  IntColumn get albumId => integer().nullable()();
   IntColumn get trackNumber => integer().nullable()();
   IntColumn get discNumber => integer().nullable()();
   IntColumn get durationMs => integer().nullable()();

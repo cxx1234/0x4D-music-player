@@ -294,20 +294,24 @@ class _LibraryPageState extends State<LibraryPage> {
   Widget _buildSongList(ThemeData theme) {
     final songs = _viewModel.songs;
     return Expanded(
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: songs.length,
-        itemBuilder: (context, index) {
-          final song = songs[index];
-          final isCurrentSong = song.id == _viewModel.currentSong?.id;
-          return _SongTile(
-            song: song,
-            theme: theme,
-            isCurrentSong: isCurrentSong,
-            isPlaying: isCurrentSong && _viewModel.isPlaying,
-            onTap: () => _viewModel.playSongFromList(index),
-          );
-        },
+      child: Material(
+        type: MaterialType.transparency,
+        clipBehavior: Clip.hardEdge,
+        child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          itemCount: songs.length,
+          itemBuilder: (context, index) {
+            final song = songs[index];
+            final isCurrentSong = song.id == _viewModel.currentSong?.id;
+            return _SongTile(
+              song: song,
+              theme: theme,
+              isCurrentSong: isCurrentSong,
+              isPlaying: isCurrentSong && _viewModel.isPlaying,
+              onTap: () => _viewModel.playSongFromList(index),
+            );
+          },
+        ),
       ),
     );
   }
@@ -355,12 +359,11 @@ class _SongTile extends StatelessWidget {
               ),
             ),
             if (isPlaying)
-              Positioned.fill(
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
                 child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black26,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
+                  color: Colors.black26,
+                  alignment: Alignment.center,
                   child: _AnimatedPlayingIcon(color: Colors.white),
                 ),
               ),

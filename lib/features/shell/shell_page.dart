@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/service_locator.dart';
 import '../../widgets/cached_album_art.dart';
+import '../album/album_page.dart';
+import '../artist/artist_page.dart';
 import '../library/library_page.dart';
 import '../player/player_page.dart';
 import '../playlist/playlist_page.dart';
@@ -10,6 +12,8 @@ import '../settings/settings_page.dart';
 
 enum NavigationItem {
   library('音乐库', Icons.library_music),
+  albums('专辑', Icons.album),
+  artists('歌手', Icons.person),
   playlists('播放列表', Icons.playlist_play),
   search('搜索', Icons.search),
   settings('设置', Icons.settings);
@@ -42,6 +46,10 @@ class _ShellPageState extends State<ShellPage> {
     switch (_selected) {
       case NavigationItem.library:
         return LibraryPage(isInitialized: widget.isInitialized);
+      case NavigationItem.albums:
+        return const AlbumsPage();
+      case NavigationItem.artists:
+        return const ArtistsPage();
       case NavigationItem.playlists:
         return const PlaylistPage();
       case NavigationItem.search:
@@ -66,7 +74,7 @@ class _ShellPageState extends State<ShellPage> {
                   onDestinationSelected: (index) {
                     setState(() => _selected = NavigationItem.values[index]);
                   },
-                  labelType: NavigationRailLabelType.all,
+                  labelType: NavigationRailLabelType.selected,
                   leading: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Icon(

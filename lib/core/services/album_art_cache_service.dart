@@ -7,9 +7,14 @@ import 'package:path_provider/path_provider.dart';
 
 /// Manages on-disk caching of embedded album art images.
 ///
-/// Images are stored under `{appDocDir}/covers/{sha256}.{ext}` where the
-/// SHA-256 hash is derived from the source audio file path, guaranteeing
-/// a unique and stable file name regardless of the file's location.
+/// Images are stored under `{appDocDir}/covers/{hash}.{ext}`.
+///
+/// Two hashing strategies are available:
+/// - **Per-file** (`saveArt` / `getArtPath`): hash derived from the source
+///   audio file path (legacy, kept for backward compatibility).
+/// - **Per-album** (`saveAlbumArt` / `getAlbumArtPath`): hash derived from an
+///   album key (e.g. `"albumName::artistName"`), ensuring one cover per album
+///   regardless of how many songs belong to it.
 class AlbumArtCacheService {
   Directory? _cacheDir;
 
@@ -63,6 +68,41 @@ class AlbumArtCacheService {
     } catch (_) {
       // Best-effort cleanup — not fatal.
     }
+  }
+
+  /// ─── Per-album art cache ─────────────────────────────
+
+  /// Returns the expected cache file path for the given [albumKey].
+  ///
+  /// [albumKey] should uniquely identify an album (e.g. `"albumName::artistName"`).
+  /// The file may not exist yet — call [saveAlbumArt] to create it.
+  Future<String> getAlbumArtPath(String albumKey) async {
+    final hash = _hashPath(albumKey);
+    final dir = await cacheDir;
+    return p.join(dir.path, '$hash.jpg');
+  }
+
+  /// Saves album art keyed by [albumKey] and returns the saved file path.
+  ///
+  /// Unlike [saveArt], this guarantees that the same [albumKey] always maps
+  /// to the same file on disk, eliminating duplicate covers.
+  Future<String> saveAlbumArt(
+    String albumKey,
+    Uint8List bytes,
+    String mimeType,
+  ) async {
+    final hash = _hashPath(albumKey);
+    final ext = _extensionForMime(mimeType);
+    final dir = await cacheDir;
+    final filePath = p.join(dir.path, '$hash.$ext');
+    await File(filePath).writeAsBytes(bytes);
+    return filePath;
+  }
+
+  /// Checks whether art for [albumKey] already exists on disk.
+  Future<bool> hasAlbumArt(String albumKey) async {
+    final path = await getAlbumArtPath(albumKey);
+    return File(path).exists();
   }
 
   /// Computes a deterministic hash of [path] to use as a stable file name.

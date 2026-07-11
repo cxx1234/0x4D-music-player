@@ -5,23 +5,34 @@ import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'tables/albums.dart';
+import 'tables/artists.dart';
 import 'tables/songs.dart';
 
 part 'database.g.dart';
 
-@DriftDatabase(tables: [Songs])
+@DriftDatabase(tables: [Songs, Albums, Artists])
 class FlutterMusicDatabase extends _$FlutterMusicDatabase {
   FlutterMusicDatabase(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
+      onCreate: (Migrator m) async {
+        await m.createAll();
+      },
       onUpgrade: (Migrator m, int from, int to) async {
         if (from == 1) {
           await m.addColumn(songs, songs.isAvailable);
+        }
+        if (from <= 2) {
+          await m.createTable(artists);
+          await m.createTable(albums);
+          await m.addColumn(songs, songs.artistId);
+          await m.addColumn(songs, songs.albumId);
         }
       },
     );
@@ -135,4 +146,56 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
   Future<List<Song>> getAvailableSongs() {
     return (select(songs)..where((t) => t.isAvailable.equals(1))).get();
   }
+
+  // ─── Album queries ──────────────────────────────────────
+
+  Future<List<Album>> getAllAlbums() => select(albums).get();
+
+  Stream<List<Album>> watchAllAlbums() => select(albums).watch();
+
+  Future<Album?> getAlbumById(int id) =>
+      (select(albums)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Future<Album?> getAlbumByNameAndArtist(String name, int artistId) =>
+      (select(albums)
+            ..where((t) => t.name.equals(name) & t.artistId.equals(artistId)))
+          .getSingleOrNull();
+
+  Future<int> insertAlbum(AlbumsCompanion entry) => into(albums).insert(entry);
+
+  Future<int> updateAlbum(AlbumsCompanion entry, int id) =>
+      (update(albums)..where((t) => t.id.equals(id))).write(entry);
+
+  Future<List<Song>> getSongsByAlbum(int albumId) =>
+      (select(songs)..where((t) => t.albumId.equals(albumId))).get();
+
+  Stream<List<Song>> watchSongsByAlbum(int albumId) =>
+      (select(songs)..where((t) => t.albumId.equals(albumId))).watch();
+
+  // ─── Artist queries ─────────────────────────────────────
+
+  Future<List<Artist>> getAllArtists() => select(artists).get();
+
+  Stream<List<Artist>> watchAllArtists() => select(artists).watch();
+
+  Future<Artist?> getArtistById(int id) =>
+      (select(artists)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Future<Artist?> getArtistByName(String name) =>
+      (select(artists)..where((t) => t.name.equals(name))).getSingleOrNull();
+
+  Future<int> insertArtist(ArtistsCompanion entry) =>
+      into(artists).insert(entry);
+
+  Future<int> updateArtist(ArtistsCompanion entry, int id) =>
+      (update(artists)..where((t) => t.id.equals(id))).write(entry);
+
+  Future<List<Song>> getSongsByArtist(int artistId) =>
+      (select(songs)..where((t) => t.artistId.equals(artistId))).get();
+
+  Stream<List<Song>> watchSongsByArtist(int artistId) =>
+      (select(songs)..where((t) => t.artistId.equals(artistId))).watch();
+
+  Future<List<Album>> getAlbumsByArtist(int artistId) =>
+      (select(albums)..where((t) => t.artistId.equals(artistId))).get();
 }

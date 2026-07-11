@@ -1,22 +1,23 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:metadata_god/metadata_god.dart';
 import 'package:path/path.dart' as p;
 
 import '../../models/scanned_song.dart';
 import '../constants/mime_types.dart';
-import 'album_art_cache_service.dart';
 
 /// Parses audio metadata from files using [metadata_god].
 class MetadataService {
-  final _artCache = AlbumArtCacheService();
-
   /// Parses metadata from a single audio file.
   ///
   /// If the audio file has no [title] tag, the file name (without extension)
   /// is used as a fallback.
   ///
-  /// Extracts embedded album art (if any) and caches it to disk.
+  /// Returns raw embedded album art bytes via [pictureBytes] / [pictureMimeType].
+  /// The caller (e.g. [SongRepository]) is responsible for caching the art
+  /// with an album-keyed hash to avoid duplicates.
+  ///
   /// Also looks for an external `.lrc` lyrics file alongside the audio file.
   Future<ScannedSong> parse(String filePath) async {
     final file = File(filePath);
@@ -27,21 +28,15 @@ class MetadataService {
         ? metadata.title!.trim()
         : p.basenameWithoutExtension(filePath);
 
-    // ── Extract and cache embedded album art ──────────────
-    String? albumArtPath;
+    // ── Extract embedded album art (raw bytes, no caching) ──
+    Uint8List? pictureBytes;
+    String? pictureMimeType;
     var hasEmbeddedArt = false;
 
     if (metadata.picture != null) {
-      try {
-        albumArtPath = await _artCache.saveArt(
-          filePath,
-          metadata.picture!.data,
-          metadata.picture!.mimeType,
-        );
-        hasEmbeddedArt = true;
-      } catch (_) {
-        // Best-effort: if caching fails, leave art fields null.
-      }
+      pictureBytes = metadata.picture!.data;
+      pictureMimeType = metadata.picture!.mimeType;
+      hasEmbeddedArt = true;
     }
 
     // ── Look for external .lrc lyrics file ────────────────
@@ -62,7 +57,8 @@ class MetadataService {
       bitrate: null,
       sampleRate: null,
       mimeType: mimeTypeForPath(filePath) ?? 'audio/unknown',
-      albumArtFilePath: albumArtPath,
+      pictureBytes: pictureBytes,
+      pictureMimeType: pictureMimeType,
       hasEmbeddedArt: hasEmbeddedArt,
       lyricsFilePath: lyricsPath,
     );

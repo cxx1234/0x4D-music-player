@@ -38,9 +38,14 @@ class PlayerService extends ChangeNotifier {
   StreamSubscription? _sequenceSub;
 
   PlayerService() {
-    _playerStateSub = _player.playerStateStream.listen(
-      (_) => notifyListeners(),
-    );
+    _playerStateSub = _player.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed &&
+          _repeatMode == PlayerRepeatMode.off) {
+        _player.seek(Duration.zero);
+        _player.pause();
+      }
+      notifyListeners();
+    });
     _positionSub = _player.positionStream.listen((_) => notifyListeners());
     _durationSub = _player.durationStream.listen((_) => notifyListeners());
     _sequenceSub = _player.sequenceStateStream.listen((_) {
