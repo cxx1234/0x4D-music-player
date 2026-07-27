@@ -1,5 +1,6 @@
 import '../database/database.dart';
 import 'folder_watcher_service.dart';
+import 'play_queue.dart';
 import 'player_service.dart';
 import 'sandbox_service.dart';
 import 'settings_service.dart';
@@ -15,6 +16,7 @@ class ServiceLocator {
   static SettingsService? _settings;
   static SongRepository? _songRepo;
   static FolderWatcherService? _folderWatcher;
+  static PlayQueue? _playQueue;
   static PlayerService? _player;
   static SandboxService? _sandbox;
 
@@ -54,6 +56,15 @@ class ServiceLocator {
     return _folderWatcher!;
   }
 
+  static PlayQueue get playQueue {
+    if (_playQueue == null) {
+      throw StateError(
+        'PlayQueue not initialized. Call ServiceLocator.initialize() first.',
+      );
+    }
+    return _playQueue!;
+  }
+
   static PlayerService get player {
     if (_player == null) {
       throw StateError(
@@ -81,7 +92,9 @@ class ServiceLocator {
     _database = await FlutterMusicDatabase.create();
     _songRepo = SongRepository();
     _folderWatcher = FolderWatcherService();
-    _player = PlayerService();
+    _playQueue = PlayQueue();
+    await _playQueue!.restoreQueue(_database!);
+    _player = PlayerService(playQueue: _playQueue!);
     _sandbox = SandboxService();
   }
 }

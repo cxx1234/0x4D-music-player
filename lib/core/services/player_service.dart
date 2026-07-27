@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../database/database.dart';
+import 'play_queue.dart';
 
 /// Available repeat modes for the player.
 enum PlayerRepeatMode {
@@ -24,9 +25,9 @@ enum PlayerRepeatMode {
 /// in [ServiceLocator] during app startup.
 class PlayerService extends ChangeNotifier {
   final AudioPlayer _player = AudioPlayer();
+  final PlayQueue _playQueue;
+  ConcatenatingAudioSource? _audioSource;
 
-  List<Song> _queue = [];
-  int _currentIndex = 0;
   PlayerRepeatMode _repeatMode = PlayerRepeatMode.off;
   bool _isShuffled = false;
 
@@ -37,7 +38,11 @@ class PlayerService extends ChangeNotifier {
   StreamSubscription? _durationSub;
   StreamSubscription? _sequenceSub;
 
-  PlayerService() {
+  PlayerService({PlayQueue? playQueue})
+    : _playQueue = playQueue ?? PlayQueue() {
+    // Forward PlayQueue changes to this service's listeners
+    _playQueue.addListener(notifyListeners);
+
     _playerStateSub = _player.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed &&
           _repeatMode == PlayerRepeatMode.off) {
@@ -49,24 +54,24 @@ class PlayerService extends ChangeNotifier {
     _positionSub = _player.positionStream.listen((_) => notifyListeners());
     _durationSub = _player.durationStream.listen((_) => notifyListeners());
     _sequenceSub = _player.sequenceStateStream.listen((_) {
-      _currentIndex = _player.currentIndex ?? 0;
+      final idx = _player.currentIndex ?? 0;
+      if (idx >= 0 && idx < _playQueue.length) {
+        _playQueue.setCurrentIndex(idx);
+      }
       notifyListeners();
     });
   }
 
   // ─── Public state ──────────────────────────────────────
 
-  /// The full playback queue.
-  List<Song> get queue => List.unmodifiable(_queue);
+  /// The playback queue (delegated to [PlayQueue]).
+  List<Song> get queue => _playQueue.songs;
 
-  /// Index of the currently playing (or about-to-play) song.
-  int get currentIndex => _currentIndex;
+  /// Index of the current song.
+  int get currentIndex => _playQueue.currentIndex;
 
-  /// The song currently playing, or `null` if nothing is loaded.
-  Song? get currentSong {
-    if (_currentIndex < 0 || _currentIndex >= _queue.length) return null;
-    return _queue[_currentIndex];
-  }
+  /// The song currently playing, or `null`.
+  Song? get currentSong => _playQueue.currentSong;
 
   /// Whether audio is currently playing.
   bool get isPlaying => _player.playing;
@@ -88,17 +93,16 @@ class PlayerService extends ChangeNotifier {
   /// Replace the queue with [songs] and start playing at [startIndex].
   Future<void> playFromList(List<Song> songs, {int startIndex = 0}) async {
     if (songs.isEmpty) return;
-
-    _queue = List.from(songs);
-    _currentIndex = startIndex.clamp(0, songs.length - 1);
+    _playQueue.replace(songs, startIndex);
 
     final sources = songs
         .map((s) => AudioSource.file(s.filePath) as AudioSource)
         .toList();
 
+    _audioSource = ConcatenatingAudioSource(children: sources);
     await _player.setAudioSource(
-      ConcatenatingAudioSource(children: sources),
-      initialIndex: _currentIndex,
+      _audioSource!,
+      initialIndex: _playQueue.currentIndex,
     );
     await _player.play();
   }
@@ -111,16 +115,24 @@ class PlayerService extends ChangeNotifier {
   /// Append [songs] to the end of the current queue.
   Future<void> addToQueue(List<Song> songs) async {
     if (songs.isEmpty) return;
-    _queue.addAll(songs);
-    // Rebuild the audio source with the extended list
-    if (_queue.length == songs.length) {
-      // Nothing was playing before — start from the first new song
-      await playFromList(_queue, startIndex: 0);
+    final wasEmpty = _playQueue.isEmpty;
+    _playQueue.append(songs);
+    if (wasEmpty) {
+      final sources = songs
+          .map((s) => AudioSource.file(s.filePath) as AudioSource)
+          .toList();
+      _audioSource = ConcatenatingAudioSource(children: sources);
+      await _player.setAudioSource(_audioSource!, initialIndex: 0);
+      await _player.play();
     } else {
-      final currentFilePath = currentSong?.filePath;
-      final currentPosition = _player.position;
-      // Rebuild the full sequence preserving the current song & position
-      await _rebuildSequence(currentFilePath, currentPosition);
+      final newSources = songs
+          .map((s) => AudioSource.file(s.filePath) as AudioSource)
+          .toList();
+      try {
+        await _audioSource?.addAll(newSources);
+      } catch (_) {
+        await _rebuildSequence();
+      }
     }
   }
 
@@ -139,16 +151,15 @@ class PlayerService extends ChangeNotifier {
   }
 
   Future<void> stop() async {
+    _audioSource = null;
     await _player.stop();
-    _queue = [];
-    _currentIndex = 0;
-    notifyListeners();
+    _playQueue.clear();
   }
 
   /// Skip to the next song.  Wraps around if [repeatMode] is [PlayerRepeatMode.all].
   Future<void> next() async {
-    if (_queue.isEmpty) return;
-    if (_currentIndex < _queue.length - 1) {
+    if (_playQueue.isEmpty) return;
+    if (_playQueue.currentIndex < _playQueue.length - 1) {
       await _player.seekToNext();
     } else if (_repeatMode == PlayerRepeatMode.all) {
       await _player.seek(Duration.zero, index: 0);
@@ -158,7 +169,7 @@ class PlayerService extends ChangeNotifier {
 
   /// Go back to the previous song.
   Future<void> previous() async {
-    if (_queue.isEmpty) return;
+    if (_playQueue.isEmpty) return;
     // If more than 3 seconds in, restart the current song.
     if (_player.position.inSeconds > 3) {
       await _player.seek(Duration.zero);
@@ -195,24 +206,82 @@ class PlayerService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Internal helpers ──────────────────────────────────
+  // ─── Queue management ───────────────────────────────
 
-  Future<void> _rebuildSequence(
-    String? currentFilePath,
-    Duration position,
-  ) async {
-    final sources = _queue
+  /// Remove a song from the queue at [index].
+  Future<void> removeFromQueue(int index) async {
+    if (index < 0 || index >= _playQueue.length) return;
+    _playQueue.removeAt(index);
+    if (_playQueue.isEmpty) {
+      _audioSource = null;
+      await _player.stop();
+      return;
+    }
+    try {
+      await _audioSource?.removeAt(index);
+    } catch (_) {
+      await _rebuildSequence();
+    }
+  }
+
+  /// Jump to the song at [index] and play.
+  Future<void> jumpTo(int index) async {
+    if (index < 0 || index >= _playQueue.length) return;
+    _playQueue.setCurrentIndex(index);
+    await _player.seek(Duration.zero, index: index);
+    await _player.play();
+  }
+
+  /// Insert [songs] right after the currently playing song.
+  Future<void> playNext(List<Song> songs) async {
+    if (songs.isEmpty) return;
+    if (_playQueue.isEmpty) {
+      await playFromList(songs, startIndex: 0);
+      return;
+    }
+    _playQueue.insertAfterCurrent(songs);
+    final newSources = songs
         .map((s) => AudioSource.file(s.filePath) as AudioSource)
         .toList();
+    try {
+      await _audioSource?.insertAll(_playQueue.currentIndex + 1, newSources);
+    } catch (_) {
+      await _rebuildSequence();
+    }
+  }
 
-    final startIndex = currentFilePath != null
-        ? _queue.indexWhere((s) => s.filePath == currentFilePath)
-        : 0;
+  /// Move a song from [oldIndex] to [newIndex] (drag-to-reorder).
+  Future<void> moveInQueue(int oldIndex, int newIndex) async {
+    _playQueue.move(oldIndex, newIndex);
+    try {
+      await _audioSource?.move(oldIndex, newIndex);
+    } catch (_) {
+      await _rebuildSequence();
+    }
+  }
 
+  /// Clear the entire queue and stop playback.
+  Future<void> clearQueue() async {
+    _playQueue.clear();
+    _audioSource = null;
+    await _player.stop();
+  }
+
+  /// Fallback: rebuild the entire audio sequence from scratch.
+  /// Used when a dynamic API call ([addAll]/[removeAt]/[move]/[insertAll])
+  /// fails — this ensures just_audio's internal sequence stays in sync with
+  /// [PlayQueue] even if the platform channel throws.
+  Future<void> _rebuildSequence() async {
+    final songs = _playQueue.songs;
+    if (songs.isEmpty) return;
+    final sources = songs
+        .map((s) => AudioSource.file(s.filePath) as AudioSource)
+        .toList();
+    _audioSource = ConcatenatingAudioSource(children: sources);
     await _player.setAudioSource(
-      ConcatenatingAudioSource(children: sources),
-      initialIndex: startIndex < 0 ? 0 : startIndex,
-      initialPosition: position,
+      _audioSource!,
+      initialIndex: _playQueue.currentIndex.clamp(0, songs.length - 1),
+      initialPosition: _player.position,
     );
   }
 

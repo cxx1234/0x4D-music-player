@@ -48,4 +48,13 @@ class PlayerViewModel extends ChangeNotifier {
   Future<void> seek(Duration position) => _player.seek(position);
   void cycleRepeatMode() => _player.cycleRepeatMode();
   Future<void> toggleShuffle() => _player.toggleShuffle();
+
+  // ─── Queue management ─────────────────────────────────
+
+  Future<void> removeFromQueue(int index) => _player.removeFromQueue(index);
+  Future<void> jumpTo(int index) => _player.jumpTo(index);
+  Future<void> playNext(List<Song> songs) => _player.playNext(songs);
+  Future<void> moveInQueue(int oldIndex, int newIndex) =>
+      _player.moveInQueue(oldIndex, newIndex);
+  Future<void> clearQueue() => _player.clearQueue();
 }
