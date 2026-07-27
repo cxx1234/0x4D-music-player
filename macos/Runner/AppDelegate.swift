@@ -14,7 +14,7 @@ class AppDelegate: FlutterAppDelegate {
   override func applicationDidFinishLaunching(_ notification: Notification) {
     let controller = mainFlutterWindow?.contentViewController as! FlutterViewController
     let channel = FlutterMethodChannel(
-      name: "com.example.flutter_music/sandbox",
+      name: "com.jerryc.flutter_music/sandbox",
       binaryMessenger: controller.engine.binaryMessenger
     )
 

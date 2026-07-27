@@ -9,7 +9,7 @@ import 'package:flutter/services.dart';
 ///
 /// On non-macOS platforms all calls are no-ops.
 class SandboxService {
-  static const _channel = MethodChannel('com.example.flutter_music/sandbox');
+  static const _channel = MethodChannel('com.jerryc.flutter_music/sandbox');
 
   /// Creates a security-scoped bookmark for [path] and returns it as a
   /// base64-encoded string.
