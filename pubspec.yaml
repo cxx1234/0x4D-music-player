@@ -37,7 +37,6 @@ dependencies:
   file_picker: ^11.0.2
   drift: ^2.26.0
   sqlite3: ^3.3.4
-  sqlite3_flutter_libs: ^0.5.27
   path_provider: ^2.1.0
   path: ^1.9.0
   metadata_god: ^1.1.0
@@ -61,6 +60,10 @@ dependency_overrides:
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
+
+# 注：sqlite3 3.x 使用默认的 build hook（source: sqlite3，从 GitHub 下载预编译库）。
+# 之前曾临时用 hooks.user_defines.sqlite3.source: system 指向系统库，现按需恢复默认。
+# 注意不要重新引入 sqlite3_flutter_libs —— 它会导致 sqlite 双份加载、启动崩溃 (EXC_BAD_ACCESS)。
 
 # The following section is specific to Flutter packages.
 flutter:
