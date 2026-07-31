@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../widgets/cached_album_art.dart';
+import '../../widgets/song_tile.dart';
+import '../playlist/song_actions.dart';
 import 'artist_view_model.dart';
 
 class ArtistsPage extends StatefulWidget {
@@ -241,51 +243,17 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
               final song = _songs[index];
               final player = ServiceLocator.player;
               final isCurrent = song.id == player.currentSong?.id;
-              final theme = Theme.of(context);
-              return ListTile(
-                selected: isCurrent,
-                selectedTileColor: theme.colorScheme.primary.withValues(
-                  alpha: 0.1,
+              return SongTile(
+                song: song,
+                isCurrentSong: isCurrent,
+                onTap: () => ServiceLocator.player.playFromList(
+                  _songs,
+                  startIndex: index,
                 ),
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: CachedAlbumArt(
-                      albumArtFilePath: song.albumArtFilePath,
-                      hasEmbeddedArt: song.hasEmbeddedArt == 1,
-                      size: 40,
-                      borderRadius: 6,
-                    ),
-                  ),
-                ),
-                title: Text(
-                  song.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: isCurrent ? theme.colorScheme.primary : null,
-                    fontWeight: isCurrent ? FontWeight.bold : null,
-                  ),
-                ),
-                subtitle: song.album != null && song.album!.isNotEmpty
-                    ? Text(
-                        song.album!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      )
-                    : null,
-                trailing: song.durationMs != null
-                    ? Text(
-                        _formatDuration(song.durationMs!),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      )
-                    : null,
-                onTap: () {
-                  ServiceLocator.player.playFromList(_songs, startIndex: index);
+                menuBuilder: (song) => songMenuItems(song),
+                onMenuSelected: (song, value) async {
+                  await handleSongMenuAction(context, song, value);
+                  await _load();
                 },
               );
             }, childCount: _songs.length),
@@ -293,12 +261,6 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
         ),
       ],
     );
-  }
-
-  String _formatDuration(int ms) {
-    final m = (ms / 60000).floor();
-    final s = ((ms % 60000) / 1000).round().toString().padLeft(2, '0');
-    return '$m:$s';
   }
 }
 
@@ -471,33 +433,28 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
                 itemBuilder: (context, index) {
                   final song = _songs[index];
                   final isCurrent = song.id == player.currentSong?.id;
-                  return ListTile(
-                    selected: isCurrent,
-                    selectedTileColor: theme.colorScheme.primary.withValues(
-                      alpha: 0.1,
+                  return SongTile(
+                    song: song,
+                    isCurrentSong: isCurrent,
+                    onTap: () => ServiceLocator.player.playFromList(
+                      _songs,
+                      startIndex: index,
                     ),
-                    leading: Text(
-                      '${index + 1}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: isCurrent
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurfaceVariant,
+                    leading: SizedBox(
+                      width: 32,
+                      child: Text(
+                        '${index + 1}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: isCurrent
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
-                    title: Text(
-                      song.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: isCurrent ? theme.colorScheme.primary : null,
-                        fontWeight: isCurrent ? FontWeight.bold : null,
-                      ),
-                    ),
-                    onTap: () {
-                      ServiceLocator.player.playFromList(
-                        _songs,
-                        startIndex: index,
-                      );
+                    menuBuilder: (song) => songMenuItems(song),
+                    onMenuSelected: (song, value) async {
+                      await handleSongMenuAction(context, song, value);
+                      await _load();
                     },
                   );
                 },

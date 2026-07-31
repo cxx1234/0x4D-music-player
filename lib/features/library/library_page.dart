@@ -1,10 +1,10 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'dart:math' show sin;
 
-import '../../core/database/database.dart';
+import '../../core/database/song_sort_order.dart';
 import '../../core/services/service_locator.dart';
-import '../../widgets/cached_album_art.dart';
+import '../../widgets/song_tile.dart';
+import '../playlist/song_actions.dart';
 import 'library_view_model.dart';
 
 class LibraryPage extends StatefulWidget {
@@ -163,6 +163,20 @@ class _LibraryPageState extends State<LibraryPage> {
               ),
             ),
           const Spacer(),
+          if (_viewModel.songs.isNotEmpty)
+            PopupMenuButton<SongSortOrder>(
+              tooltip: '排序',
+              icon: const Icon(Icons.sort),
+              onSelected: _viewModel.setSortOrder,
+              itemBuilder: (context) => [
+                for (final order in SongSortOrder.values)
+                  CheckedPopupMenuItem(
+                    value: order,
+                    checked: order == _viewModel.sortOrder,
+                    child: Text(order.label),
+                  ),
+              ],
+            ),
           if (_musicFolders.isNotEmpty) ...[
             if (!_viewModel.isScanning)
               IconButton(
@@ -303,231 +317,20 @@ class _LibraryPageState extends State<LibraryPage> {
           itemBuilder: (context, index) {
             final song = songs[index];
             final isCurrentSong = song.id == _viewModel.currentSong?.id;
-            return _SongTile(
+            return SongTile(
               song: song,
-              theme: theme,
               isCurrentSong: isCurrentSong,
               isPlaying: isCurrentSong && _viewModel.isPlaying,
               onTap: () => _viewModel.playSongFromList(index),
+              menuBuilder: (song) => songMenuItems(song),
+              onMenuSelected: (song, value) async {
+                await handleSongMenuAction(context, song, value);
+                await _viewModel.reloadSongs();
+              },
             );
           },
         ),
       ),
     );
   }
-}
-
-class _SongTile extends StatelessWidget {
-  final Song song;
-  final ThemeData theme;
-  final bool isCurrentSong;
-  final bool isPlaying;
-  final VoidCallback? onTap;
-
-  const _SongTile({
-    required this.song,
-    required this.theme,
-    this.isCurrentSong = false,
-    this.isPlaying = false,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final duration = song.durationMs;
-    final durationStr = duration != null
-        ? '${(duration / 60000).floor()}:${((duration % 60000) / 1000).round().toString().padLeft(2, '0')}'
-        : null;
-
-    final primaryColor = theme.colorScheme.primary;
-
-    return ListTile(
-      selected: isCurrentSong,
-      selectedTileColor: primaryColor.withValues(alpha: 0.1),
-      leading: SizedBox(
-        width: 44,
-        height: 44,
-        child: Stack(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: CachedAlbumArt(
-                albumArtFilePath: song.albumArtFilePath,
-                hasEmbeddedArt: song.hasEmbeddedArt == 1,
-                size: 44,
-                borderRadius: 6,
-              ),
-            ),
-            if (isPlaying)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: Container(
-                  color: Colors.black26,
-                  alignment: Alignment.center,
-                  child: _AnimatedPlayingIcon(color: Colors.white),
-                ),
-              ),
-            if (isCurrentSong && !isPlaying)
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: Container(
-                  width: 14,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    color: primaryColor,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.music_note,
-                    size: 8,
-                    color: theme.colorScheme.onPrimary,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-      title: Text(
-        song.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: isCurrentSong ? primaryColor : null,
-          fontWeight: isCurrentSong ? FontWeight.bold : null,
-        ),
-      ),
-      subtitle: Row(
-        children: [
-          if (song.artist != null && song.artist!.isNotEmpty) ...[
-            Flexible(
-              child: Text(
-                song.artist!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: isCurrentSong ? primaryColor : null),
-              ),
-            ),
-            if (song.album != null) const Text(' · '),
-          ],
-          if (song.album != null)
-            Flexible(
-              child: Text(
-                song.album!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-        ],
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isCurrentSong)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Icon(
-                isPlaying ? Icons.volume_up_rounded : Icons.pause_rounded,
-                size: 18,
-                color: primaryColor,
-              ),
-            ),
-          if (durationStr != null)
-            Text(
-              durationStr,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: isCurrentSong
-                    ? primaryColor
-                    : theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-        ],
-      ),
-      onTap: onTap,
-    );
-  }
-}
-
-/// A simple animated icon that alternates bar heights to indicate playback.
-class _AnimatedPlayingIcon extends StatefulWidget {
-  final Color color;
-
-  const _AnimatedPlayingIcon({required this.color});
-
-  @override
-  State<_AnimatedPlayingIcon> createState() => _AnimatedPlayingIconState();
-}
-
-class _AnimatedPlayingIconState extends State<_AnimatedPlayingIcon>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return CustomPaint(
-          size: const Size(18, 18),
-          painter: _PlayingBarsPainter(
-            color: widget.color,
-            value: _controller.value,
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _PlayingBarsPainter extends CustomPainter {
-  final Color color;
-  final double value;
-
-  _PlayingBarsPainter({required this.color, required this.value});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 3;
-
-    const barCount = 4;
-    final barWidth = 3.0;
-    const spacing = 3.0;
-    final totalWidth = barCount * barWidth + (barCount - 1) * spacing;
-    final startX = (size.width - totalWidth) / 2;
-    final baseHeight = 6.0;
-    final maxHeight = size.height - 2;
-
-    for (var i = 0; i < barCount; i++) {
-      final phase = (i / barCount) * 2 * 3.14159;
-      final normalizedPhase = (phase + value * 2 * 3.14159) % (2 * 3.14159);
-      final height =
-          baseHeight +
-          (maxHeight - baseHeight) * (0.5 + 0.5 * sin(normalizedPhase));
-      final x = startX + i * (barWidth + spacing);
-      final y = size.height - height;
-      canvas.drawLine(Offset(x, y), Offset(x, size.height - 2), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_PlayingBarsPainter oldDelegate) =>
-      oldDelegate.value != value;
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/database/database.dart';
+import '../../core/database/song_sort_order.dart';
 import '../../core/services/library_scanner_service.dart';
 import '../../core/services/player_service.dart';
 import '../../core/services/service_locator.dart';
@@ -29,12 +30,14 @@ class LibraryViewModel extends ChangeNotifier {
   ScanResult? _scanResult;
   List<Song> _songs = [];
   String? _errorMessage;
+  SongSortOrder _sortOrder = SongSortOrder.title;
 
   LibraryScanState get scanState => _scanState;
   ScanProgress? get scanProgress => _scanProgress;
   ScanResult? get scanResult => _scanResult;
   List<Song> get songs => _songs;
   String? get errorMessage => _errorMessage;
+  SongSortOrder get sortOrder => _sortOrder;
 
   bool get isIdle => _scanState == LibraryScanState.idle;
   bool get isScanning => _scanState == LibraryScanState.scanning;
@@ -79,6 +82,23 @@ class LibraryViewModel extends ChangeNotifier {
       // sandbox permissions happen to be unavailable.
       await _quickSync(folders);
     }
+    _sortOrder = ServiceLocator.settings.songSortOrder;
+    await _loadSongs();
+    notifyListeners();
+  }
+
+  /// 重新加载歌曲列表（排序或收藏变化后调用）。
+  Future<void> reloadSongs() async {
+    await _loadSongs();
+    notifyListeners();
+  }
+
+  /// 切换排序方式并持久化到设置。
+  Future<void> setSortOrder(SongSortOrder order) async {
+    if (_sortOrder == order) return;
+    _sortOrder = order;
+    notifyListeners();
+    await ServiceLocator.settings.setSongSortOrder(order);
     await _loadSongs();
     notifyListeners();
   }
@@ -165,7 +185,7 @@ class LibraryViewModel extends ChangeNotifier {
   }
 
   Future<void> _loadSongs() async {
-    _songs = await ServiceLocator.songRepo.getAvailableSongs();
+    _songs = await ServiceLocator.songRepo.getAvailableSongs(order: _sortOrder);
   }
 
   void _startWatching(List<String> folders) {
@@ -174,7 +194,10 @@ class LibraryViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
-    ServiceLocator.player.removeListener(notifyListeners);
+    // 测试环境可能未初始化 ServiceLocator，需要判空。
+    if (ServiceLocator.isReady) {
+      ServiceLocator.player.removeListener(notifyListeners);
+    }
     super.dispose();
   }
 }
