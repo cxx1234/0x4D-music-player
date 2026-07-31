@@ -7,6 +7,9 @@ class ScannedSong {
   final int fileSize;
   final String title;
   final String? artist;
+
+  /// 专辑艺术家（独立标签，合集专辑区分于歌曲歌手）。
+  final String? albumArtist;
   final String? album;
   final int? trackNumber;
   final int? discNumber;
@@ -38,6 +41,7 @@ class ScannedSong {
     required this.fileSize,
     required this.title,
     this.artist,
+    this.albumArtist,
     this.album,
     this.trackNumber,
     this.discNumber,

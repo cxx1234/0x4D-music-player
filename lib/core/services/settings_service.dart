@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../database/song_sort_order.dart';
+
 /// A music folder with an optional macOS security-scoped bookmark.
 ///
 /// The [bookmark] field stores a base64-encoded `NSData` security-scoped
@@ -32,7 +34,14 @@ class AppSettings {
   final List<MusicFolder> musicFolders;
   final String themeMode;
 
-  const AppSettings({this.musicFolders = const [], this.themeMode = 'system'});
+  /// 音乐库歌曲排序方式（[SongSortOrder.name]）。
+  final String songSortOrder;
+
+  const AppSettings({
+    this.musicFolders = const [],
+    this.themeMode = 'system',
+    this.songSortOrder = 'title',
+  });
 
   /// The raw folder paths (convenience getter).
   List<String> get folderPaths => musicFolders.map((f) => f.path).toList();
@@ -40,6 +49,7 @@ class AppSettings {
   Map<String, dynamic> toJson() => {
     'musicFolders': musicFolders.map((f) => f.toJson()).toList(),
     'themeMode': themeMode,
+    'songSortOrder': songSortOrder,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -61,13 +71,19 @@ class AppSettings {
     return AppSettings(
       musicFolders: folders,
       themeMode: json['themeMode'] as String? ?? 'system',
+      songSortOrder: json['songSortOrder'] as String? ?? 'title',
     );
   }
 
-  AppSettings copyWith({List<MusicFolder>? musicFolders, String? themeMode}) {
+  AppSettings copyWith({
+    List<MusicFolder>? musicFolders,
+    String? themeMode,
+    String? songSortOrder,
+  }) {
     return AppSettings(
       musicFolders: musicFolders ?? this.musicFolders,
       themeMode: themeMode ?? this.themeMode,
+      songSortOrder: songSortOrder ?? this.songSortOrder,
     );
   }
 
@@ -96,6 +112,16 @@ class SettingsService {
 
   /// The full list of music folders including security-scoped bookmarks.
   List<MusicFolder> get musicFolderItems => _settings.musicFolders;
+
+  /// 音乐库歌曲排序方式。
+  SongSortOrder get songSortOrder =>
+      SongSortOrder.fromName(_settings.songSortOrder);
+
+  /// 持久化排序方式到 settings.json。
+  Future<void> setSongSortOrder(SongSortOrder order) async {
+    _settings = _settings.copyWith(songSortOrder: order.name);
+    await _save();
+  }
 
   Future<void> initialize() async {
     if (_initialized) return;

@@ -1,6 +1,9 @@
 import 'package:drift/drift.dart';
+
 import '../../models/scanned_song.dart';
 import '../database/database.dart';
+import '../database/song_sort_order.dart';
+import '../utils/sort_key.dart';
 import 'album_art_cache_service.dart';
 import 'service_locator.dart';
 
@@ -16,7 +19,9 @@ class SongRepository {
 
   Future<List<Song>> getAllSongs() => _db.getAllSongs();
 
-  Future<List<Song>> getAvailableSongs() => _db.getAvailableSongs();
+  Future<List<Song>> getAvailableSongs({
+    SongSortOrder order = SongSortOrder.title,
+  }) => _db.getAvailableSongs(order: order);
 
   Stream<List<Song>> watchAllSongs() => _db.watchAllSongs();
 
@@ -60,6 +65,87 @@ class SongRepository {
 
   Future<List<Album>> getAlbumsByArtist(int artistId) =>
       _db.getAlbumsByArtist(artistId);
+
+  // ─── Playlist queries ──────────────────────────────────
+
+  Future<List<Playlist>> getAllPlaylists() => _db.getAllPlaylists();
+
+  Stream<List<Playlist>> watchAllPlaylists() => _db.watchAllPlaylists();
+
+  Future<Playlist?> getPlaylistById(int id) => _db.getPlaylistById(id);
+
+  Future<int> insertPlaylist(PlaylistsCompanion entry) =>
+      _db.insertPlaylist(entry);
+
+  Future<bool> updatePlaylist(PlaylistsCompanion entry, int id) =>
+      _db.updatePlaylist(entry, id);
+
+  Future<void> deletePlaylist(int id) => _db.deletePlaylist(id);
+
+  Future<List<Song>> getSongsInPlaylist(int playlistId, {int? limit}) =>
+      _db.getSongsInPlaylist(playlistId, limit: limit);
+
+  Future<void> addSongToPlaylist(int playlistId, int songId) =>
+      _db.addSongToPlaylist(playlistId, songId);
+
+  Future<int> addSongsToPlaylist(int playlistId, List<int> songIds) =>
+      _db.addSongsToPlaylist(playlistId, songIds);
+
+  Future<void> removeSongFromPlaylist(int playlistId, int songId) =>
+      _db.removeSongFromPlaylist(playlistId, songId);
+
+  Future<void> moveSongInPlaylist(int playlistId, int oldIndex, int newIndex) =>
+      _db.moveSongInPlaylist(playlistId, oldIndex, newIndex);
+
+  Future<List<Song>> getFavoriteSongs() => _db.getFavoriteSongs();
+
+  Future<int> getFavoriteCount() => _db.getFavoriteCount();
+
+  Future<int> toggleFavorite(int id) => _db.toggleFavorite(id);
+
+  Future<Map<int, int>> getPlaylistSongCounts() => _db.getPlaylistSongCounts();
+
+  // ─── Sort key backfill ────────────────────────────────
+
+  /// 为 sort_key 为空的歌曲/专辑/歌手回填拼音/日文排序键。
+  Future<void> backfillSortKeys() async {
+    final songs = await _db.getSongsWithNullSortKey();
+    for (final song in songs) {
+      final key = buildSortKey(song.title);
+      if (key.isNotEmpty) {
+        await _db.updateSongSortKey(song.id, key);
+      }
+    }
+
+    final albums = await _db.getAlbumsWithNullSortKey();
+    for (final album in albums) {
+      final key = buildSortKey(album.name);
+      if (key.isNotEmpty) {
+        await _db.updateAlbumSortKey(album.id, key);
+      }
+    }
+
+    final artists = await _db.getArtistsWithNullSortKey();
+    for (final artist in artists) {
+      final key = buildSortKey(artist.name);
+      if (key.isNotEmpty) {
+        await _db.updateArtistSortKey(artist.id, key);
+      }
+    }
+  }
+
+  /// 若已有专辑的 albumArtist 为空且当前歌曲提供了专辑艺术家，则补写。
+  Future<void> _fillAlbumArtistIfEmpty(Album album, ScannedSong song) async {
+    final artist = song.albumArtist ?? song.artist;
+    if (artist == null || artist.isEmpty) return;
+    final current = album.albumArtist;
+    if (current == null || current.isEmpty) {
+      await _db.updateAlbum(
+        AlbumsCompanion(albumArtist: Value(artist)),
+        album.id,
+      );
+    }
+  }
 
   // ─── File paths (for sync) ─────────────────────────────
 
@@ -130,7 +216,12 @@ class SongRepository {
     final existing = await _db.getArtistByName(name);
     if (existing != null) return existing.id;
 
-    return _db.insertArtist(ArtistsCompanion(name: Value(name)));
+    return _db.insertArtist(
+      ArtistsCompanion(
+        name: Value(name),
+        nameSortKey: Value(buildSortKey(name)),
+      ),
+    );
   }
 
   // ─── Album helpers ─────────────────────────────────────
@@ -158,6 +249,7 @@ class SongRepository {
     if (artistId != null) {
       final existing = await _db.getAlbumByNameAndArtist(albumName, artistId);
       if (existing != null) {
+        await _fillAlbumArtistIfEmpty(existing, song);
         return (existing.id, existing.albumArtFilePath);
       }
     }
@@ -167,6 +259,7 @@ class SongRepository {
       final allAlbums = await _db.getAllAlbums();
       for (final a in allAlbums) {
         if (a.name == albumName) {
+          await _fillAlbumArtistIfEmpty(a, song);
           return (a.id, a.albumArtFilePath);
         }
       }
@@ -199,7 +292,8 @@ class SongRepository {
       AlbumsCompanion(
         name: Value(albumName),
         artistId: Value(artistId),
-        albumArtist: Value(song.artist),
+        albumArtist: Value(song.albumArtist ?? song.artist),
+        nameSortKey: Value(buildSortKey(albumName)),
         albumArtFilePath: Value(albumArtPath),
       ),
     );
@@ -249,6 +343,7 @@ class SongRepository {
   ) {
     return SongsCompanion(
       title: Value(scanned.title),
+      titleSortKey: Value(buildSortKey(scanned.title)),
       artist: Value(scanned.artist),
       album: Value(scanned.album),
       artistId: Value(artistId),

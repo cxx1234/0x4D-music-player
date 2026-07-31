@@ -103,6 +103,8 @@ class ServiceLocator {
     await _settings!.initialize();
     _database = await FlutterMusicDatabase.create();
     _songRepo = SongRepository();
+    // 迁移后为 NULL 的 sort_key 回填拼音/日文排序键（一次性）。
+    await _songRepo!.backfillSortKeys();
     _folderWatcher = FolderWatcherService();
     _playQueue = PlayQueue();
     await _playQueue!.restoreQueue(_database!);

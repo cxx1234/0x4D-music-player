@@ -9,4 +9,7 @@ class Albums extends Table {
   TextColumn get genre => text().nullable()();
   TextColumn get albumArtFilePath => text().nullable()();
   IntColumn get songCount => integer().withDefault(const Constant(0))();
+
+  /// 拼音/日文排序键（专辑名）。
+  TextColumn get nameSortKey => text().nullable()();
 }

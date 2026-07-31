@@ -26,4 +26,7 @@ class Songs extends Table {
   IntColumn get playCount => integer().withDefault(const Constant(0))();
   IntColumn get isFavorite => integer().withDefault(const Constant(0))();
   IntColumn get isAvailable => integer().withDefault(const Constant(1))();
+
+  /// 拼音/日文排序键（含日文假名时按原文，否则按拼音小写全拼）。
+  TextColumn get titleSortKey => text().nullable()();
 }

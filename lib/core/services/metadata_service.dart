@@ -48,6 +48,7 @@ class MetadataService {
       fileSize: await file.length(),
       title: title,
       artist: _nullIfEmpty(metadata.artist),
+      albumArtist: _nullIfEmpty(metadata.albumArtist),
       album: _nullIfEmpty(metadata.album),
       trackNumber: metadata.trackNumber,
       discNumber: metadata.discNumber,
