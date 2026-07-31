@@ -1,5 +1,7 @@
+import '../audio/platform_media_controls.dart';
 import '../database/database.dart';
 import 'folder_watcher_service.dart';
+import 'media_control_service.dart';
 import 'play_queue.dart';
 import 'player_service.dart';
 import 'sandbox_service.dart';
@@ -19,6 +21,7 @@ class ServiceLocator {
   static PlayQueue? _playQueue;
   static PlayerService? _player;
   static SandboxService? _sandbox;
+  static MediaControlService? _mediaControls;
 
   static FlutterMusicDatabase get database {
     if (_database == null) {
@@ -83,6 +86,15 @@ class ServiceLocator {
     return _sandbox!;
   }
 
+  static MediaControlService get mediaControls {
+    if (_mediaControls == null) {
+      throw StateError(
+        'MediaControlService not initialized. Call ServiceLocator.initialize() first.',
+      );
+    }
+    return _mediaControls!;
+  }
+
   /// Whether [initialize] has completed.
   static bool get isReady => _player != null;
 
@@ -96,5 +108,11 @@ class ServiceLocator {
     await _playQueue!.restoreQueue(_database!);
     _player = PlayerService(playQueue: _playQueue!);
     _sandbox = SandboxService();
+
+    _mediaControls = MediaControlService(
+      _player!,
+      PlatformMediaControls.create(),
+    );
+    await _mediaControls!.initialize();
   }
 }

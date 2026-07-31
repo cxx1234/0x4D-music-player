@@ -4,7 +4,9 @@ import FlutterMacOS
 @main
 class AppDelegate: FlutterAppDelegate {
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-    return true
+    // Keep running in the background after the window is closed so playback
+    // continues and the system media keys / Now Playing stay controllable.
+    return false
   }
 
   override func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
@@ -65,6 +67,14 @@ class AppDelegate: FlutterAppDelegate {
         result(FlutterMethodNotImplemented)
       }
     }
+
+    // Register the system media controls plugin (MPRemoteCommandCenter +
+    // MPNowPlayingInfoCenter → Now Playing / Control Center / media keys).
+    // On macOS, plugins are registered through the FlutterViewController's
+    // registrar (FlutterAppDelegate does not expose `registrar(forPlugin:)`).
+    MediaControlsPlugin.register(
+      with: controller.registrar(forPlugin: "MediaControlsPlugin")
+    )
 
     super.applicationDidFinishLaunching(notification)
   }
