@@ -267,6 +267,16 @@ class PlayerService extends ChangeNotifier {
     await _player.stop();
   }
 
+  /// Set up the playback sequence from a restored queue at startup.
+  ///
+  /// Called once by [ServiceLocator] after the queue is loaded from disk.
+  /// Loads the audio source **without auto-playing**, so the cached queue can
+  /// be used immediately via [jumpTo]/[next]/[previous].
+  Future<void> initializePlayback() async {
+    if (_playQueue.isEmpty) return;
+    await _rebuildSequence();
+  }
+
   /// Fallback: rebuild the entire audio sequence from scratch.
   /// Used when a dynamic API call ([addAll]/[removeAt]/[move]/[insertAll])
   /// fails — this ensures just_audio's internal sequence stays in sync with

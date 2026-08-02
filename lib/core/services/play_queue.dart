@@ -139,7 +139,8 @@ class PlayQueue extends ChangeNotifier {
 
       if (restored.isNotEmpty) {
         _queue = restored;
-        _currentIndex = 0;
+        final savedIndex = data['currentIndex'] as int? ?? 0;
+        _currentIndex = savedIndex.clamp(0, restored.length - 1);
       }
     } catch (_) {
       _queue = [];
@@ -155,7 +156,10 @@ class PlayQueue extends ChangeNotifier {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final file = File(p.join(dir.path, _queueFileName));
-      final data = {'filePaths': _queue.map((s) => s.filePath).toList()};
+      final data = {
+        'filePaths': _queue.map((s) => s.filePath).toList(),
+        'currentIndex': _currentIndex,
+      };
       await file.writeAsString(jsonEncode(data));
     } catch (_) {
       // Silently ignore persistence failures
