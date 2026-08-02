@@ -43,6 +43,13 @@ class PlayerService extends ChangeNotifier {
     // Forward PlayQueue changes to this service's listeners
     _playQueue.addListener(notifyListeners);
 
+    // Restore persisted playback-mode settings (repeat / shuffle).
+    _repeatMode = PlayerRepeatMode.values.firstWhere(
+      (m) => m.name == _playQueue.repeatModeName,
+      orElse: () => PlayerRepeatMode.off,
+    );
+    _isShuffled = _playQueue.isShuffled;
+
     _playerStateSub = _player.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed &&
           _repeatMode == PlayerRepeatMode.off) {
@@ -104,6 +111,7 @@ class PlayerService extends ChangeNotifier {
       _audioSource!,
       initialIndex: _playQueue.currentIndex,
     );
+    await _applyAudioModes();
     await _player.play();
   }
 
@@ -123,6 +131,7 @@ class PlayerService extends ChangeNotifier {
           .toList();
       _audioSource = ConcatenatingAudioSource(children: sources);
       await _player.setAudioSource(_audioSource!, initialIndex: 0);
+      await _applyAudioModes();
       await _player.play();
     } else {
       final newSources = songs
@@ -224,22 +233,24 @@ class PlayerService extends ChangeNotifier {
     switch (_repeatMode) {
       case PlayerRepeatMode.off:
         _repeatMode = PlayerRepeatMode.all;
-        _player.setLoopMode(LoopMode.all);
+        break;
       case PlayerRepeatMode.all:
         _repeatMode = PlayerRepeatMode.one;
-        _player.setLoopMode(LoopMode.one);
+        break;
       case PlayerRepeatMode.one:
         _repeatMode = PlayerRepeatMode.off;
-        _player.setLoopMode(LoopMode.off);
+        break;
     }
+    _playQueue.setRepeatModeName(_repeatMode.name);
+    unawaited(_player.setLoopMode(_loopModeFor(_repeatMode)));
     notifyListeners();
   }
 
   Future<void> toggleShuffle() async {
     _isShuffled = !_isShuffled;
-    await _player.setShuffleModeEnabled(_isShuffled);
-    if (_isShuffled) {
-      await _player.shuffle();
+    _playQueue.setIsShuffled(_isShuffled);
+    if (_audioSource != null) {
+      await _applyAudioModes();
     }
     notifyListeners();
   }
@@ -311,6 +322,32 @@ class PlayerService extends ChangeNotifier {
     await _player.stop();
   }
 
+  /// Map a [PlayerRepeatMode] to just_audio's [LoopMode].
+  LoopMode _loopModeFor(PlayerRepeatMode mode) {
+    switch (mode) {
+      case PlayerRepeatMode.off:
+        return LoopMode.off;
+      case PlayerRepeatMode.one:
+        return LoopMode.one;
+      case PlayerRepeatMode.all:
+        return LoopMode.all;
+    }
+  }
+
+  /// Apply the current repeat/shuffle settings to the audio engine.
+  ///
+  /// Called after an audio source is loaded so just_audio's loop and shuffle
+  /// modes stay in sync with the persisted settings.
+  Future<void> _applyAudioModes() async {
+    await _player.setLoopMode(_loopModeFor(_repeatMode));
+    if (_isShuffled) {
+      await _player.setShuffleModeEnabled(true);
+      await _player.shuffle();
+    } else {
+      await _player.setShuffleModeEnabled(false);
+    }
+  }
+
   /// Fallback: rebuild the entire audio sequence from scratch.
   /// Used when a dynamic API call ([addAll]/[removeAt]/[move]/[insertAll])
   /// fails — this ensures just_audio's internal sequence stays in sync with
@@ -327,6 +364,7 @@ class PlayerService extends ChangeNotifier {
       initialIndex: _playQueue.currentIndex.clamp(0, songs.length - 1),
       initialPosition: _player.position,
     );
+    await _applyAudioModes();
   }
 
   @override

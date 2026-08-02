@@ -295,7 +295,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
   Widget _buildFavoritesCard(ThemeData theme) {
     return Card(
       clipBehavior: Clip.hardEdge,
-      margin: const EdgeInsets.symmetric(vertical: 4),
+      margin: const EdgeInsets.all(16),
       child: InkWell(
         onTap: _openFavorites,
         child: Padding(

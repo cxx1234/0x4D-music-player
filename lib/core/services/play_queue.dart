@@ -17,6 +17,8 @@ import '../database/database.dart';
 class PlayQueue extends ChangeNotifier {
   List<Song> _queue = [];
   int _currentIndex = 0;
+  String _repeatModeName = 'off';
+  bool _isShuffled = false;
 
   // ─── Public state ──────────────────────────────────────
 
@@ -37,6 +39,12 @@ class PlayQueue extends ChangeNotifier {
 
   /// The number of items in the queue.
   int get length => _queue.length;
+
+  /// Persisted repeat-mode name ('off' | 'one' | 'all').
+  String get repeatModeName => _repeatModeName;
+
+  /// Whether shuffle is enabled (persisted).
+  bool get isShuffled => _isShuffled;
 
   // ─── Queue mutations (all audio-safe) ──────────────────
 
@@ -114,6 +122,22 @@ class PlayQueue extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Persist the repeat-mode name.
+  void setRepeatModeName(String name) {
+    if (_repeatModeName == name) return;
+    _repeatModeName = name;
+    _save();
+    notifyListeners();
+  }
+
+  /// Persist the shuffle flag.
+  void setIsShuffled(bool value) {
+    if (_isShuffled == value) return;
+    _isShuffled = value;
+    _save();
+    notifyListeners();
+  }
+
   // ─── JSON persistence ──────────────────────────────────
 
   static const _queueFileName = 'play_queue.json';
@@ -143,6 +167,9 @@ class PlayQueue extends ChangeNotifier {
         final savedIndex = data['currentIndex'] as int? ?? 0;
         _currentIndex = savedIndex.clamp(0, restored.length - 1);
       }
+
+      _repeatModeName = data['repeatMode'] as String? ?? 'off';
+      _isShuffled = data['isShuffled'] as bool? ?? false;
     } catch (_) {
       _queue = [];
       _currentIndex = 0;
@@ -160,6 +187,8 @@ class PlayQueue extends ChangeNotifier {
       final data = {
         'filePaths': _queue.map((s) => s.filePath).toList(),
         'currentIndex': _currentIndex,
+        'repeatMode': _repeatModeName,
+        'isShuffled': _isShuffled,
       };
       await file.writeAsString(jsonEncode(data));
     } catch (_) {
