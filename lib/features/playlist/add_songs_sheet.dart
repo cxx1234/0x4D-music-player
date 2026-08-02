@@ -105,50 +105,54 @@ class _AddSongsSheetState extends State<AddSongsSheet> {
                         ),
                       ),
                     )
-                  : ListView.builder(
-                      itemCount: _filtered.length,
-                      itemBuilder: (context, index) {
-                        final song = _filtered[index];
-                        final checked = _selected.contains(song.id);
-                        return CheckboxListTile(
-                          value: checked,
-                          dense: true,
-                          title: Text(
-                            song.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: song.artist != null
-                              ? Text(
-                                  song.artist!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                )
-                              : null,
-                          secondary: SizedBox(
-                            width: 40,
-                            height: 40,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: CachedAlbumArt(
-                                albumArtFilePath: song.albumArtFilePath,
-                                hasEmbeddedArt: song.hasEmbeddedArt == 1,
-                                size: 40,
-                                borderRadius: 6,
+                  : Material(
+                      type: MaterialType.transparency,
+                      clipBehavior: Clip.hardEdge,
+                      child: ListView.builder(
+                        itemCount: _filtered.length,
+                        itemBuilder: (context, index) {
+                          final song = _filtered[index];
+                          final checked = _selected.contains(song.id);
+                          return CheckboxListTile(
+                            value: checked,
+                            dense: true,
+                            title: Text(
+                              song.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: song.artist != null
+                                ? Text(
+                                    song.artist!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  )
+                                : null,
+                            secondary: SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: CachedAlbumArt(
+                                  albumArtFilePath: song.albumArtFilePath,
+                                  hasEmbeddedArt: song.hasEmbeddedArt == 1,
+                                  size: 40,
+                                  borderRadius: 6,
+                                ),
                               ),
                             ),
-                          ),
-                          onChanged: (v) {
-                            setState(() {
-                              if (v == true) {
-                                _selected.add(song.id);
-                              } else {
-                                _selected.remove(song.id);
-                              }
-                            });
-                          },
-                        );
-                      },
+                            onChanged: (v) {
+                              setState(() {
+                                if (v == true) {
+                                  _selected.add(song.id);
+                                } else {
+                                  _selected.remove(song.id);
+                                }
+                              });
+                            },
+                          );
+                        },
+                      ),
                     ),
             ),
             SafeArea(

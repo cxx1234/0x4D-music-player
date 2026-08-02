@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
+import '../../core/utils/grid_layout.dart';
 import 'favorites_page.dart';
 import 'playlist_cover.dart';
 import 'playlist_detail_page.dart';
@@ -260,7 +261,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
         if (playlists.isNotEmpty) ...[
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
               child: Text(
                 '我的播放列表',
                 style: theme.textTheme.titleSmall?.copyWith(
@@ -270,13 +271,15 @@ class _PlaylistPageState extends State<PlaylistPage> {
             ),
           ),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(0, 0, 0, 16),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             sliver: SliverGrid(
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+              gridDelegate: const SliverGridDelegateWithClampedExtent(
+                maxCrossAxisExtent: 200,
+                minCrossAxisCount: 2,
+                maxCrossAxisCount: 8,
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
-                childAspectRatio: 0.85,
+                childAspectRatio: 0.76,
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, index) => _buildPlaylistCard(theme, playlists[index]),
@@ -347,8 +350,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AspectRatio(
-              aspectRatio: 1,
+            // 封面：弹性填满剩余高度，保证下方文字在任何格子宽下不被裁切
+            Expanded(
               child: PlaylistCover(
                 playlistId: playlist.id,
                 size: double.infinity,

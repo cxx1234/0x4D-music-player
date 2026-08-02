@@ -98,37 +98,41 @@ class _ArtistsPageState extends State<ArtistsPage> {
   }
 
   Widget _buildList(ThemeData theme, List<Artist> artists) {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      itemCount: artists.length,
-      itemBuilder: (context, index) {
-        final artist = artists[index];
-        final albumCount = _viewModel.albumsForArtist(artist).length;
-        final songCount = _viewModel.songsForArtist(artist).length;
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: theme.colorScheme.primaryContainer,
-            child: Text(
-              artist.name.isNotEmpty ? artist.name[0].toUpperCase() : '?',
-              style: TextStyle(
-                color: theme.colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.bold,
+    return Material(
+      type: MaterialType.transparency,
+      clipBehavior: Clip.hardEdge,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+        itemCount: artists.length,
+        itemBuilder: (context, index) {
+          final artist = artists[index];
+          final albumCount = _viewModel.albumsForArtist(artist).length;
+          final songCount = _viewModel.songsForArtist(artist).length;
+          return ListTile(
+            leading: CircleAvatar(
+              backgroundColor: theme.colorScheme.primaryContainer,
+              child: Text(
+                artist.name.isNotEmpty ? artist.name[0].toUpperCase() : '?',
+                style: TextStyle(
+                  color: theme.colorScheme.onPrimaryContainer,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-          ),
-          title: Text(
-            artist.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          subtitle: Text(
-            '$songCount 首歌曲${albumCount > 0 ? ' · $albumCount 张专辑' : ''}',
-            style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-          ),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => _openArtistDetail(context, artist),
-        );
-      },
+            title: Text(
+              artist.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              '$songCount 首歌曲${albumCount > 0 ? ' · $albumCount 张专辑' : ''}',
+              style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _openArtistDetail(context, artist),
+          );
+        },
+      ),
     );
   }
 
@@ -427,37 +431,41 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
             ),
             const Divider(height: 1),
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                itemCount: _songs.length,
-                itemBuilder: (context, index) {
-                  final song = _songs[index];
-                  final isCurrent = song.id == player.currentSong?.id;
-                  return SongTile(
-                    song: song,
-                    isCurrentSong: isCurrent,
-                    onTap: () => ServiceLocator.player.playFromList(
-                      _songs,
-                      startIndex: index,
-                    ),
-                    leading: SizedBox(
-                      width: 32,
-                      child: Text(
-                        '${index + 1}',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: isCurrent
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurfaceVariant,
+              child: Material(
+                type: MaterialType.transparency,
+                clipBehavior: Clip.hardEdge,
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                  itemCount: _songs.length,
+                  itemBuilder: (context, index) {
+                    final song = _songs[index];
+                    final isCurrent = song.id == player.currentSong?.id;
+                    return SongTile(
+                      song: song,
+                      isCurrentSong: isCurrent,
+                      onTap: () => ServiceLocator.player.playFromList(
+                        _songs,
+                        startIndex: index,
+                      ),
+                      leading: SizedBox(
+                        width: 32,
+                        child: Text(
+                          '${index + 1}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: isCurrent
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ),
-                    ),
-                    menuBuilder: (song) => songMenuItems(song),
-                    onMenuSelected: (song, value) async {
-                      await handleSongMenuAction(context, song, value);
-                      await _load();
-                    },
-                  );
-                },
+                      menuBuilder: (song) => songMenuItems(song),
+                      onMenuSelected: (song, value) async {
+                        await handleSongMenuAction(context, song, value);
+                        await _load();
+                      },
+                    );
+                  },
+                ),
               ),
             ),
           ],

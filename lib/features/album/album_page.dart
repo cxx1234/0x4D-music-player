@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
+import '../../core/utils/grid_layout.dart';
 import '../../widgets/cached_album_art.dart';
 import '../../widgets/song_tile.dart';
 import '../playlist/song_actions.dart';
@@ -98,23 +99,29 @@ class _AlbumsPageState extends State<AlbumsPage> {
   }
 
   Widget _buildGrid(ThemeData theme, List<Album> albums) {
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: 0.85,
+    return Material(
+      type: MaterialType.transparency,
+      clipBehavior: Clip.hardEdge,
+      child: GridView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        gridDelegate: const SliverGridDelegateWithClampedExtent(
+          maxCrossAxisExtent: 200,
+          minCrossAxisCount: 2,
+          maxCrossAxisCount: 8,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.76,
+        ),
+        itemCount: albums.length,
+        itemBuilder: (context, index) {
+          final album = albums[index];
+          return _AlbumCard(
+            album: album,
+            theme: theme,
+            onTap: () => _openAlbumDetail(context, album),
+          );
+        },
       ),
-      itemCount: albums.length,
-      itemBuilder: (context, index) {
-        final album = albums[index];
-        return _AlbumCard(
-          album: album,
-          theme: theme,
-          onTap: () => _openAlbumDetail(context, album),
-        );
-      },
     );
   }
 
@@ -145,9 +152,8 @@ class _AlbumCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Album art
-            AspectRatio(
-              aspectRatio: 1,
+            // Album art：弹性填满剩余高度，保证下方文字在任何格子宽下不被裁切
+            Expanded(
               child: CachedAlbumArt(
                 albumArtFilePath: album.albumArtFilePath,
                 hasEmbeddedArt: album.albumArtFilePath != null,
@@ -265,37 +271,41 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
             const Divider(height: 1),
             // Song list
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                itemCount: _songs.length,
-                itemBuilder: (context, index) {
-                  final song = _songs[index];
-                  final isCurrent = song.id == player.currentSong?.id;
-                  return SongTile(
-                    song: song,
-                    isCurrentSong: isCurrent,
-                    onTap: () => ServiceLocator.player.playFromList(
-                      _songs,
-                      startIndex: index,
-                    ),
-                    leading: SizedBox(
-                      width: 32,
-                      child: Text(
-                        '${index + 1}',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: isCurrent
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurfaceVariant,
+              child: Material(
+                type: MaterialType.transparency,
+                clipBehavior: Clip.hardEdge,
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                  itemCount: _songs.length,
+                  itemBuilder: (context, index) {
+                    final song = _songs[index];
+                    final isCurrent = song.id == player.currentSong?.id;
+                    return SongTile(
+                      song: song,
+                      isCurrentSong: isCurrent,
+                      onTap: () => ServiceLocator.player.playFromList(
+                        _songs,
+                        startIndex: index,
+                      ),
+                      leading: SizedBox(
+                        width: 32,
+                        child: Text(
+                          '${index + 1}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: isCurrent
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ),
-                    ),
-                    menuBuilder: (song) => songMenuItems(song),
-                    onMenuSelected: (song, value) async {
-                      await handleSongMenuAction(context, song, value);
-                      await _load();
-                    },
-                  );
-                },
+                      menuBuilder: (song) => songMenuItems(song),
+                      onMenuSelected: (song, value) async {
+                        await handleSongMenuAction(context, song, value);
+                        await _load();
+                      },
+                    );
+                  },
+                ),
               ),
             ),
           ],

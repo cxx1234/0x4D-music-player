@@ -68,6 +68,8 @@ class CachedAlbumArt extends StatelessWidget {
 
 /// Fallback placeholder widget used when no album art is available.
 Widget _buildPlaceholder(ThemeData theme, double size) {
+  // size 可能为 double.infinity（网格卡片用 Expanded 填满），此时图标取固定值。
+  final iconSize = size.isFinite ? size * 0.35 : 48.0;
   return Container(
     width: size,
     height: size,
@@ -77,7 +79,7 @@ Widget _buildPlaceholder(ThemeData theme, double size) {
     ),
     child: Icon(
       Icons.music_note_rounded,
-      size: size * 0.35,
+      size: iconSize,
       color: theme.colorScheme.onPrimaryContainer,
     ),
   );

@@ -178,16 +178,20 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                 _buildEmptyState(theme)
               else
                 Expanded(
-                  child: ReorderableListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                    buildDefaultDragHandles: false,
-                    onReorderItem: _onReorder,
-                    itemCount: _songs.length,
-                    itemBuilder: (context, index) {
-                      final song = _songs[index];
-                      final isCurrent = song.id == player.currentSong?.id;
-                      return _buildSongRow(theme, song, index, isCurrent);
-                    },
+                  child: Material(
+                    type: MaterialType.transparency,
+                    clipBehavior: Clip.hardEdge,
+                    child: ReorderableListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                      buildDefaultDragHandles: false,
+                      onReorderItem: _onReorder,
+                      itemCount: _songs.length,
+                      itemBuilder: (context, index) {
+                        final song = _songs[index];
+                        final isCurrent = song.id == player.currentSong?.id;
+                        return _buildSongRow(theme, song, index, isCurrent);
+                      },
+                    ),
                   ),
                 ),
             ],

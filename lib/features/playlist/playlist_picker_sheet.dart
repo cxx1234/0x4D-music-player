@@ -58,21 +58,25 @@ class _PlaylistPickerSheetState extends State<_PlaylistPickerSheet> {
             )
           else
             Flexible(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: playlists.length,
-                itemBuilder: (context, index) {
-                  final p = playlists[index];
-                  return ListTile(
-                    leading: const Icon(Icons.queue_music_rounded),
-                    title: Text(
-                      p.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onTap: () => Navigator.pop(context, p.id),
-                  );
-                },
+              child: Material(
+                type: MaterialType.transparency,
+                clipBehavior: Clip.hardEdge,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: playlists.length,
+                  itemBuilder: (context, index) {
+                    final p = playlists[index];
+                    return ListTile(
+                      leading: const Icon(Icons.queue_music_rounded),
+                      title: Text(
+                        p.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () => Navigator.pop(context, p.id),
+                    );
+                  },
+                ),
               ),
             ),
           ListTile(

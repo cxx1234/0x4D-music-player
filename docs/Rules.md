@@ -40,6 +40,16 @@ Do not place unrelated files together.
 * Avoid business logic inside Widgets.
 * Prefer StatelessWidget whenever possible.
 * Move complex logic into ViewModels.
+* Wrap bounded scrollables (ListView / GridView / ReorderableListView) that
+  contain interactive tiles (ListTile / InkWell) in a transparent Material with
+  Clip.hardEdge. Otherwise ink ripples draw on the nearest ancestor Material
+  (often the whole-page Scaffold) and visibly spill outside the list bounds:
+
+      Material(
+        type: MaterialType.transparency,
+        clipBehavior: Clip.hardEdge,
+        child: ListView.builder(/* ... */),
+      )
 
 ⸻
 

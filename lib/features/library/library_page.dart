@@ -267,40 +267,44 @@ class _LibraryPageState extends State<LibraryPage> {
   Widget _buildFolderList(ThemeData theme) {
     return ConstrainedBox(
       constraints: const BoxConstraints(maxHeight: 160),
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        shrinkWrap: true,
-        itemCount: _musicFolders.length,
-        itemBuilder: (context, index) {
-          final folder = _musicFolders[index];
-          return Card(
-            child: ListTile(
-              dense: true,
-              leading: const Icon(Icons.folder),
-              title: Text(
-                folder,
-                style: theme.textTheme.bodySmall,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!_viewModel.isScanning)
+      child: Material(
+        type: MaterialType.transparency,
+        clipBehavior: Clip.hardEdge,
+        child: ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          shrinkWrap: true,
+          itemCount: _musicFolders.length,
+          itemBuilder: (context, index) {
+            final folder = _musicFolders[index];
+            return Card(
+              child: ListTile(
+                dense: true,
+                leading: const Icon(Icons.folder),
+                title: Text(
+                  folder,
+                  style: theme.textTheme.bodySmall,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!_viewModel.isScanning)
+                      IconButton(
+                        icon: const Icon(Icons.refresh, size: 18),
+                        tooltip: '重新扫描此文件夹',
+                        onPressed: () => _viewModel.rescanFolder(folder),
+                      ),
                     IconButton(
-                      icon: const Icon(Icons.refresh, size: 18),
-                      tooltip: '重新扫描此文件夹',
-                      onPressed: () => _viewModel.rescanFolder(folder),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      tooltip: '移除',
+                      onPressed: () => _removeFolder(folder),
                     ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    tooltip: '移除',
-                    onPressed: () => _removeFolder(folder),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

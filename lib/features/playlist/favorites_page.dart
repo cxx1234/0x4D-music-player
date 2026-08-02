@@ -87,61 +87,65 @@ class _FavoritesPageState extends State<FavoritesPage> {
               ),
             );
           }
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-            itemCount: _songs.length,
-            itemBuilder: (context, index) {
-              final song = _songs[index];
-              final isCurrent = song.id == player.currentSong?.id;
-              return ListTile(
-                selected: isCurrent,
-                selectedTileColor: theme.colorScheme.primary.withValues(
-                  alpha: 0.1,
-                ),
-                leading: SizedBox(
-                  width: 44,
-                  height: 44,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: CachedAlbumArt(
-                      albumArtFilePath: song.albumArtFilePath,
-                      hasEmbeddedArt: song.hasEmbeddedArt == 1,
-                      size: 44,
-                      borderRadius: 6,
+          return Material(
+            type: MaterialType.transparency,
+            clipBehavior: Clip.hardEdge,
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+              itemCount: _songs.length,
+              itemBuilder: (context, index) {
+                final song = _songs[index];
+                final isCurrent = song.id == player.currentSong?.id;
+                return ListTile(
+                  selected: isCurrent,
+                  selectedTileColor: theme.colorScheme.primary.withValues(
+                    alpha: 0.1,
+                  ),
+                  leading: SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: CachedAlbumArt(
+                        albumArtFilePath: song.albumArtFilePath,
+                        hasEmbeddedArt: song.hasEmbeddedArt == 1,
+                        size: 44,
+                        borderRadius: 6,
+                      ),
                     ),
                   ),
-                ),
-                title: Text(
-                  song.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: isCurrent ? theme.colorScheme.primary : null,
-                    fontWeight: isCurrent ? FontWeight.bold : null,
+                  title: Text(
+                    song.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isCurrent ? theme.colorScheme.primary : null,
+                      fontWeight: isCurrent ? FontWeight.bold : null,
+                    ),
                   ),
-                ),
-                subtitle: song.artist != null
-                    ? Text(
-                        song.artist!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      )
-                    : null,
-                trailing: PopupMenuButton<String>(
-                  tooltip: '更多',
-                  onSelected: (value) {
-                    if (value == 'unfavorite') _unfavorite(song);
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(value: 'unfavorite', child: Text('取消喜欢')),
-                  ],
-                ),
-                onTap: () => ServiceLocator.player.playFromList(
-                  _songs,
-                  startIndex: index,
-                ),
-              );
-            },
+                  subtitle: song.artist != null
+                      ? Text(
+                          song.artist!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : null,
+                  trailing: PopupMenuButton<String>(
+                    tooltip: '更多',
+                    onSelected: (value) {
+                      if (value == 'unfavorite') _unfavorite(song);
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(value: 'unfavorite', child: Text('取消喜欢')),
+                    ],
+                  ),
+                  onTap: () => ServiceLocator.player.playFromList(
+                    _songs,
+                    startIndex: index,
+                  ),
+                );
+              },
+            ),
           );
         },
       ),
