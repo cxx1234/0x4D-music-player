@@ -110,6 +110,7 @@ class PlayQueue extends ChangeNotifier {
   void setCurrentIndex(int index) {
     if (index < 0 || index >= _queue.length) return;
     _currentIndex = index;
+    _save();
     notifyListeners();
   }
 

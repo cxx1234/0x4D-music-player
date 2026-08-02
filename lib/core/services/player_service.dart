@@ -138,7 +138,15 @@ class PlayerService extends ChangeNotifier {
 
   // ─── Playback control ──────────────────────────────────
 
-  Future<void> play() => _player.play();
+  Future<void> play() async {
+    // Lazily build the sequence if no audio source is loaded yet (e.g.
+    // restored queue after startup) — play() on an empty player does nothing.
+    if (_audioSource == null) {
+      if (_playQueue.isEmpty) return;
+      await _rebuildSequence();
+    }
+    await _player.play();
+  }
 
   Future<void> pause() => _player.pause();
 
@@ -146,7 +154,7 @@ class PlayerService extends ChangeNotifier {
     if (_player.playing) {
       await _player.pause();
     } else {
-      await _player.play();
+      await play();
     }
   }
 
@@ -159,6 +167,24 @@ class PlayerService extends ChangeNotifier {
   /// Skip to the next song.  Wraps around if [repeatMode] is [PlayerRepeatMode.all].
   Future<void> next() async {
     if (_playQueue.isEmpty) return;
+
+    // No audio source loaded yet (e.g. restored queue after startup) —
+    // lazily build the sequence so navigation works without pre-loading
+    // files (which would need macOS sandbox permissions too early).
+    if (_audioSource == null) {
+      final nextIndex = _playQueue.currentIndex + 1;
+      if (nextIndex < _playQueue.length) {
+        _playQueue.setCurrentIndex(nextIndex);
+        await _rebuildSequence();
+        await _player.play();
+      } else if (_repeatMode == PlayerRepeatMode.all) {
+        _playQueue.setCurrentIndex(0);
+        await _rebuildSequence();
+        await _player.play();
+      }
+      return;
+    }
+
     if (_playQueue.currentIndex < _playQueue.length - 1) {
       await _player.seekToNext();
     } else if (_repeatMode == PlayerRepeatMode.all) {
@@ -170,6 +196,18 @@ class PlayerService extends ChangeNotifier {
   /// Go back to the previous song.
   Future<void> previous() async {
     if (_playQueue.isEmpty) return;
+
+    // Lazily build the sequence if no audio source is loaded yet.
+    if (_audioSource == null) {
+      final prevIndex = _playQueue.currentIndex - 1;
+      if (prevIndex >= 0) {
+        _playQueue.setCurrentIndex(prevIndex);
+        await _rebuildSequence();
+        await _player.play();
+      }
+      return;
+    }
+
     // If more than 3 seconds in, restart the current song.
     if (_player.position.inSeconds > 3) {
       await _player.seek(Duration.zero);
@@ -228,7 +266,13 @@ class PlayerService extends ChangeNotifier {
   Future<void> jumpTo(int index) async {
     if (index < 0 || index >= _playQueue.length) return;
     _playQueue.setCurrentIndex(index);
-    await _player.seek(Duration.zero, index: index);
+    if (_audioSource == null) {
+      // Lazy-load the sequence on first playback — avoids accessing files
+      // before macOS sandbox bookmarks are resolved at startup.
+      await _rebuildSequence();
+    } else {
+      await _player.seek(Duration.zero, index: index);
+    }
     await _player.play();
   }
 
@@ -265,16 +309,6 @@ class PlayerService extends ChangeNotifier {
     _playQueue.clear();
     _audioSource = null;
     await _player.stop();
-  }
-
-  /// Set up the playback sequence from a restored queue at startup.
-  ///
-  /// Called once by [ServiceLocator] after the queue is loaded from disk.
-  /// Loads the audio source **without auto-playing**, so the cached queue can
-  /// be used immediately via [jumpTo]/[next]/[previous].
-  Future<void> initializePlayback() async {
-    if (_playQueue.isEmpty) return;
-    await _rebuildSequence();
   }
 
   /// Fallback: rebuild the entire audio sequence from scratch.

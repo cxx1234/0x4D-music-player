@@ -109,9 +109,6 @@ class ServiceLocator {
     _playQueue = PlayQueue();
     await _playQueue!.restoreQueue(_database!);
     _player = PlayerService(playQueue: _playQueue!);
-    // Rebuild the audio sequence from the restored queue (without auto-play)
-    // so cached songs can be played immediately after startup.
-    await _player!.initializePlayback();
     _sandbox = SandboxService();
 
     _mediaControls = MediaControlService(
