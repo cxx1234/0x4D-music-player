@@ -52,14 +52,11 @@ class _QueueViewState extends State<QueueView> {
     super.dispose();
   }
 
-  // 估算单行高度（ListTile 带副标题 ≈72，否则 ≈56），用于计算滚动偏移。
-  static const double _tileWithSubtitle = 72;
-  static const double _tileWithoutSubtitle = 56;
+  // 队列固定行高：itemExtent 保证滚动偏移精确（index * extent），
+  // 不会像“逐行估算高度”那样在大列表下累积误差导致高亮滚动失效。
+  static const double _kQueueTileExtent = 72;
 
-  double _estimateTileExtent(Song song) =>
-      song.artist != null ? _tileWithSubtitle : _tileWithoutSubtitle;
-
-  // 滚动到当前播放项并尽量居中显示。
+  // 滚动到当前播放项并尽量居中显示（先快后慢 easeOutCubic，400ms）。
   void _scrollToCurrent() {
     if (!mounted) return;
     final index = vm.currentIndex;
@@ -67,20 +64,15 @@ class _QueueViewState extends State<QueueView> {
     if (index < 0 || index >= queue.length) return;
     if (!_scrollController.hasClients) return;
 
-    // 累加当前项之前各行的高度作为目标偏移，再减去半个视口使目标居中。
-    double offset = 0;
-    for (var i = 0; i < index; i++) {
-      offset += _estimateTileExtent(queue[i]);
-    }
-    offset -= _scrollController.position.viewportDimension / 2;
-    final target = offset.clamp(
-      0.0,
-      _scrollController.position.maxScrollExtent,
-    );
+    // 偏移 = index * 固定行高，再减去半个视口使目标居中。
+    final target =
+        (index * _kQueueTileExtent -
+                _scrollController.position.viewportDimension / 2)
+            .clamp(0.0, _scrollController.position.maxScrollExtent);
     _scrollController.animateTo(
       target,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
     );
   }
 
@@ -238,6 +230,7 @@ class _QueueViewState extends State<QueueView> {
   Widget _buildList(List<Song> queue) {
     return ListView.builder(
       controller: _scrollController,
+      itemExtent: _kQueueTileExtent,
       padding: const EdgeInsets.symmetric(vertical: 4),
       itemCount: queue.length,
       itemBuilder: (context, index) {
@@ -251,6 +244,7 @@ class _QueueViewState extends State<QueueView> {
   Widget _buildReorderableList(List<Song> queue) {
     return ReorderableListView.builder(
       scrollController: _scrollController,
+      itemExtent: _kQueueTileExtent,
       padding: const EdgeInsets.symmetric(vertical: 4),
       buildDefaultDragHandles: false,
       itemCount: queue.length,
@@ -294,15 +288,20 @@ class _QueueViewState extends State<QueueView> {
               child: const Icon(Icons.drag_handle, size: 20),
             )
           : (isCurrent
-                ? Icon(
-                    Icons.play_arrow_rounded,
-                    color: theme.colorScheme.primary,
-                    size: 20,
+                ? SizedBox(
+                    width: 32,
+                    child: Icon(
+                      Icons.play_arrow_rounded,
+                      color: theme.colorScheme.primary,
+                      size: 20,
+                    ),
                   )
                 : SizedBox(
-                    width: 24,
+                    width: 32,
                     child: Text(
                       '${index + 1}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,

@@ -10,6 +10,9 @@ import 'queue_page.dart';
 import 'queue_view.dart';
 
 class PlayerPage extends StatefulWidget {
+  /// 全屏播放页的路由名（用于全局底栏在播放页打开时隐藏）。
+  static const String routeName = '/player';
+
   const PlayerPage({super.key});
 
   @override
@@ -56,6 +59,11 @@ class _PlayerPageState extends State<PlayerPage> {
 
         return Scaffold(
           appBar: AppBar(
+            leading: IconButton(
+              icon: const Icon(Icons.keyboard_arrow_down),
+              tooltip: '收起',
+              onPressed: () => Navigator.of(context).pop(),
+            ),
             title: const Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -136,6 +144,7 @@ class _PlayerPageState extends State<PlayerPage> {
                         viewModel: _viewModel,
                         song: song,
                         theme: theme,
+                        isNarrow: true,
                       ),
                     ),
                   ),
@@ -152,6 +161,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       viewModel: _viewModel,
                       song: song,
                       theme: theme,
+                      isNarrow: false,
                     ),
                   ),
 
@@ -179,11 +189,13 @@ class _LeftPanel extends StatelessWidget {
   final PlayerViewModel viewModel;
   final Song song;
   final ThemeData theme;
+  final bool isNarrow;
 
   const _LeftPanel({
     required this.viewModel,
     required this.song,
     required this.theme,
+    required this.isNarrow,
   });
 
   @override
@@ -198,7 +210,10 @@ class _LeftPanel extends StatelessWidget {
           const SizedBox(height: 32),
 
           // ── Song info ──────────────────────────────────
-          _SongInfo(song: song, theme: theme),
+          SizedBox(
+            width: double.infinity,
+            child: _SongInfo(song: song, theme: theme, isNarrow: isNarrow),
+          ),
           const SizedBox(height: 32),
 
           // ── Progress bar ───────────────────────────────
@@ -243,8 +258,13 @@ class _AlbumArt extends StatelessWidget {
 class _SongInfo extends StatelessWidget {
   final Song song;
   final ThemeData theme;
+  final bool isNarrow;
 
-  const _SongInfo({required this.song, required this.theme});
+  const _SongInfo({
+    required this.song,
+    required this.theme,
+    required this.isNarrow,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -253,8 +273,13 @@ class _SongInfo extends StatelessWidget {
       if (song.album != null) song.album!,
     ].join(' · ');
 
+    // 窄模式（单栏）上下两行都居中；宽模式靠左。
+    final textAlign = isNarrow ? TextAlign.center : TextAlign.start;
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: isNarrow
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
       children: [
         Text(
           song.title,
@@ -263,6 +288,7 @@ class _SongInfo extends StatelessWidget {
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
+          textAlign: textAlign,
         ),
         if (subtitle.isNotEmpty) ...[
           const SizedBox(height: 4),
@@ -273,6 +299,7 @@ class _SongInfo extends StatelessWidget {
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            textAlign: textAlign,
           ),
         ],
       ],
