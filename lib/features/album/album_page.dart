@@ -240,6 +240,9 @@ class _AlbumDetailContent extends StatefulWidget {
 
 class _AlbumDetailContentState extends State<_AlbumDetailContent> {
   List<Song> _songs = [];
+
+  /// 平铺的行结构：多碟时含 `Disc N` 标题行，单碟时全是歌曲行。
+  List<_AlbumRow> _rows = [];
   bool _loading = true;
 
   @override
@@ -255,9 +258,33 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
     if (mounted) {
       setState(() {
         _songs = songs;
+        _rows = _buildRows(songs);
         _loading = false;
       });
     }
+  }
+
+  /// 是否多碟专辑（出现 >1 个不同的碟号）。
+  bool _hasMultipleDiscs(List<Song> songs) =>
+      songs.map((s) => s.discNumber ?? 1).toSet().length > 1;
+
+  /// 按碟分组生成平铺行：多碟时在每组前插入 `Disc N` 标题行。
+  List<_AlbumRow> _buildRows(List<Song> songs) {
+    if (!_hasMultipleDiscs(songs)) {
+      return [for (var i = 0; i < songs.length; i++) _AlbumRow.song(i)];
+    }
+    final indicesByDisc = <int, List<int>>{};
+    for (var i = 0; i < songs.length; i++) {
+      final disc = songs[i].discNumber ?? 1;
+      indicesByDisc.putIfAbsent(disc, () => []).add(i);
+    }
+    final discs = indicesByDisc.keys.toList()..sort();
+    final rows = <_AlbumRow>[];
+    for (final disc in discs) {
+      rows.add(_AlbumRow.header(disc));
+      rows.addAll([for (final i in indicesByDisc[disc]!) _AlbumRow.song(i)]);
+    }
+    return rows;
   }
 
   @override
@@ -282,21 +309,26 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
                 clipBehavior: Clip.hardEdge,
                 child: ListView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                  itemCount: _songs.length,
+                  itemCount: _rows.length,
                   itemBuilder: (context, index) {
-                    final song = _songs[index];
+                    final row = _rows[index];
+                    if (row.isHeader) {
+                      return _DiscHeader(disc: row.disc!);
+                    }
+                    final song = _songs[row.songIndex];
                     final isCurrent = song.id == player.currentSong?.id;
                     return SongTile(
                       song: song,
                       isCurrentSong: isCurrent,
                       onTap: () => ServiceLocator.player.playFromList(
                         _songs,
-                        startIndex: index,
+                        startIndex: row.songIndex,
                       ),
                       leading: SizedBox(
-                        width: 32,
+                        width: 36,
                         child: Text(
-                          '${index + 1}',
+                          song.trackNumber?.toString() ?? '',
+                          textAlign: TextAlign.right,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: isCurrent
                                 ? theme.colorScheme.primary
@@ -367,6 +399,39 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 专辑详情列表中的一行：`Disc N` 标题行或歌曲行。
+class _AlbumRow {
+  final int? disc;
+  final int songIndex;
+
+  const _AlbumRow.header(this.disc) : songIndex = -1;
+  const _AlbumRow.song(this.songIndex) : disc = null;
+
+  bool get isHeader => disc != null;
+}
+
+/// 多碟专辑的分碟标题行。
+class _DiscHeader extends StatelessWidget {
+  final int disc;
+
+  const _DiscHeader({required this.disc});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 16, 0, 4),
+      child: Text(
+        'Disc $disc',
+        style: theme.textTheme.labelLarge?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
