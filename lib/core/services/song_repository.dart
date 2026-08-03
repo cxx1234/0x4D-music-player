@@ -12,8 +12,14 @@ import 'service_locator.dart';
 /// Wraps [FlutterMusicDatabase] and provides higher-level operations
 /// like batch upsert, file-state sync, and folder-scoped queries.
 class SongRepository {
-  FlutterMusicDatabase get _db => ServiceLocator.database;
+  final FlutterMusicDatabase? _database;
+  FlutterMusicDatabase get _db => _database ?? ServiceLocator.database;
   final _artCache = AlbumArtCacheService();
+
+  /// [database] is optional and used for testing; defaults to the app-wide
+  /// [ServiceLocator.database].
+  // ignore: prefer_initializing_formals (公开参数名 database，字段私有 _database)
+  SongRepository({FlutterMusicDatabase? database}) : _database = database;
 
   // ─── Song queries ──────────────────────────────────────
 
@@ -62,9 +68,6 @@ class SongRepository {
 
   Stream<List<Song>> watchSongsByArtist(int artistId) =>
       _db.watchSongsByArtist(artistId);
-
-  Future<List<Album>> getAlbumsByArtist(int artistId) =>
-      _db.getAlbumsByArtist(artistId);
 
   // ─── Playlist queries ──────────────────────────────────
 
@@ -227,45 +230,55 @@ class SongRepository {
   // ─── Album helpers ─────────────────────────────────────
 
   /// Builds a stable album key used for art cache deduplication.
-  String _buildAlbumKey(String albumName, String? artistName) {
-    return '$albumName::${artistName ?? 'Unknown'}';
+  ///
+  /// Uses the album artist (falling back to the song artist) so a compilation
+  /// album shared by many artists keeps a single cover.
+  String _buildAlbumKey(String albumName, String? albumArtist) {
+    return '$albumName::${albumArtist ?? 'Unknown'}';
   }
 
-  /// Finds an existing album by name + artist, or creates a new one.
+  /// Finds an existing album for [albumName] / [artistId], or creates a new
+  /// one, merging same-named albums across different song artists.
   ///
-  /// If the album doesn't have art yet and the current song provides embedded
+  /// Resolution order:
+  /// 1. Exact match by `(albumName, artistId)` — the fast path for ordinary
+  ///    albums and same-name albums by the same artist.
+  /// 2. Reuse any existing album with the same name — merges compilation /
+  ///    multi-artist albums into a single record. Skipped only when the song
+  ///    carries an explicit `albumArtist` tag that differs from the existing
+  ///    album's (treated as two distinct albums).
+  /// 3. Create a new album (with embedded-art caching).
+  ///
+  /// If the reused album has no art yet and the current song provides embedded
   /// art, the art is cached using the album key (not the file path), ensuring
-  /// one cover per album.  The album record is updated with the cached path.
-  ///
-  /// Returns `(albumId, albumArtFilePath)`.
+  /// one cover per album. Returns `(albumId, albumArtFilePath)`.
   Future<(int, String?)> _getOrCreateAlbum(
     String albumName,
     int? artistId,
     ScannedSong song,
   ) async {
-    final albumKey = _buildAlbumKey(albumName, song.artist);
+    final albumArtist = song.albumArtist ?? song.artist;
+    final albumKey = _buildAlbumKey(albumName, albumArtist);
 
-    // Try to find an existing album.
+    // 1) Exact match by name + song artist.
     if (artistId != null) {
       final existing = await _db.getAlbumByNameAndArtist(albumName, artistId);
       if (existing != null) {
         await _fillAlbumArtistIfEmpty(existing, song);
-        return (existing.id, existing.albumArtFilePath);
+        final artPath = await _ensureAlbumArt(existing, song, albumKey);
+        return (existing.id, artPath);
       }
     }
 
-    // If no artistId, search without artist constraint (fallback).
-    if (artistId == null) {
-      final allAlbums = await _db.getAllAlbums();
-      for (final a in allAlbums) {
-        if (a.name == albumName) {
-          await _fillAlbumArtistIfEmpty(a, song);
-          return (a.id, a.albumArtFilePath);
-        }
-      }
+    // 2) Reuse a same-named album (merges multi-artist albums).
+    final byName = await _db.getAlbumByName(albumName);
+    if (byName != null && !_isDistinctAlbum(byName, song.albumArtist)) {
+      await _fillAlbumArtistIfEmpty(byName, song);
+      final artPath = await _ensureAlbumArt(byName, song, albumKey);
+      return (byName.id, artPath);
     }
 
-    // ── Deduplicate album art ──────────────────────────
+    // 3) Create a new album, caching embedded art.
     String? albumArtPath;
     if (song.hasEmbeddedArt &&
         song.pictureBytes != null &&
@@ -292,13 +305,60 @@ class SongRepository {
       AlbumsCompanion(
         name: Value(albumName),
         artistId: Value(artistId),
-        albumArtist: Value(song.albumArtist ?? song.artist),
+        albumArtist: Value(albumArtist),
         nameSortKey: Value(buildSortKey(albumName)),
         albumArtFilePath: Value(albumArtPath),
       ),
     );
 
     return (albumId, albumArtPath);
+  }
+
+  /// Whether a same-named album should be treated as a distinct album
+  /// (i.e. NOT merged) — true only when the song carries an explicit
+  /// `albumArtist` tag that differs from the existing album's. Without a tag
+  /// the albums are merged by name.
+  bool _isDistinctAlbum(Album album, String? songAlbumArtist) {
+    final tag = songAlbumArtist?.trim();
+    if (tag == null || tag.isEmpty) return false;
+    final existing = album.albumArtist?.trim();
+    if (existing == null || existing.isEmpty) return false;
+    return existing != tag;
+  }
+
+  /// Returns the album's art path, filling it from the current song's embedded
+  /// art (and writing the cached path back to the album) when missing.
+  Future<String?> _ensureAlbumArt(
+    Album album,
+    ScannedSong song,
+    String albumKey,
+  ) async {
+    if (album.albumArtFilePath != null) return album.albumArtFilePath;
+    if (!song.hasEmbeddedArt ||
+        song.pictureBytes == null ||
+        song.pictureMimeType == null) {
+      return null;
+    }
+    try {
+      final String path;
+      if (await _artCache.hasAlbumArt(albumKey)) {
+        path = await _artCache.getAlbumArtPath(albumKey);
+      } else {
+        path = await _artCache.saveAlbumArt(
+          albumKey,
+          song.pictureBytes!,
+          song.pictureMimeType!,
+        );
+      }
+      await _db.updateAlbum(
+        AlbumsCompanion(albumArtFilePath: Value(path)),
+        album.id,
+      );
+      return path;
+    } catch (_) {
+      // Best-effort: if caching fails, leave art null.
+      return null;
+    }
   }
 
   // ─── File state sync ───────────────────────────────────

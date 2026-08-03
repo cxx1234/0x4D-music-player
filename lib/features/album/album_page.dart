@@ -8,6 +8,12 @@ import '../../widgets/song_tile.dart';
 import '../playlist/song_actions.dart';
 import 'album_view_model.dart';
 
+/// 专辑副标题：优先显示 albumArtist；无则显示「多位歌手」。
+String _albumSubtitle(Album album) {
+  final artist = album.albumArtist?.trim();
+  return (artist == null || artist.isEmpty) ? '多位歌手' : artist;
+}
+
 class AlbumsPage extends StatefulWidget {
   const AlbumsPage({super.key});
 
@@ -175,7 +181,7 @@ class _AlbumCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
-                album.albumArtist ?? '未知歌手',
+                _albumSubtitle(album),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -345,7 +351,7 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  widget.album.albumArtist ?? '未知歌手',
+                  _albumSubtitle(widget.album),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

@@ -197,13 +197,32 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
 
   Future<void> _load() async {
     final results = await Future.wait([
-      ServiceLocator.songRepo.getAlbumsByArtist(widget.artist.id),
+      ServiceLocator.songRepo.getAllAlbums(),
       ServiceLocator.songRepo.getSongsByArtist(widget.artist.id),
     ]);
+    final allAlbums = results[0] as List<Album>;
+    final songs = results[1] as List<Song>;
+
+    // 专辑按该歌手歌曲的 albumId 派生：合集/多歌手专辑每位参与歌手都能看到。
+    final albumById = {for (final a in allAlbums) a.id: a};
+    final albumsById = <int, Album>{};
+    for (final s in songs) {
+      final albumId = s.albumId;
+      if (albumId == null) continue;
+      final album = albumById[albumId];
+      if (album != null) albumsById[albumId] = album;
+    }
+    final albums = albumsById.values.toList()
+      ..sort((a, b) {
+        final byYear = (a.year ?? 0).compareTo(b.year ?? 0);
+        if (byYear != 0) return byYear;
+        return a.name.compareTo(b.name);
+      });
+
     if (mounted) {
       setState(() {
-        _albums = results[0] as List<Album>;
-        _songs = results[1] as List<Song>;
+        _albums = albums;
+        _songs = songs;
         _loading = false;
       });
     }
