@@ -1,10 +1,14 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import '../../core/database/database.dart';
+import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
 import 'favorites_page.dart';
 import 'playlist_cover.dart';
 import 'playlist_detail_page.dart';
+import 'playlist_io.dart';
 import 'playlist_view_model.dart';
 
 class PlaylistPage extends StatefulWidget {
@@ -79,6 +83,73 @@ class _PlaylistPageState extends State<PlaylistPage> {
     if (created != null) {
       await _openDetail(created);
     }
+  }
+
+  Future<void> _importM3u() async {
+    final result = await FilePicker.pickFiles(
+      dialogTitle: '导入播放列表',
+      type: FileType.custom,
+      allowedExtensions: const ['m3u', 'm3u8'],
+    );
+    final filePath = result?.files.single.path;
+    if (filePath == null || !mounted) return;
+
+    final imported = await importM3uFromFile(filePath);
+    if (imported.songs.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('未匹配到任何歌曲，请确认歌单中的文件已在音乐库中')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    final defaultName = p.basenameWithoutExtension(filePath);
+    final targetId = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => _ImportTargetSheet(
+        songs: imported.songs,
+        total: imported.total,
+        defaultName: defaultName,
+        playlists: _viewModel.playlists,
+      ),
+    );
+    if (targetId == null || !mounted) return;
+
+    int playlistId;
+    String targetName;
+    if (targetId == _ImportTargetSheet.createNew) {
+      playlistId = await _viewModel.createPlaylist(defaultName);
+      targetName = defaultName;
+    } else {
+      playlistId = targetId;
+      targetName = _nameOf(targetId) ?? '播放列表';
+    }
+
+    final added = await ServiceLocator.songRepo.addSongsToPlaylist(
+      playlistId,
+      imported.songs.map((s) => s.id).toList(),
+    );
+    await _viewModel.load();
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          '已导入 $added 首到"$targetName"'
+          '${imported.skipped > 0 ? '，${imported.skipped} 首未匹配' : ''}',
+        ),
+      ),
+    );
+  }
+
+  String? _nameOf(int id) {
+    for (final pl in _viewModel.playlists) {
+      if (pl.id == id) return pl.name;
+    }
+    return null;
   }
 
   Future<void> _rename(Playlist playlist) async {
@@ -218,6 +289,15 @@ class _PlaylistPageState extends State<PlaylistPage> {
             ),
           ),
           const Spacer(),
+          PopupMenuButton<String>(
+            tooltip: '更多',
+            onSelected: (value) {
+              if (value == 'import') _importM3u();
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'import', child: Text('导入播放列表')),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.add),
             tooltip: '新建播放列表',
@@ -384,6 +464,88 @@ class _PlaylistPageState extends State<PlaylistPage> {
             const SizedBox(height: 4),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 导入 M3U 时的目标选择弹层：新建（以文件名命名）或加入已有播放列表。
+class _ImportTargetSheet extends StatelessWidget {
+  /// 选中"新建播放列表"时返回的特殊 id。
+  static const int createNew = -1;
+
+  final List<Song> songs;
+  final int total;
+  final String defaultName;
+  final List<Playlist> playlists;
+
+  const _ImportTargetSheet({
+    required this.songs,
+    required this.total,
+    required this.defaultName,
+    required this.playlists,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              '导入 ${songs.length} 首歌曲',
+              style: theme.textTheme.titleMedium,
+            ),
+          ),
+          if (total > songs.length)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                '${total - songs.length} 首未匹配（不在音乐库中）',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ListTile(
+            leading: const Icon(Icons.add),
+            title: Text('新建播放列表"$defaultName"'),
+            onTap: () => Navigator.pop(context, createNew),
+          ),
+          if (playlists.isNotEmpty) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Text(
+                '加入已有播放列表',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: playlists.length,
+                itemBuilder: (context, index) {
+                  final pl = playlists[index];
+                  return ListTile(
+                    leading: const Icon(Icons.queue_music_rounded),
+                    title: Text(
+                      pl.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => Navigator.pop(context, pl.id),
+                  );
+                },
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

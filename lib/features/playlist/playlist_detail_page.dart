@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 
@@ -6,6 +7,7 @@ import '../../core/services/service_locator.dart';
 import '../../widgets/cached_album_art.dart';
 import 'add_songs_sheet.dart';
 import 'playlist_cover.dart';
+import 'playlist_io.dart';
 
 /// 播放列表详情页：头部 + 可拖动排序的歌曲列表 + 加歌/重命名/删除。
 class PlaylistDetailPage extends StatefulWidget {
@@ -50,6 +52,21 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     if (added != null && added > 0) {
       await _load();
     }
+  }
+
+  Future<void> _exportM3u() async {
+    final path = await FilePicker.saveFile(
+      dialogTitle: '导出播放列表',
+      fileName: '$_name.m3u8',
+      type: FileType.custom,
+      allowedExtensions: const ['m3u8', 'm3u'],
+    );
+    if (path == null || !mounted) return;
+    final count = await exportPlaylistToFile(widget.playlist.id, path);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已导出 $count 首歌曲')));
   }
 
   Future<void> _rename() async {
@@ -155,8 +172,10 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
             onSelected: (value) {
               if (value == 'rename') _rename();
               if (value == 'delete') _delete();
+              if (value == 'export') _exportM3u();
             },
             itemBuilder: (context) => const [
+              PopupMenuItem(value: 'export', child: Text('导出为 M3U…')),
               PopupMenuItem(value: 'rename', child: Text('重命名')),
               PopupMenuItem(value: 'delete', child: Text('删除')),
             ],
