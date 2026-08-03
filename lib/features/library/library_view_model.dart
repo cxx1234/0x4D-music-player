@@ -122,6 +122,7 @@ class LibraryViewModel extends ChangeNotifier {
     ServiceLocator.folderWatcher.stopWatching(folderPath);
     await ServiceLocator.songRepo.removeFolder(folderPath);
     await ServiceLocator.settings.removeMusicFolder(folderPath);
+    await _syncQueueWithLibrary();
     await _loadSongs();
     notifyListeners();
   }
@@ -155,6 +156,7 @@ class LibraryViewModel extends ChangeNotifier {
       _errorMessage = e.toString();
     }
 
+    await _syncQueueWithLibrary();
     await _loadSongs();
     notifyListeners();
   }
@@ -165,6 +167,13 @@ class LibraryViewModel extends ChangeNotifier {
     } catch (_) {
       // Silently handle quick sync errors
     }
+    await _syncQueueWithLibrary();
+  }
+
+  /// 移除音乐库中已不存在的歌曲，保持播放队列与库一致。
+  Future<void> _syncQueueWithLibrary() async {
+    final available = await ServiceLocator.database.getAllFilePaths();
+    await ServiceLocator.player.pruneQueue(available.toSet());
   }
 
   /// Resolves macOS security-scoped bookmarks to restore sandbox access.

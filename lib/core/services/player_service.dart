@@ -322,6 +322,26 @@ class PlayerService extends ChangeNotifier {
     await _player.stop();
   }
 
+  /// Sync the queue & audio with the library: removes any song whose
+  /// `filePath` is not in [validFilePaths] (e.g. its folder was removed or
+  /// the file went missing).
+  ///
+  /// The audio sequence is only rebuilt when a song was **actually** removed —
+  /// a no-op prune (e.g. on a routine library page refresh) leaves the audio
+  /// untouched to avoid stutter.
+  Future<void> pruneQueue(Set<String> validFilePaths) async {
+    final pruned = _playQueue.pruneTo(validFilePaths);
+
+    if (_playQueue.isEmpty) {
+      _audioSource = null;
+      await _player.stop();
+      return;
+    }
+    if (pruned && _audioSource != null) {
+      await _rebuildSequence();
+    }
+  }
+
   /// Map a [PlayerRepeatMode] to just_audio's [LoopMode].
   LoopMode _loopModeFor(PlayerRepeatMode mode) {
     switch (mode) {

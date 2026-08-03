@@ -114,6 +114,34 @@ class PlayQueue extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Remove every song whose `filePath` is **not** in [validFilePaths].
+  ///
+  /// Keeps the queue in sync with the library after songs are deleted or
+  /// become unavailable (e.g. their folder was removed). The current song
+  /// is preserved if it survives; otherwise the index falls back to 0.
+  ///
+  /// Returns `true` if any song was actually removed, `false` otherwise.
+  bool pruneTo(Set<String> validFilePaths) {
+    if (_queue.every((s) => validFilePaths.contains(s.filePath))) {
+      return false; // nothing to prune
+    }
+
+    final currentFilePath = currentSong?.filePath;
+    _queue.removeWhere((s) => !validFilePaths.contains(s.filePath));
+
+    if (_queue.isEmpty) {
+      _currentIndex = 0;
+    } else if (currentFilePath != null) {
+      final newIndex = _queue.indexWhere((s) => s.filePath == currentFilePath);
+      _currentIndex = newIndex < 0 ? 0 : newIndex;
+    } else {
+      _currentIndex = _currentIndex.clamp(0, _queue.length - 1);
+    }
+    _save();
+    notifyListeners();
+    return true;
+  }
+
   /// Update [_currentIndex] without touching audio.
   void setCurrentIndex(int index) {
     if (index < 0 || index >= _queue.length) return;
