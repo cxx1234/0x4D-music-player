@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
@@ -20,19 +22,39 @@ class _LibraryPageState extends State<LibraryPage> {
   final _viewModel = LibraryViewModel();
   List<String> _musicFolders = [];
   bool _ready = false;
+  Timer? _readyTimer;
 
   @override
   void initState() {
     super.initState();
     _viewModel.addListener(_onViewModelChanged);
     _loadFolders();
+    _scheduleReadyRetry();
   }
 
   @override
   void dispose() {
+    _readyTimer?.cancel();
     _viewModel.removeListener(_onViewModelChanged);
     _viewModel.dispose();
     super.dispose();
+  }
+
+  /// 兜底：ServiceLocator 尚未就绪时轮询等待，就绪后自动加载。
+  ///
+  /// 不依赖 [didUpdateWidget] —— Flutter 的 `MaterialApp.home` 参数变化
+  /// 不会刷新 Navigator 里已存在的初始 route，导致 `isInitialized` 信号
+  /// 从未到达本页面，启动后不做任何操作会一直转圈。
+  void _scheduleReadyRetry() {
+    _readyTimer?.cancel();
+    if (widget.isInitialized || ServiceLocator.isReady) return;
+    _readyTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      if (widget.isInitialized || ServiceLocator.isReady) {
+        _readyTimer?.cancel();
+        _readyTimer = null;
+        _loadFolders();
+      }
+    });
   }
 
   @override
@@ -48,9 +70,11 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   void _loadFolders() {
-    // 初始化完成前等待 didUpdateWidget 触发；ServiceLocator 已就绪时
-    // 即使 isInitialized 信号意外丢失也能立即加载，避免一直转圈。
+    // 初始化完成前等待 didUpdateWidget / 轮询兜底触发；ServiceLocator 已
+    // 就绪时即使 isInitialized 信号意外丢失也能立即加载，避免一直转圈。
     if (!widget.isInitialized && !ServiceLocator.isReady) return;
+    _readyTimer?.cancel();
+    _readyTimer = null;
     final folders = ServiceLocator.settings.musicFolders;
     if (mounted) {
       setState(() {
