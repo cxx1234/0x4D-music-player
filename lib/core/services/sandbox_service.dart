@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Manages macOS Security-Scoped Bookmarks via a native MethodChannel.
@@ -31,13 +32,19 @@ class SandboxService {
 
   /// Resolves a previously created [base64Bookmark] and starts accessing the
   /// security-scoped resource.  Returns the file path on success, or `null`
-  /// if the bookmark is invalid / stale.
+  /// if the bookmark is invalid / stale / cannot be accessed.
   Future<String?> resolveBookmark(String base64Bookmark) async {
     try {
       return await _channel.invokeMethod<String>(
         'resolveBookmark',
         base64Bookmark,
       );
+    } on PlatformException catch (e) {
+      // STALE / RESOLVE_FAILED / ACCESS_FAILED — the bookmark can't be
+      // restored. Log the reason so callers can decide whether to ask the
+      // user to re-authorize the folder.
+      debugPrint('[Sandbox] resolveBookmark 失败: ${e.code} - ${e.message}');
+      return null;
     } on MissingPluginException {
       return null;
     }

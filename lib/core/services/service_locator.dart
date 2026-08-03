@@ -1,3 +1,7 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+
 import '../audio/platform_media_controls.dart';
 import '../database/database.dart';
 import 'folder_watcher_service.dart';
@@ -22,6 +26,9 @@ class ServiceLocator {
   static PlayerService? _player;
   static SandboxService? _sandbox;
   static MediaControlService? _mediaControls;
+
+  /// 启动时恢复沙箱权限失败的文件夹数量（0 = 全部成功）。
+  static int _sandboxRestoreFailures = 0;
 
   static FlutterMusicDatabase get database {
     if (_database == null) {
@@ -98,6 +105,16 @@ class ServiceLocator {
   /// Whether [initialize] has completed.
   static bool get isReady => _player != null;
 
+  /// 启动时恢复沙箱权限失败的文件夹数量（0 = 全部成功）。
+  ///
+  /// UI 可据此提示用户重新授权音乐文件夹。
+  static int get sandboxRestoreFailures => _sandboxRestoreFailures;
+
+  /// 重新授权成功后清零失败计数。
+  static void clearSandboxRestoreFailures() {
+    _sandboxRestoreFailures = 0;
+  }
+
   static Future<void> initialize() async {
     _settings = SettingsService();
     await _settings!.initialize();
@@ -111,10 +128,43 @@ class ServiceLocator {
     _player = PlayerService(playQueue: _playQueue!);
     _sandbox = SandboxService();
 
+    // macOS 沙箱：恢复 security-scoped bookmarks（与 UI 生命周期解耦，
+    // 保证每次启动都无条件执行，不依赖音乐库页面是否成功渲染）。
+    await _restoreSandboxAccess();
+
     _mediaControls = MediaControlService(
       _player!,
       PlatformMediaControls.create(),
     );
     await _mediaControls!.initialize();
+  }
+
+  /// 恢复 macOS security-scoped bookmarks，让音乐文件夹在重启后仍可读。
+  ///
+  /// resolve 后做读探测确认真实可读；失效的 bookmark 记录日志并累加
+  /// [sandboxRestoreFailures]，供 UI 提示用户重新授权。
+  static Future<void> _restoreSandboxAccess() async {
+    for (final item in _settings!.musicFolderItems) {
+      if (item.bookmark.isEmpty) continue;
+
+      final restoredPath = await _sandbox!.resolveBookmark(item.bookmark);
+      if (restoredPath == null) {
+        _sandboxRestoreFailures++;
+        debugPrint('[Sandbox] 音乐文件夹 bookmark 解析失败（可能已失效）：${item.path}');
+        continue;
+      }
+
+      // 读探测：resolve 返回路径不代表权限真正生效，实际验证目录可读。
+      try {
+        final dir = Directory(restoredPath);
+        if (!await dir.exists()) {
+          _sandboxRestoreFailures++;
+          debugPrint('[Sandbox] 音乐文件夹不存在：$restoredPath');
+        }
+      } catch (e) {
+        _sandboxRestoreFailures++;
+        debugPrint('[Sandbox] 音乐文件夹读探测失败：$restoredPath ($e)');
+      }
+    }
   }
 }

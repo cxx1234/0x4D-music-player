@@ -48,7 +48,9 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   void _loadFolders() {
-    if (!widget.isInitialized) return;
+    // 初始化完成前等待 didUpdateWidget 触发；ServiceLocator 已就绪时
+    // 即使 isInitialized 信号意外丢失也能立即加载，避免一直转圈。
+    if (!widget.isInitialized && !ServiceLocator.isReady) return;
     final folders = ServiceLocator.settings.musicFolders;
     if (mounted) {
       setState(() {
@@ -89,6 +91,8 @@ class _LibraryPageState extends State<LibraryPage> {
     return Column(
       children: [
         _buildAppBar(theme),
+        if (ServiceLocator.sandboxRestoreFailures > 0)
+          _buildSandboxWarning(theme),
         if (_viewModel.isScanning) _buildScanProgress(theme),
         if (_viewModel.scanResult != null && !_viewModel.isScanning)
           _buildScanResult(theme),
@@ -146,6 +150,54 @@ class _LibraryPageState extends State<LibraryPage> {
         ),
       ),
     );
+  }
+
+  /// macOS 沙箱权限恢复失败的提示横幅 + 重新授权入口。
+  Widget _buildSandboxWarning(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Material(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Row(
+            children: [
+              Icon(
+                Icons.lock_outline,
+                size: 16,
+                color: theme.colorScheme.onErrorContainer,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '音乐文件夹访问权限已失效，请重新授权',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onErrorContainer,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: _reauthorizeFolder,
+                child: const Text('重新授权'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 重新授权音乐文件夹：重新选择文件夹并刷新 bookmark，随后重扫恢复数据。
+  Future<void> _reauthorizeFolder() async {
+    final path = await FilePicker.getDirectoryPath();
+    if (path == null || !mounted) return;
+
+    final bookmark = await ServiceLocator.sandbox.createBookmark(path);
+    await ServiceLocator.settings.updateMusicFolderBookmark(path, bookmark);
+    ServiceLocator.clearSandboxRestoreFailures();
+    setState(() => _musicFolders = ServiceLocator.settings.musicFolders);
+    _viewModel.startScan();
   }
 
   Widget _buildAppBar(ThemeData theme) {

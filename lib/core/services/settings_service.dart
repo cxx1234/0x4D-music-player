@@ -162,6 +162,23 @@ class SettingsService {
     await _save();
   }
 
+  /// 更新已有音乐文件夹的 security-scoped bookmark（重新授权后调用）。
+  ///
+  /// 与 [addMusicFolder] 不同，路径已存在时也会更新 bookmark，
+  /// 用于修复失效的 macOS 沙箱权限。
+  Future<void> updateMusicFolderBookmark(String path, String bookmark) async {
+    _settings = _settings.copyWith(
+      musicFolders: [
+        for (final f in _settings.musicFolders)
+          if (f.path == path)
+            MusicFolder(path: f.path, bookmark: bookmark)
+          else
+            f,
+      ],
+    );
+    await _save();
+  }
+
   Future<void> setThemeMode(String mode) async {
     _settings = _settings.copyWith(themeMode: mode);
     await _save();

@@ -72,10 +72,8 @@ class LibraryViewModel extends ChangeNotifier {
     ServiceLocator.player.addListener(notifyListeners);
     final folders = ServiceLocator.settings.musicFolders;
     if (folders.isNotEmpty) {
-      // Resolve any stored macOS security-scoped bookmarks so the
-      // app can read these folders (sandbox permission restoration).
-      await _resolveBookmarks();
-
+      // 沙箱权限恢复已在 ServiceLocator.initialize() 完成（与 UI 解耦，
+      // 见 ServiceLocator._restoreSandboxAccess）。
       _startWatching(folders);
       // Quick check: scan without re-parsing existing files.
       // markMissing:false ensures we never falsely delete data even if
@@ -174,23 +172,6 @@ class LibraryViewModel extends ChangeNotifier {
   Future<void> _syncQueueWithLibrary() async {
     final available = await ServiceLocator.database.getAllFilePaths();
     await ServiceLocator.player.pruneQueue(available.toSet());
-  }
-
-  /// Resolves macOS security-scoped bookmarks to restore sandbox access.
-  ///
-  /// Iterates over all stored [MusicFolder] items and resolves their
-  /// bookmark data so the app can read those folders after a restart.
-  Future<void> _resolveBookmarks() async {
-    final items = ServiceLocator.settings.musicFolderItems;
-    for (final item in items) {
-      if (item.bookmark.isEmpty) continue;
-      try {
-        await ServiceLocator.sandbox.resolveBookmark(item.bookmark);
-      } catch (_) {
-        // Stale or invalid bookmark — will be re-created next time the
-        // user picks the folder.  Not fatal.
-      }
-    }
   }
 
   Future<void> _loadSongs() async {
