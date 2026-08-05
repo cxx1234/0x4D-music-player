@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/detail_top_bar.dart';
 import 'player_view_model.dart';
 import 'queue_view.dart';
 
@@ -23,7 +24,7 @@ class _QueuePageState extends State<QueuePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('播放列表'), centerTitle: true),
+      appBar: const DetailTopBar(title: '播放列表'),
       body: QueueView(viewModel: _viewModel, theme: Theme.of(context)),
     );
   }

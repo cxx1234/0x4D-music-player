@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../widgets/cached_album_art.dart';
+import '../../widgets/detail_top_bar.dart';
+import '../../widgets/page_toolbar.dart';
+import '../../widgets/play_all_button.dart';
 import '../../widgets/song_tile.dart';
 import '../playlist/song_actions.dart';
 import 'artist_view_model.dart';
@@ -47,7 +50,7 @@ class _ArtistsPageState extends State<ArtistsPage> {
 
     return Column(
       children: [
-        _buildAppBar(theme, artists.length),
+        _buildAppBar(artists.length),
         const Divider(height: 1),
         if (artists.isEmpty)
           _buildEmptyState(theme)
@@ -57,22 +60,8 @@ class _ArtistsPageState extends State<ArtistsPage> {
     );
   }
 
-  Widget _buildAppBar(ThemeData theme, int count) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-      child: Row(
-        children: [
-          Text('歌手', style: theme.textTheme.titleLarge),
-          const SizedBox(width: 12),
-          Text(
-            '$count 位',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
+  Widget _buildAppBar(int count) {
+    return PageToolbar(title: '歌手', subtitle: '$count 位');
   }
 
   Widget _buildEmptyState(ThemeData theme) {
@@ -153,25 +142,9 @@ class ArtistDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(artist.name),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.playlist_play),
-            tooltip: '播放全部',
-            onPressed: () => _playAll(context),
-          ),
-        ],
-      ),
+      appBar: DetailTopBar(title: artist.name),
       body: _ArtistDetailContent(artist: artist),
     );
-  }
-
-  void _playAll(BuildContext context) async {
-    final songs = await ServiceLocator.songRepo.getSongsByArtist(artist.id);
-    if (songs.isNotEmpty) {
-      ServiceLocator.player.playFromList(songs, startIndex: 0);
-    }
   }
 }
 
@@ -257,7 +230,13 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
 
         // Songs section
         SliverToBoxAdapter(
-          child: _SectionHeader(title: '歌曲 (${_songs.length})'),
+          child: _SectionHeader(
+            title: '歌曲 (${_songs.length})',
+            trailing: PlayAllButton(
+              onPlayAll: () =>
+                  ServiceLocator.player.playFromList(_songs, startIndex: 0),
+            ),
+          ),
         ),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -289,19 +268,27 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
 
 class _SectionHeader extends StatelessWidget {
   final String title;
+  final Widget? trailing;
 
-  const _SectionHeader({required this.title});
+  const _SectionHeader({required this.title, this.trailing});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-      child: Text(
-        title,
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ?trailing,
+        ],
       ),
     );
   }

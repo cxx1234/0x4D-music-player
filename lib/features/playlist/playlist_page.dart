@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
+import '../../widgets/page_toolbar.dart';
 import 'favorites_page.dart';
 import 'playlist_cover.dart';
 import 'playlist_detail_page.dart';
@@ -264,7 +265,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
 
     return Column(
       children: [
-        _buildAppBar(theme, playlists.length),
+        _buildAppBar(playlists.length),
         const Divider(height: 1),
         Expanded(
           child: hasAnything
@@ -275,36 +276,26 @@ class _PlaylistPageState extends State<PlaylistPage> {
     );
   }
 
-  Widget _buildAppBar(ThemeData theme, int count) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 16, 8),
-      child: Row(
-        children: [
-          Text('播放列表', style: theme.textTheme.titleLarge),
-          const SizedBox(width: 12),
-          Text(
-            '$count 个',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const Spacer(),
-          PopupMenuButton<String>(
-            tooltip: '更多',
-            onSelected: (value) {
-              if (value == 'import') _importM3u();
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'import', child: Text('导入播放列表')),
-            ],
-          ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: '新建播放列表',
-            onPressed: _createPlaylist,
-          ),
-        ],
-      ),
+  Widget _buildAppBar(int count) {
+    return PageToolbar(
+      title: '播放列表',
+      subtitle: '$count 个',
+      actions: [
+        PopupMenuButton<String>(
+          tooltip: '更多',
+          onSelected: (value) {
+            if (value == 'import') _importM3u();
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(value: 'import', child: Text('导入播放列表')),
+          ],
+        ),
+        IconButton(
+          icon: const Icon(Icons.add),
+          tooltip: '新建播放列表',
+          onPressed: _createPlaylist,
+        ),
+      ],
     );
   }
 

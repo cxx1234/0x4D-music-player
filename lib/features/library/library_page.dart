@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/database/song_sort_order.dart';
 import '../../core/services/service_locator.dart';
+import '../../widgets/page_toolbar.dart';
 import '../../widgets/song_tile.dart';
 import '../playlist/song_actions.dart';
 import 'library_view_model.dart';
@@ -114,7 +115,7 @@ class _LibraryPageState extends State<LibraryPage> {
 
     return Column(
       children: [
-        _buildAppBar(theme),
+        _buildAppBar(),
         if (ServiceLocator.sandboxRestoreFailures > 0)
           _buildSandboxWarning(theme),
         if (_viewModel.isScanning) _buildScanProgress(theme),
@@ -224,50 +225,41 @@ class _LibraryPageState extends State<LibraryPage> {
     _viewModel.startScan();
   }
 
-  Widget _buildAppBar(ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-      child: Row(
-        children: [
-          Text('音乐库', style: theme.textTheme.titleLarge),
-          const SizedBox(width: 12),
-          if (_viewModel.songs.isNotEmpty)
-            Text(
-              '${_viewModel.songs.length} 首',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+  Widget _buildAppBar() {
+    return PageToolbar(
+      title: '音乐库',
+      subtitle: _viewModel.songs.isNotEmpty
+          ? '${_viewModel.songs.length} 首'
+          : null,
+      actions: [
+        if (_viewModel.songs.isNotEmpty)
+          PopupMenuButton<SongSortOrder>(
+            tooltip: '排序',
+            icon: const Icon(Icons.sort),
+            onSelected: _viewModel.setSortOrder,
+            itemBuilder: (context) => [
+              for (final order in SongSortOrder.values)
+                CheckedPopupMenuItem(
+                  value: order,
+                  checked: order == _viewModel.sortOrder,
+                  child: Text(order.label),
+                ),
+            ],
+          ),
+        if (_musicFolders.isNotEmpty) ...[
+          if (!_viewModel.isScanning)
+            IconButton(
+              onPressed: _viewModel.startScan,
+              icon: const Icon(Icons.refresh),
+              tooltip: '重新扫描',
             ),
-          const Spacer(),
-          if (_viewModel.songs.isNotEmpty)
-            PopupMenuButton<SongSortOrder>(
-              tooltip: '排序',
-              icon: const Icon(Icons.sort),
-              onSelected: _viewModel.setSortOrder,
-              itemBuilder: (context) => [
-                for (final order in SongSortOrder.values)
-                  CheckedPopupMenuItem(
-                    value: order,
-                    checked: order == _viewModel.sortOrder,
-                    child: Text(order.label),
-                  ),
-              ],
-            ),
-          if (_musicFolders.isNotEmpty) ...[
-            if (!_viewModel.isScanning)
-              IconButton(
-                onPressed: _viewModel.startScan,
-                icon: const Icon(Icons.refresh),
-                tooltip: '重新扫描',
-              ),
-            FilledButton.icon(
-              onPressed: _pickFolder,
-              icon: const Icon(Icons.folder_open, size: 18),
-              label: const Text('导入文件夹'),
-            ),
-          ],
+          FilledButton.icon(
+            onPressed: _pickFolder,
+            icon: const Icon(Icons.folder_open, size: 18),
+            label: const Text('导入文件夹'),
+          ),
         ],
-      ),
+      ],
     );
   }
 

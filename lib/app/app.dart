@@ -1,8 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:metadata_god/metadata_god.dart';
 
 import 'theme.dart';
 import 'router.dart';
+import '../core/constants/layout.dart';
 import '../core/services/service_locator.dart';
 import '../features/player/player_page.dart';
 import '../features/shell/now_playing_bar.dart';
@@ -20,9 +23,16 @@ class _AppState extends State<App> {
   final _navKey = GlobalKey<NavigatorState>();
   final _showBar = ValueNotifier<bool>(true);
 
+  /// 与原生层（MainFlutterWindow.swift）通信的通道。
+  static const _windowChannel = MethodChannel('flutter_music/window');
+
   @override
   void initState() {
     super.initState();
+    // 首帧后将顶部高度参数同步给原生层（红绿灯定位用）。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncTopBarHeightToNative();
+    });
     ServiceLocator.initialize().then((_) async {
       try {
         await MetadataGod.initialize();
@@ -40,6 +50,21 @@ class _AppState extends State<App> {
   void dispose() {
     _showBar.dispose();
     super.dispose();
+  }
+
+  /// 将左侧边栏顶部预留高度（layoutConfig.sidebarTopInset）传给原生层，用于红绿灯定位。
+  Future<void> _syncTopBarHeightToNative() async {
+    // 红绿灯仅 macOS 有；其他平台没有该 MethodChannel handler，
+    // 不调用可避免 MissingPluginException 噪音。
+    if (defaultTargetPlatform != TargetPlatform.macOS) return;
+    try {
+      await _windowChannel.invokeMethod(
+        'setTopBarHeight',
+        layoutConfig.sidebarTopInset,
+      );
+    } catch (e) {
+      debugPrint('Failed to sync top bar height to native: $e');
+    }
   }
 
   void _openPlayer() {
@@ -68,9 +93,10 @@ class _AppState extends State<App> {
           initialEntries: [
             OverlayEntry(
               builder: (context) => Scaffold(
-                // 所有页面（Shell + 子页面 + 播放页）都渲染在底栏上方，
-                // 底栏因此全局常驻、子页面不再盖住它。
-                body: child,
+                // 所有页面（Shell + 子页面 + 播放页）都渲染在底栏上方，底栏不被
+                // 子页面盖住。顶部不再有全局顶栏，改由各页面自行避让（左侧边栏
+                // 顶部预留 45 给红绿灯，右侧内容区用统一高度的 PageToolbar）。
+                body: child ?? const SizedBox.shrink(),
                 bottomNavigationBar: ValueListenableBuilder<bool>(
                   valueListenable: _showBar,
                   builder: (context, show, _) {

@@ -4,6 +4,9 @@ import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
 import '../../widgets/cached_album_art.dart';
+import '../../widgets/detail_top_bar.dart';
+import '../../widgets/page_toolbar.dart';
+import '../../widgets/play_all_button.dart';
 import '../../widgets/song_tile.dart';
 import '../playlist/song_actions.dart';
 import 'album_view_model.dart';
@@ -54,7 +57,7 @@ class _AlbumsPageState extends State<AlbumsPage> {
 
     return Column(
       children: [
-        _buildAppBar(theme, albums.length),
+        _buildAppBar(albums.length),
         const Divider(height: 1),
         if (albums.isEmpty)
           _buildEmptyState(theme)
@@ -64,22 +67,8 @@ class _AlbumsPageState extends State<AlbumsPage> {
     );
   }
 
-  Widget _buildAppBar(ThemeData theme, int count) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-      child: Row(
-        children: [
-          Text('专辑', style: theme.textTheme.titleLarge),
-          const SizedBox(width: 12),
-          Text(
-            '$count 张',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
+  Widget _buildAppBar(int count) {
+    return PageToolbar(title: '专辑', subtitle: '$count 张');
   }
 
   Widget _buildEmptyState(ThemeData theme) {
@@ -207,25 +196,9 @@ class AlbumDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(album.name),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.playlist_play),
-            tooltip: '播放全部',
-            onPressed: () => _playAll(context),
-          ),
-        ],
-      ),
+      appBar: DetailTopBar(title: album.name),
       body: _AlbumDetailContent(album: album),
     );
-  }
-
-  void _playAll(BuildContext context) async {
-    final songs = await ServiceLocator.songRepo.getSongsByAlbum(album.id);
-    if (songs.isNotEmpty) {
-      ServiceLocator.player.playFromList(songs, startIndex: 0);
-    }
   }
 }
 
@@ -299,9 +272,12 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
       builder: (context, _) {
         return Column(
           children: [
-            // Album header
-            _buildHeader(theme),
-            const Divider(height: 1),
+            // Album header（底部 Material 阴影分隔列表区）
+            Material(
+              color: theme.colorScheme.surface,
+              elevation: 3,
+              child: _buildHeader(theme),
+            ),
             // Song list
             Expanded(
               child: Material(
@@ -394,6 +370,12 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
+                ),
+                const SizedBox(height: 12),
+                // 椭圆形「播放全部」文本按钮，位于信息文本下方
+                PlayAllButton(
+                  onPlayAll: () =>
+                      ServiceLocator.player.playFromList(_songs, startIndex: 0),
                 ),
               ],
             ),

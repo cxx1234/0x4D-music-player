@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/layout.dart';
 import '../../core/database/database.dart';
 import '../../core/services/player_service.dart';
 import '../../widgets/cached_album_art.dart';
@@ -58,51 +59,67 @@ class _PlayerPageState extends State<PlayerPage> {
         final narrow = constraints.maxWidth < _kWideBreakpoint;
 
         return Scaffold(
-          appBar: AppBar(
-            leading: IconButton(
-              icon: const Icon(Icons.keyboard_arrow_down),
-              tooltip: '收起',
-              onPressed: () => Navigator.of(context).pop(),
+          appBar: PreferredSize(
+            // 总高 = 顶部红绿灯预留（macOS 45）+ 下方 56 控件区；
+            // 控件固定在下方区域内，不再随 AppBar 整体垂直居中。
+            preferredSize: Size.fromHeight(
+              kToolbarHeight + layoutConfig.playerTopBarTopReserve,
             ),
-            title: const Row(
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.music_note_rounded),
-                SizedBox(width: 8),
-                Text('正在播放'),
+                // 顶部红绿灯预留区（macOS 45，其余 0）。
+                SizedBox(height: layoutConfig.playerTopBarTopReserve),
+                AppBar(
+                  toolbarHeight: kToolbarHeight,
+                  leading: IconButton(
+                    icon: const Icon(Icons.keyboard_arrow_down),
+                    tooltip: '收起',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                  title: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.music_note_rounded),
+                      const SizedBox(width: 8),
+                      // 字号与 DetailTopBar 标题一致（titleMedium）。
+                      Text('正在播放', style: theme.textTheme.titleMedium),
+                    ],
+                  ),
+                  centerTitle: false,
+                  actions: [
+                    if (narrow) ...[
+                      // 窄模式：两个图标跳转全屏页
+                      IconButton(
+                        icon: const Icon(Icons.lyrics_rounded),
+                        tooltip: '歌词',
+                        onPressed: _openLyrics,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.queue_music_rounded),
+                        tooltip: '播放列表',
+                        onPressed: _openQueue,
+                      ),
+                    ] else ...[
+                      // 宽模式：切换右栏内容（选中高亮 + 显示文字）
+                      _AppBarTab(
+                        icon: Icons.lyrics_rounded,
+                        label: '歌词',
+                        selected: !_showQueue,
+                        onTap: () => setState(() => _showQueue = false),
+                      ),
+                      _AppBarTab(
+                        icon: Icons.queue_music_rounded,
+                        label: '播放列表',
+                        selected: _showQueue,
+                        onTap: () => setState(() => _showQueue = true),
+                      ),
+                    ],
+                    const SizedBox(width: 8),
+                  ],
+                ),
               ],
             ),
-            centerTitle: false,
-            actions: [
-              if (narrow) ...[
-                // 窄模式：两个图标跳转全屏页
-                IconButton(
-                  icon: const Icon(Icons.lyrics_rounded),
-                  tooltip: '歌词',
-                  onPressed: _openLyrics,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.queue_music_rounded),
-                  tooltip: '播放列表',
-                  onPressed: _openQueue,
-                ),
-              ] else ...[
-                // 宽模式：切换右栏内容（选中高亮 + 显示文字）
-                _AppBarTab(
-                  icon: Icons.lyrics_rounded,
-                  label: '歌词',
-                  selected: !_showQueue,
-                  onTap: () => setState(() => _showQueue = false),
-                ),
-                _AppBarTab(
-                  icon: Icons.queue_music_rounded,
-                  label: '播放列表',
-                  selected: _showQueue,
-                  onTap: () => setState(() => _showQueue = true),
-                ),
-              ],
-              const SizedBox(width: 8),
-            ],
           ),
           body: ListenableBuilder(
             listenable: _viewModel,

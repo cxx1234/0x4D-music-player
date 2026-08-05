@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../widgets/cached_album_art.dart';
+import '../../widgets/detail_top_bar.dart';
+import '../../widgets/play_all_button.dart';
 import 'add_songs_sheet.dart';
 import 'playlist_cover.dart';
 import 'playlist_io.dart';
@@ -155,20 +157,16 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     final player = ServiceLocator.player;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_name),
+      appBar: DetailTopBar(
+        title: _name,
         actions: [
           IconButton(
             icon: const Icon(Icons.playlist_add),
             tooltip: '添加歌曲',
             onPressed: _addSongs,
           ),
-          IconButton(
-            icon: const Icon(Icons.playlist_play),
-            tooltip: '播放全部',
-            onPressed: _playAll,
-          ),
           PopupMenuButton<String>(
+            tooltip: '更多',
             onSelected: (value) {
               if (value == 'rename') _rename();
               if (value == 'delete') _delete();
@@ -187,8 +185,12 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
         builder: (context, _) {
           return Column(
             children: [
-              _buildHeader(theme),
-              const Divider(height: 1),
+              // 头部（底部 Material 阴影分隔列表区）
+              Material(
+                color: theme.colorScheme.surface,
+                elevation: 3,
+                child: _buildHeader(theme),
+              ),
               if (_loading)
                 const Expanded(
                   child: Center(child: CircularProgressIndicator()),
@@ -249,6 +251,9 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
+                const SizedBox(height: 12),
+                // 椭圆形「播放全部」文本按钮，位于信息文本下方
+                PlayAllButton(onPlayAll: _playAll),
               ],
             ),
           ),
