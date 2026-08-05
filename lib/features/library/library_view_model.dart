@@ -61,6 +61,28 @@ class LibraryViewModel extends ChangeNotifier {
 
   final _scanner = LibraryScannerService();
 
+  /// 本 ViewModel 是否已注册到 PlayerService 的监听。
+  ///
+  /// 用于保证「注册最多一次 / 注销彻底一次」。ChangeNotifier 的 addListener
+  /// 不去重、removeListener 一次只移除一个匹配项;若 initialize() 被重复调用
+  /// (initState / 轮询兜底 / didUpdateWidget 多个触发源)会残留指向已 dispose
+  /// 实例的监听,播放时 positionStream 触发即抛 "used after being disposed"。
+  bool _playerListenerAttached = false;
+
+  /// 幂等注册:无论调用多少次,PlayerService 上最多挂一个本 VM 的监听。
+  void _attachPlayerListener() {
+    if (_playerListenerAttached) return;
+    ServiceLocator.player.addListener(notifyListeners);
+    _playerListenerAttached = true;
+  }
+
+  /// 注销注册:页面生命周期结束时调用,保证移除干净。
+  void _detachPlayerListener() {
+    if (!_playerListenerAttached) return;
+    ServiceLocator.player.removeListener(notifyListeners);
+    _playerListenerAttached = false;
+  }
+
   // ─── Initialization ────────────────────────────────────
 
   /// Called when the Library page is first shown.
@@ -69,13 +91,11 @@ class LibraryViewModel extends ChangeNotifier {
   /// Resolves macOS security-scoped bookmarks first to restore sandbox
   /// file access across app restarts.
   Future<void> initialize() async {
-    ServiceLocator.player.addListener(notifyListeners);
+    _attachPlayerListener();
     final folders = ServiceLocator.settings.musicFolders;
     if (folders.isNotEmpty) {
-      // Resolve any stored macOS security-scoped bookmarks so the
-      // app can read these folders (sandbox permission restoration).
-      await _resolveBookmarks();
-
+      // 沙箱权限恢复已在 ServiceLocator.initialize() 完成（与 UI 解耦，
+      // 见 ServiceLocator._restoreSandboxAccess）。
       _startWatching(folders);
       // Quick check: scan without re-parsing existing files.
       // markMissing:false ensures we never falsely delete data even if
@@ -122,6 +142,7 @@ class LibraryViewModel extends ChangeNotifier {
     ServiceLocator.folderWatcher.stopWatching(folderPath);
     await ServiceLocator.songRepo.removeFolder(folderPath);
     await ServiceLocator.settings.removeMusicFolder(folderPath);
+    await _syncQueueWithLibrary();
     await _loadSongs();
     notifyListeners();
   }
@@ -155,6 +176,7 @@ class LibraryViewModel extends ChangeNotifier {
       _errorMessage = e.toString();
     }
 
+    await _syncQueueWithLibrary();
     await _loadSongs();
     notifyListeners();
   }
@@ -165,23 +187,13 @@ class LibraryViewModel extends ChangeNotifier {
     } catch (_) {
       // Silently handle quick sync errors
     }
+    await _syncQueueWithLibrary();
   }
 
-  /// Resolves macOS security-scoped bookmarks to restore sandbox access.
-  ///
-  /// Iterates over all stored [MusicFolder] items and resolves their
-  /// bookmark data so the app can read those folders after a restart.
-  Future<void> _resolveBookmarks() async {
-    final items = ServiceLocator.settings.musicFolderItems;
-    for (final item in items) {
-      if (item.bookmark.isEmpty) continue;
-      try {
-        await ServiceLocator.sandbox.resolveBookmark(item.bookmark);
-      } catch (_) {
-        // Stale or invalid bookmark — will be re-created next time the
-        // user picks the folder.  Not fatal.
-      }
-    }
+  /// 移除音乐库中已不存在的歌曲，保持播放队列与库一致。
+  Future<void> _syncQueueWithLibrary() async {
+    final available = await ServiceLocator.database.getAllFilePaths();
+    await ServiceLocator.player.pruneQueue(available.toSet());
   }
 
   Future<void> _loadSongs() async {
@@ -196,7 +208,7 @@ class LibraryViewModel extends ChangeNotifier {
   void dispose() {
     // 测试环境可能未初始化 ServiceLocator，需要判空。
     if (ServiceLocator.isReady) {
-      ServiceLocator.player.removeListener(notifyListeners);
+      _detachPlayerListener();
     }
     super.dispose();
   }

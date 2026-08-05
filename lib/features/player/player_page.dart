@@ -1,19 +1,36 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/layout.dart';
 import '../../core/database/database.dart';
 import '../../core/services/player_service.dart';
 import '../../widgets/cached_album_art.dart';
+import 'lyrics_page.dart';
+import 'lyrics_view.dart';
 import 'player_view_model.dart';
+import 'queue_page.dart';
+import 'queue_view.dart';
 
 class PlayerPage extends StatefulWidget {
+  /// 全屏播放页的路由名（用于全局底栏在播放页打开时隐藏）。
+  static const String routeName = '/player';
+
   const PlayerPage({super.key});
 
   @override
   State<PlayerPage> createState() => _PlayerPageState();
 }
 
+// 宽模式断点：窗口宽度低于此值时隐藏右栏，进入单栏窄模式。
+const double _kWideBreakpoint = 760;
+
+// 宽模式下左栏固定宽度（播放控制行最小需求 ~384px，留出缓冲）。
+const double _kLeftPanelWidth = 420;
+
 class _PlayerPageState extends State<PlayerPage> {
   final _viewModel = PlayerViewModel();
+
+  // 宽模式下右栏显示队列(true)还是歌词(false)。
+  bool _showQueue = true;
 
   @override
   void dispose() {
@@ -21,66 +38,164 @@ class _PlayerPageState extends State<PlayerPage> {
     super.dispose();
   }
 
+  void _openLyrics() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const LyricsPage()));
+  }
+
+  void _openQueue() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const QueuePage()));
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('正在播放'), centerTitle: true),
-      body: ListenableBuilder(
-        listenable: _viewModel,
-        builder: (context, _) {
-          final song = _viewModel.currentSong;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth < _kWideBreakpoint;
 
-          // ── Empty state ────────────────────────────────
-          if (song == null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.music_note_rounded,
-                    size: 120,
-                    color: theme.colorScheme.primary,
+        return Scaffold(
+          appBar: PreferredSize(
+            // 总高 = 顶部红绿灯预留（macOS 45）+ 下方 56 控件区；
+            // 控件固定在下方区域内，不再随 AppBar 整体垂直居中。
+            preferredSize: Size.fromHeight(
+              kToolbarHeight + layoutConfig.playerTopBarTopReserve,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 顶部红绿灯预留区（macOS 45，其余 0）。
+                SizedBox(height: layoutConfig.playerTopBarTopReserve),
+                AppBar(
+                  toolbarHeight: kToolbarHeight,
+                  leading: IconButton(
+                    icon: const Icon(Icons.keyboard_arrow_down),
+                    tooltip: '收起',
+                    onPressed: () => Navigator.of(context).pop(),
                   ),
-                  const SizedBox(height: 24),
-                  Text('未在播放', style: theme.textTheme.headlineMedium),
-                  const SizedBox(height: 8),
-                  Text(
-                    '选择一首歌曲开始播放',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                  title: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.music_note_rounded),
+                      const SizedBox(width: 8),
+                      // 字号与 DetailTopBar 标题一致（titleMedium）。
+                      Text('正在播放', style: theme.textTheme.titleMedium),
+                    ],
+                  ),
+                  centerTitle: false,
+                  actions: [
+                    if (narrow) ...[
+                      // 窄模式：两个图标跳转全屏页
+                      IconButton(
+                        icon: const Icon(Icons.lyrics_rounded),
+                        tooltip: '歌词',
+                        onPressed: _openLyrics,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.queue_music_rounded),
+                        tooltip: '播放列表',
+                        onPressed: _openQueue,
+                      ),
+                    ] else ...[
+                      // 宽模式：切换右栏内容（选中高亮 + 显示文字）
+                      _AppBarTab(
+                        icon: Icons.lyrics_rounded,
+                        label: '歌词',
+                        selected: !_showQueue,
+                        onTap: () => setState(() => _showQueue = false),
+                      ),
+                      _AppBarTab(
+                        icon: Icons.queue_music_rounded,
+                        label: '播放列表',
+                        selected: _showQueue,
+                        onTap: () => setState(() => _showQueue = true),
+                      ),
+                    ],
+                    const SizedBox(width: 8),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          body: ListenableBuilder(
+            listenable: _viewModel,
+            builder: (context, _) {
+              final song = _viewModel.currentSong;
+
+              // ── Empty state ────────────────────────────
+              if (song == null) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.music_note_rounded,
+                        size: 120,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(height: 24),
+                      Text('未在播放', style: theme.textTheme.headlineMedium),
+                      const SizedBox(height: 8),
+                      Text(
+                        '选择一首歌曲开始播放',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              // ── 窄模式：单栏（右栏隐藏）───────────────
+              if (narrow) {
+                return SingleChildScrollView(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 460),
+                      child: _LeftPanel(
+                        viewModel: _viewModel,
+                        song: song,
+                        theme: theme,
+                        isNarrow: true,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              // ── 宽模式：左栏固定宽 + 右栏自适应 ────────
+              return Row(
+                children: [
+                  // ── Left panel: cover + info + controls ──
+                  SizedBox(
+                    width: _kLeftPanelWidth,
+                    child: _LeftPanel(
+                      viewModel: _viewModel,
+                      song: song,
+                      theme: theme,
+                      isNarrow: false,
+                    ),
+                  ),
+
+                  // ── Right panel: lyrics / queue ──────────
+                  Expanded(
+                    child: _RightPanel(
+                      viewModel: _viewModel,
+                      theme: theme,
+                      showQueue: _showQueue,
                     ),
                   ),
                 ],
-              ),
-            );
-          }
-
-          // ── Active playback — left / right split ───────
-          return Row(
-            children: [
-              // ── Left panel: cover + info + controls ────
-              Expanded(
-                flex: 4,
-                child: _LeftPanel(
-                  viewModel: _viewModel,
-                  song: song,
-                  theme: theme,
-                ),
-              ),
-
-              const VerticalDivider(width: 1),
-
-              // ── Right panel: lyrics / queue toggle ──────
-              Expanded(
-                flex: 6,
-                child: _RightPanel(viewModel: _viewModel, theme: theme),
-              ),
-            ],
-          );
-        },
-      ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }
@@ -91,11 +206,13 @@ class _LeftPanel extends StatelessWidget {
   final PlayerViewModel viewModel;
   final Song song;
   final ThemeData theme;
+  final bool isNarrow;
 
   const _LeftPanel({
     required this.viewModel,
     required this.song,
     required this.theme,
+    required this.isNarrow,
   });
 
   @override
@@ -110,7 +227,10 @@ class _LeftPanel extends StatelessWidget {
           const SizedBox(height: 32),
 
           // ── Song info ──────────────────────────────────
-          _SongInfo(song: song, theme: theme),
+          SizedBox(
+            width: double.infinity,
+            child: _SongInfo(song: song, theme: theme, isNarrow: isNarrow),
+          ),
           const SizedBox(height: 32),
 
           // ── Progress bar ───────────────────────────────
@@ -155,8 +275,13 @@ class _AlbumArt extends StatelessWidget {
 class _SongInfo extends StatelessWidget {
   final Song song;
   final ThemeData theme;
+  final bool isNarrow;
 
-  const _SongInfo({required this.song, required this.theme});
+  const _SongInfo({
+    required this.song,
+    required this.theme,
+    required this.isNarrow,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -165,8 +290,13 @@ class _SongInfo extends StatelessWidget {
       if (song.album != null) song.album!,
     ].join(' · ');
 
+    // 窄模式（单栏）上下两行都居中；宽模式靠左。
+    final textAlign = isNarrow ? TextAlign.center : TextAlign.start;
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: isNarrow
+          ? CrossAxisAlignment.center
+          : CrossAxisAlignment.start,
       children: [
         Text(
           song.title,
@@ -175,6 +305,7 @@ class _SongInfo extends StatelessWidget {
           ),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
+          textAlign: textAlign,
         ),
         if (subtitle.isNotEmpty) ...[
           const SizedBox(height: 4),
@@ -185,6 +316,7 @@ class _SongInfo extends StatelessWidget {
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            textAlign: textAlign,
           ),
         ],
       ],
@@ -338,63 +470,44 @@ class _IconButton extends StatelessWidget {
   }
 }
 
-// ─── Right panel: lyrics / queue toggle ──────────────────────
+// ─── Right panel: lyrics / queue content ─────────────────────
 
-class _RightPanel extends StatefulWidget {
+class _RightPanel extends StatelessWidget {
   final PlayerViewModel viewModel;
   final ThemeData theme;
+  final bool showQueue;
 
-  const _RightPanel({required this.viewModel, required this.theme});
-
-  @override
-  State<_RightPanel> createState() => _RightPanelState();
-}
-
-class _RightPanelState extends State<_RightPanel> {
-  bool _showQueue = true;
+  const _RightPanel({
+    required this.viewModel,
+    required this.theme,
+    required this.showQueue,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // ── Toggle ──────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _TabButton(
-                label: '歌词',
-                selected: !_showQueue,
-                onTap: () => setState(() => _showQueue = false),
-              ),
-              const SizedBox(width: 4),
-              _TabButton(
-                label: '播放列表',
-                selected: _showQueue,
-                onTap: () => setState(() => _showQueue = true),
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
         // ── Content ─────────────────────────────────────
         Expanded(
-          child: _showQueue
-              ? _QueueView(viewModel: widget.viewModel, theme: widget.theme)
-              : _LyricsTab(theme: widget.theme),
+          child: showQueue
+              ? QueueView(viewModel: viewModel, theme: theme)
+              : LyricsView(theme: theme),
         ),
       ],
     );
   }
 }
 
-class _TabButton extends StatelessWidget {
+// ─── AppBar tab（宽模式：切换右栏内容）──────────────────────
+
+class _AppBarTab extends StatelessWidget {
+  final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
-  const _TabButton({
+  const _AppBarTab({
+    required this.icon,
     required this.label,
     required this.selected,
     required this.onTap,
@@ -403,342 +516,43 @@ class _TabButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Material(
-      color: selected ? theme.colorScheme.primaryContainer : Colors.transparent,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Text(
-            label,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: selected
-                  ? theme.colorScheme.onPrimaryContainer
-                  : theme.colorScheme.onSurfaceVariant,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Lyrics tab placeholder ──────────────────────────────────
-
-class _LyricsTab extends StatelessWidget {
-  final ThemeData theme;
-
-  const _LyricsTab({required this.theme});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.lyrics_rounded,
-            size: 48,
-            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '暂无歌词',
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Queue view ──────────────────────────────────────────────
-
-class _QueueView extends StatefulWidget {
-  final PlayerViewModel viewModel;
-  final ThemeData theme;
-
-  const _QueueView({required this.viewModel, required this.theme});
-
-  @override
-  State<_QueueView> createState() => _QueueViewState();
-}
-
-class _QueueViewState extends State<_QueueView> {
-  bool _deleteMode = false;
-  bool _reorderMode = false;
-  final Set<int> _selectedIndices = {};
-
-  PlayerViewModel get vm => widget.viewModel;
-  ThemeData get theme => widget.theme;
-
-  String _formatDuration(int? ms) {
-    if (ms == null) return '';
-    final d = Duration(milliseconds: ms);
-    final min = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final sec = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$min:$sec';
-  }
-
-  void _toggleDeleteMode() {
-    setState(() {
-      _deleteMode = !_deleteMode;
-      if (!_deleteMode) {
-        _selectedIndices.clear();
-      }
-      _reorderMode = false;
-    });
-  }
-
-  void _toggleReorderMode() {
-    setState(() {
-      _reorderMode = !_reorderMode;
-      if (_reorderMode) {
-        _deleteMode = false;
-        _selectedIndices.clear();
-      }
-    });
-  }
-
-  Future<void> _confirmClear() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('清空播放列表'),
-        content: const Text('确定要清空当前播放列表吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('清空'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      await vm.clearQueue();
-    }
-  }
-
-  Future<void> _deleteSelected() async {
-    // Sort descending so indices stay valid after removal
-    final sorted = _selectedIndices.toList()..sort((a, b) => b.compareTo(a));
-    for (final i in sorted) {
-      await vm.removeFromQueue(i);
-    }
-    setState(() {
-      _selectedIndices.clear();
-      _deleteMode = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final queue = vm.queue;
-    if (queue.isEmpty) {
-      return Center(
-        child: Text(
-          '播放列表为空',
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        _buildToolbar(queue.length),
-        const Divider(height: 1),
-        Expanded(
-          child: Material(
-            type: MaterialType.transparency,
-            clipBehavior: Clip.hardEdge,
-            child: _reorderMode
-                ? _buildReorderableList(queue)
-                : _buildList(queue),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildToolbar(int count) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Row(
-        children: [
-          Text(
-            '共 $count 首',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Material(
+        color: selected
+            ? theme.colorScheme.primaryContainer
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: selected
+                      ? theme.colorScheme.onPrimaryContainer
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                if (selected) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: theme.colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          const Spacer(),
-          if (_deleteMode) ...[
-            IconButton(
-              icon: const Icon(Icons.close, size: 20),
-              tooltip: '取消',
-              onPressed: _toggleDeleteMode,
-            ),
-            const SizedBox(width: 4),
-            IconButton(
-              icon: Icon(
-                Icons.delete_rounded,
-                size: 20,
-                color: _selectedIndices.isNotEmpty
-                    ? theme.colorScheme.error
-                    : null,
-              ),
-              tooltip: '删除选中 (${_selectedIndices.length})',
-              onPressed: _selectedIndices.isNotEmpty ? _deleteSelected : null,
-            ),
-          ] else if (_reorderMode) ...[
-            IconButton(
-              icon: const Icon(Icons.check, size: 20),
-              tooltip: '完成排序',
-              onPressed: _toggleReorderMode,
-            ),
-          ] else ...[
-            IconButton(
-              icon: const Icon(Icons.delete_sweep_rounded, size: 20),
-              tooltip: '清空列表',
-              onPressed: _confirmClear,
-            ),
-            IconButton(
-              icon: const Icon(Icons.checklist_rounded, size: 20),
-              tooltip: '选择删除',
-              onPressed: _toggleDeleteMode,
-            ),
-            IconButton(
-              icon: const Icon(Icons.reorder_rounded, size: 20),
-              tooltip: '手动排序',
-              onPressed: _toggleReorderMode,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildList(List<Song> queue) {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      itemCount: queue.length,
-      itemBuilder: (context, index) {
-        final song = queue[index];
-        final isCurrent = index == vm.currentIndex;
-        return _buildListTile(song, index, isCurrent);
-      },
-    );
-  }
-
-  Widget _buildReorderableList(List<Song> queue) {
-    return ReorderableListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      buildDefaultDragHandles: false,
-      itemCount: queue.length,
-      onReorderItem: (oldIndex, newIndex) {
-        vm.moveInQueue(oldIndex, newIndex);
-      },
-      itemBuilder: (context, index) {
-        final song = queue[index];
-        final isCurrent = index == vm.currentIndex;
-        return _buildListTile(
-          song,
-          index,
-          isCurrent,
-          key: ValueKey(song.filePath),
-        );
-      },
-    );
-  }
-
-  Widget _buildListTile(Song song, int index, bool isCurrent, {Key? key}) {
-    return ListTile(
-      key: key,
-      selected: isCurrent,
-      selectedTileColor: theme.colorScheme.primary.withValues(alpha: 0.1),
-      leading: _deleteMode
-          ? Checkbox(
-              value: _selectedIndices.contains(index),
-              onChanged: (checked) {
-                setState(() {
-                  if (checked == true) {
-                    _selectedIndices.add(index);
-                  } else {
-                    _selectedIndices.remove(index);
-                  }
-                });
-              },
-            )
-          : _reorderMode
-          ? ReorderableDragStartListener(
-              index: index,
-              child: const Icon(Icons.drag_handle, size: 20),
-            )
-          : (isCurrent
-                ? Icon(
-                    Icons.play_arrow_rounded,
-                    color: theme.colorScheme.primary,
-                    size: 20,
-                  )
-                : SizedBox(
-                    width: 24,
-                    child: Text(
-                      '${index + 1}',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  )),
-      title: Text(
-        song.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontWeight: isCurrent ? FontWeight.bold : null,
-          color: isCurrent ? theme.colorScheme.primary : null,
         ),
       ),
-      subtitle: song.artist != null
-          ? Text(
-              song.artist!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            )
-          : null,
-      trailing: song.durationMs != null
-          ? Text(
-              _formatDuration(song.durationMs),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            )
-          : null,
-      onTap: _deleteMode
-          ? () {
-              setState(() {
-                if (_selectedIndices.contains(index)) {
-                  _selectedIndices.remove(index);
-                } else {
-                  _selectedIndices.add(index);
-                }
-              });
-            }
-          : (isCurrent ? null : () => vm.jumpTo(index)),
     );
   }
 }

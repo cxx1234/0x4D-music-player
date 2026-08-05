@@ -57,7 +57,11 @@ class AppDelegate: FlutterAppDelegate {
             result(FlutterError(code: "STALE", message: "Bookmark is stale, please re-add the folder", details: nil))
             return
           }
-          _ = url.startAccessingSecurityScopedResource()
+          // 检查是否真的获得了访问权限；失败时明确报错，而不是静默返回路径。
+          guard url.startAccessingSecurityScopedResource() else {
+            result(FlutterError(code: "ACCESS_FAILED", message: "Failed to start accessing the security-scoped resource", details: nil))
+            return
+          }
           result(url.path)
         } catch {
           result(FlutterError(code: "RESOLVE_FAILED", message: error.localizedDescription, details: nil))

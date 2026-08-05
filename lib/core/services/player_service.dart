@@ -43,6 +43,13 @@ class PlayerService extends ChangeNotifier {
     // Forward PlayQueue changes to this service's listeners
     _playQueue.addListener(notifyListeners);
 
+    // Restore persisted playback-mode settings (repeat / shuffle).
+    _repeatMode = PlayerRepeatMode.values.firstWhere(
+      (m) => m.name == _playQueue.repeatModeName,
+      orElse: () => PlayerRepeatMode.off,
+    );
+    _isShuffled = _playQueue.isShuffled;
+
     _playerStateSub = _player.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed &&
           _repeatMode == PlayerRepeatMode.off) {
@@ -104,6 +111,7 @@ class PlayerService extends ChangeNotifier {
       _audioSource!,
       initialIndex: _playQueue.currentIndex,
     );
+    await _applyAudioModes();
     await _player.play();
   }
 
@@ -123,6 +131,7 @@ class PlayerService extends ChangeNotifier {
           .toList();
       _audioSource = ConcatenatingAudioSource(children: sources);
       await _player.setAudioSource(_audioSource!, initialIndex: 0);
+      await _applyAudioModes();
       await _player.play();
     } else {
       final newSources = songs
@@ -138,7 +147,15 @@ class PlayerService extends ChangeNotifier {
 
   // ─── Playback control ──────────────────────────────────
 
-  Future<void> play() => _player.play();
+  Future<void> play() async {
+    // Lazily build the sequence if no audio source is loaded yet (e.g.
+    // restored queue after startup) — play() on an empty player does nothing.
+    if (_audioSource == null) {
+      if (_playQueue.isEmpty) return;
+      await _rebuildSequence();
+    }
+    await _player.play();
+  }
 
   Future<void> pause() => _player.pause();
 
@@ -146,7 +163,7 @@ class PlayerService extends ChangeNotifier {
     if (_player.playing) {
       await _player.pause();
     } else {
-      await _player.play();
+      await play();
     }
   }
 
@@ -159,6 +176,24 @@ class PlayerService extends ChangeNotifier {
   /// Skip to the next song.  Wraps around if [repeatMode] is [PlayerRepeatMode.all].
   Future<void> next() async {
     if (_playQueue.isEmpty) return;
+
+    // No audio source loaded yet (e.g. restored queue after startup) —
+    // lazily build the sequence so navigation works without pre-loading
+    // files (which would need macOS sandbox permissions too early).
+    if (_audioSource == null) {
+      final nextIndex = _playQueue.currentIndex + 1;
+      if (nextIndex < _playQueue.length) {
+        _playQueue.setCurrentIndex(nextIndex);
+        await _rebuildSequence();
+        await _player.play();
+      } else if (_repeatMode == PlayerRepeatMode.all) {
+        _playQueue.setCurrentIndex(0);
+        await _rebuildSequence();
+        await _player.play();
+      }
+      return;
+    }
+
     if (_playQueue.currentIndex < _playQueue.length - 1) {
       await _player.seekToNext();
     } else if (_repeatMode == PlayerRepeatMode.all) {
@@ -170,6 +205,18 @@ class PlayerService extends ChangeNotifier {
   /// Go back to the previous song.
   Future<void> previous() async {
     if (_playQueue.isEmpty) return;
+
+    // Lazily build the sequence if no audio source is loaded yet.
+    if (_audioSource == null) {
+      final prevIndex = _playQueue.currentIndex - 1;
+      if (prevIndex >= 0) {
+        _playQueue.setCurrentIndex(prevIndex);
+        await _rebuildSequence();
+        await _player.play();
+      }
+      return;
+    }
+
     // If more than 3 seconds in, restart the current song.
     if (_player.position.inSeconds > 3) {
       await _player.seek(Duration.zero);
@@ -186,22 +233,24 @@ class PlayerService extends ChangeNotifier {
     switch (_repeatMode) {
       case PlayerRepeatMode.off:
         _repeatMode = PlayerRepeatMode.all;
-        _player.setLoopMode(LoopMode.all);
+        break;
       case PlayerRepeatMode.all:
         _repeatMode = PlayerRepeatMode.one;
-        _player.setLoopMode(LoopMode.one);
+        break;
       case PlayerRepeatMode.one:
         _repeatMode = PlayerRepeatMode.off;
-        _player.setLoopMode(LoopMode.off);
+        break;
     }
+    _playQueue.setRepeatModeName(_repeatMode.name);
+    unawaited(_player.setLoopMode(_loopModeFor(_repeatMode)));
     notifyListeners();
   }
 
   Future<void> toggleShuffle() async {
     _isShuffled = !_isShuffled;
-    await _player.setShuffleModeEnabled(_isShuffled);
-    if (_isShuffled) {
-      await _player.shuffle();
+    _playQueue.setIsShuffled(_isShuffled);
+    if (_audioSource != null) {
+      await _applyAudioModes();
     }
     notifyListeners();
   }
@@ -228,7 +277,13 @@ class PlayerService extends ChangeNotifier {
   Future<void> jumpTo(int index) async {
     if (index < 0 || index >= _playQueue.length) return;
     _playQueue.setCurrentIndex(index);
-    await _player.seek(Duration.zero, index: index);
+    if (_audioSource == null) {
+      // Lazy-load the sequence on first playback — avoids accessing files
+      // before macOS sandbox bookmarks are resolved at startup.
+      await _rebuildSequence();
+    } else {
+      await _player.seek(Duration.zero, index: index);
+    }
     await _player.play();
   }
 
@@ -267,6 +322,52 @@ class PlayerService extends ChangeNotifier {
     await _player.stop();
   }
 
+  /// Sync the queue & audio with the library: removes any song whose
+  /// `filePath` is not in [validFilePaths] (e.g. its folder was removed or
+  /// the file went missing).
+  ///
+  /// The audio sequence is only rebuilt when a song was **actually** removed —
+  /// a no-op prune (e.g. on a routine library page refresh) leaves the audio
+  /// untouched to avoid stutter.
+  Future<void> pruneQueue(Set<String> validFilePaths) async {
+    final pruned = _playQueue.pruneTo(validFilePaths);
+
+    if (_playQueue.isEmpty) {
+      _audioSource = null;
+      await _player.stop();
+      return;
+    }
+    if (pruned && _audioSource != null) {
+      await _rebuildSequence();
+    }
+  }
+
+  /// Map a [PlayerRepeatMode] to just_audio's [LoopMode].
+  LoopMode _loopModeFor(PlayerRepeatMode mode) {
+    switch (mode) {
+      case PlayerRepeatMode.off:
+        return LoopMode.off;
+      case PlayerRepeatMode.one:
+        return LoopMode.one;
+      case PlayerRepeatMode.all:
+        return LoopMode.all;
+    }
+  }
+
+  /// Apply the current repeat/shuffle settings to the audio engine.
+  ///
+  /// Called after an audio source is loaded so just_audio's loop and shuffle
+  /// modes stay in sync with the persisted settings.
+  Future<void> _applyAudioModes() async {
+    await _player.setLoopMode(_loopModeFor(_repeatMode));
+    if (_isShuffled) {
+      await _player.setShuffleModeEnabled(true);
+      await _player.shuffle();
+    } else {
+      await _player.setShuffleModeEnabled(false);
+    }
+  }
+
   /// Fallback: rebuild the entire audio sequence from scratch.
   /// Used when a dynamic API call ([addAll]/[removeAt]/[move]/[insertAll])
   /// fails — this ensures just_audio's internal sequence stays in sync with
@@ -283,6 +384,7 @@ class PlayerService extends ChangeNotifier {
       initialIndex: _playQueue.currentIndex.clamp(0, songs.length - 1),
       initialPosition: _player.position,
     );
+    await _applyAudioModes();
   }
 
   @override

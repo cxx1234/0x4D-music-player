@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../widgets/cached_album_art.dart';
+import '../../widgets/detail_top_bar.dart';
+import '../../widgets/page_toolbar.dart';
+import '../../widgets/play_all_button.dart';
 import '../../widgets/song_tile.dart';
 import '../playlist/song_actions.dart';
 import 'artist_view_model.dart';
@@ -47,7 +50,7 @@ class _ArtistsPageState extends State<ArtistsPage> {
 
     return Column(
       children: [
-        _buildAppBar(theme, artists.length),
+        _buildAppBar(artists.length),
         const Divider(height: 1),
         if (artists.isEmpty)
           _buildEmptyState(theme)
@@ -57,22 +60,8 @@ class _ArtistsPageState extends State<ArtistsPage> {
     );
   }
 
-  Widget _buildAppBar(ThemeData theme, int count) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-      child: Row(
-        children: [
-          Text('歌手', style: theme.textTheme.titleLarge),
-          const SizedBox(width: 12),
-          Text(
-            '$count 位',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
+  Widget _buildAppBar(int count) {
+    return PageToolbar(title: '歌手', subtitle: '$count 位');
   }
 
   Widget _buildEmptyState(ThemeData theme) {
@@ -98,37 +87,41 @@ class _ArtistsPageState extends State<ArtistsPage> {
   }
 
   Widget _buildList(ThemeData theme, List<Artist> artists) {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-      itemCount: artists.length,
-      itemBuilder: (context, index) {
-        final artist = artists[index];
-        final albumCount = _viewModel.albumsForArtist(artist).length;
-        final songCount = _viewModel.songsForArtist(artist).length;
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: theme.colorScheme.primaryContainer,
-            child: Text(
-              artist.name.isNotEmpty ? artist.name[0].toUpperCase() : '?',
-              style: TextStyle(
-                color: theme.colorScheme.onPrimaryContainer,
-                fontWeight: FontWeight.bold,
+    return Material(
+      type: MaterialType.transparency,
+      clipBehavior: Clip.hardEdge,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+        itemCount: artists.length,
+        itemBuilder: (context, index) {
+          final artist = artists[index];
+          final albumCount = _viewModel.albumsForArtist(artist).length;
+          final songCount = _viewModel.songsForArtist(artist).length;
+          return ListTile(
+            leading: CircleAvatar(
+              backgroundColor: theme.colorScheme.primaryContainer,
+              child: Text(
+                artist.name.isNotEmpty ? artist.name[0].toUpperCase() : '?',
+                style: TextStyle(
+                  color: theme.colorScheme.onPrimaryContainer,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-          ),
-          title: Text(
-            artist.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          subtitle: Text(
-            '$songCount 首歌曲${albumCount > 0 ? ' · $albumCount 张专辑' : ''}',
-            style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-          ),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () => _openArtistDetail(context, artist),
-        );
-      },
+            title: Text(
+              artist.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              '$songCount 首歌曲${albumCount > 0 ? ' · $albumCount 张专辑' : ''}',
+              style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _openArtistDetail(context, artist),
+          );
+        },
+      ),
     );
   }
 
@@ -149,25 +142,9 @@ class ArtistDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(artist.name),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.playlist_play),
-            tooltip: '播放全部',
-            onPressed: () => _playAll(context),
-          ),
-        ],
-      ),
+      appBar: DetailTopBar(title: artist.name),
       body: _ArtistDetailContent(artist: artist),
     );
-  }
-
-  void _playAll(BuildContext context) async {
-    final songs = await ServiceLocator.songRepo.getSongsByArtist(artist.id);
-    if (songs.isNotEmpty) {
-      ServiceLocator.player.playFromList(songs, startIndex: 0);
-    }
   }
 }
 
@@ -193,13 +170,32 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
 
   Future<void> _load() async {
     final results = await Future.wait([
-      ServiceLocator.songRepo.getAlbumsByArtist(widget.artist.id),
+      ServiceLocator.songRepo.getAllAlbums(),
       ServiceLocator.songRepo.getSongsByArtist(widget.artist.id),
     ]);
+    final allAlbums = results[0] as List<Album>;
+    final songs = results[1] as List<Song>;
+
+    // 专辑按该歌手歌曲的 albumId 派生：合集/多歌手专辑每位参与歌手都能看到。
+    final albumById = {for (final a in allAlbums) a.id: a};
+    final albumsById = <int, Album>{};
+    for (final s in songs) {
+      final albumId = s.albumId;
+      if (albumId == null) continue;
+      final album = albumById[albumId];
+      if (album != null) albumsById[albumId] = album;
+    }
+    final albums = albumsById.values.toList()
+      ..sort((a, b) {
+        final byYear = (a.year ?? 0).compareTo(b.year ?? 0);
+        if (byYear != 0) return byYear;
+        return a.name.compareTo(b.name);
+      });
+
     if (mounted) {
       setState(() {
-        _albums = results[0] as List<Album>;
-        _songs = results[1] as List<Song>;
+        _albums = albums;
+        _songs = songs;
         _loading = false;
       });
     }
@@ -234,7 +230,13 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
 
         // Songs section
         SliverToBoxAdapter(
-          child: _SectionHeader(title: '歌曲 (${_songs.length})'),
+          child: _SectionHeader(
+            title: '歌曲 (${_songs.length})',
+            trailing: PlayAllButton(
+              onPlayAll: () =>
+                  ServiceLocator.player.playFromList(_songs, startIndex: 0),
+            ),
+          ),
         ),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -266,19 +268,27 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
 
 class _SectionHeader extends StatelessWidget {
   final String title;
+  final Widget? trailing;
 
-  const _SectionHeader({required this.title});
+  const _SectionHeader({required this.title, this.trailing});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-      child: Text(
-        title,
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ?trailing,
+        ],
       ),
     );
   }
@@ -427,37 +437,41 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
             ),
             const Divider(height: 1),
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                itemCount: _songs.length,
-                itemBuilder: (context, index) {
-                  final song = _songs[index];
-                  final isCurrent = song.id == player.currentSong?.id;
-                  return SongTile(
-                    song: song,
-                    isCurrentSong: isCurrent,
-                    onTap: () => ServiceLocator.player.playFromList(
-                      _songs,
-                      startIndex: index,
-                    ),
-                    leading: SizedBox(
-                      width: 32,
-                      child: Text(
-                        '${index + 1}',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: isCurrent
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurfaceVariant,
+              child: Material(
+                type: MaterialType.transparency,
+                clipBehavior: Clip.hardEdge,
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                  itemCount: _songs.length,
+                  itemBuilder: (context, index) {
+                    final song = _songs[index];
+                    final isCurrent = song.id == player.currentSong?.id;
+                    return SongTile(
+                      song: song,
+                      isCurrentSong: isCurrent,
+                      onTap: () => ServiceLocator.player.playFromList(
+                        _songs,
+                        startIndex: index,
+                      ),
+                      leading: SizedBox(
+                        width: 32,
+                        child: Text(
+                          '${index + 1}',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: isCurrent
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ),
-                    ),
-                    menuBuilder: (song) => songMenuItems(song),
-                    onMenuSelected: (song, value) async {
-                      await handleSongMenuAction(context, song, value);
-                      await _load();
-                    },
-                  );
-                },
+                      menuBuilder: (song) => songMenuItems(song),
+                      onMenuSelected: (song, value) async {
+                        await handleSongMenuAction(context, song, value);
+                        await _load();
+                      },
+                    );
+                  },
+                ),
               ),
             ),
           ],

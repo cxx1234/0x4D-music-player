@@ -194,6 +194,15 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
             ..where((t) => t.name.equals(name) & t.artistId.equals(artistId)))
           .getSingleOrNull();
 
+  /// Returns the first album with the given [name], regardless of artist.
+  ///
+  /// Used to merge compilation / multi-artist albums that share a name.
+  Future<Album?> getAlbumByName(String name) =>
+      (select(albums)
+            ..where((t) => t.name.equals(name))
+            ..limit(1))
+          .getSingleOrNull();
+
   Future<int> insertAlbum(AlbumsCompanion entry) => into(albums).insert(entry);
 
   Future<int> updateAlbum(AlbumsCompanion entry, int id) =>
@@ -254,15 +263,6 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
               ..._songTrackOrdering(),
             ]))
           .watch();
-
-  Future<List<Album>> getAlbumsByArtist(int artistId) =>
-      (select(albums)
-            ..where((t) => t.artistId.equals(artistId))
-            ..orderBy([
-              (t) => OrderingTerm.asc(t.year),
-              (t) => OrderingTerm.asc(t.name),
-            ]))
-          .get();
 
   // ─── Playlist queries ──────────────────────────────────
 

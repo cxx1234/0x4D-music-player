@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/database/song_sort_order.dart';
 import '../../core/services/service_locator.dart';
+import '../../widgets/page_toolbar.dart';
 import '../../widgets/song_tile.dart';
 import '../playlist/song_actions.dart';
 import 'library_view_model.dart';
@@ -20,19 +23,39 @@ class _LibraryPageState extends State<LibraryPage> {
   final _viewModel = LibraryViewModel();
   List<String> _musicFolders = [];
   bool _ready = false;
+  Timer? _readyTimer;
 
   @override
   void initState() {
     super.initState();
     _viewModel.addListener(_onViewModelChanged);
     _loadFolders();
+    _scheduleReadyRetry();
   }
 
   @override
   void dispose() {
+    _readyTimer?.cancel();
     _viewModel.removeListener(_onViewModelChanged);
     _viewModel.dispose();
     super.dispose();
+  }
+
+  /// 兜底：ServiceLocator 尚未就绪时轮询等待，就绪后自动加载。
+  ///
+  /// 不依赖 [didUpdateWidget] —— Flutter 的 `MaterialApp.home` 参数变化
+  /// 不会刷新 Navigator 里已存在的初始 route，导致 `isInitialized` 信号
+  /// 从未到达本页面，启动后不做任何操作会一直转圈。
+  void _scheduleReadyRetry() {
+    _readyTimer?.cancel();
+    if (widget.isInitialized || ServiceLocator.isReady) return;
+    _readyTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      if (widget.isInitialized || ServiceLocator.isReady) {
+        _readyTimer?.cancel();
+        _readyTimer = null;
+        _loadFolders();
+      }
+    });
   }
 
   @override
@@ -48,7 +71,11 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   void _loadFolders() {
-    if (!widget.isInitialized) return;
+    // 初始化完成前等待 didUpdateWidget / 轮询兜底触发；ServiceLocator 已
+    // 就绪时即使 isInitialized 信号意外丢失也能立即加载，避免一直转圈。
+    if (!widget.isInitialized && !ServiceLocator.isReady) return;
+    _readyTimer?.cancel();
+    _readyTimer = null;
     final folders = ServiceLocator.settings.musicFolders;
     if (mounted) {
       setState(() {
@@ -88,7 +115,9 @@ class _LibraryPageState extends State<LibraryPage> {
 
     return Column(
       children: [
-        _buildAppBar(theme),
+        _buildAppBar(),
+        if (ServiceLocator.sandboxRestoreFailures > 0)
+          _buildSandboxWarning(theme),
         if (_viewModel.isScanning) _buildScanProgress(theme),
         if (_viewModel.scanResult != null && !_viewModel.isScanning)
           _buildScanResult(theme),
@@ -148,50 +177,89 @@ class _LibraryPageState extends State<LibraryPage> {
     );
   }
 
-  Widget _buildAppBar(ThemeData theme) {
+  /// macOS 沙箱权限恢复失败的提示横幅 + 重新授权入口。
+  Widget _buildSandboxWarning(ThemeData theme) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
-      child: Row(
-        children: [
-          Text('音乐库', style: theme.textTheme.titleLarge),
-          const SizedBox(width: 12),
-          if (_viewModel.songs.isNotEmpty)
-            Text(
-              '${_viewModel.songs.length} 首',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Material(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Row(
+            children: [
+              Icon(
+                Icons.lock_outline,
+                size: 16,
+                color: theme.colorScheme.onErrorContainer,
               ),
-            ),
-          const Spacer(),
-          if (_viewModel.songs.isNotEmpty)
-            PopupMenuButton<SongSortOrder>(
-              tooltip: '排序',
-              icon: const Icon(Icons.sort),
-              onSelected: _viewModel.setSortOrder,
-              itemBuilder: (context) => [
-                for (final order in SongSortOrder.values)
-                  CheckedPopupMenuItem(
-                    value: order,
-                    checked: order == _viewModel.sortOrder,
-                    child: Text(order.label),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '音乐文件夹访问权限已失效，请重新授权',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onErrorContainer,
                   ),
-              ],
-            ),
-          if (_musicFolders.isNotEmpty) ...[
-            if (!_viewModel.isScanning)
-              IconButton(
-                onPressed: _viewModel.startScan,
-                icon: const Icon(Icons.refresh),
-                tooltip: '重新扫描',
+                ),
               ),
-            FilledButton.icon(
-              onPressed: _pickFolder,
-              icon: const Icon(Icons.folder_open, size: 18),
-              label: const Text('导入文件夹'),
-            ),
-          ],
-        ],
+              TextButton(
+                onPressed: _reauthorizeFolder,
+                child: const Text('重新授权'),
+              ),
+            ],
+          ),
+        ),
       ),
+    );
+  }
+
+  /// 重新授权音乐文件夹：重新选择文件夹并刷新 bookmark，随后重扫恢复数据。
+  Future<void> _reauthorizeFolder() async {
+    final path = await FilePicker.getDirectoryPath();
+    if (path == null || !mounted) return;
+
+    final bookmark = await ServiceLocator.sandbox.createBookmark(path);
+    await ServiceLocator.settings.updateMusicFolderBookmark(path, bookmark);
+    ServiceLocator.clearSandboxRestoreFailures();
+    setState(() => _musicFolders = ServiceLocator.settings.musicFolders);
+    _viewModel.startScan();
+  }
+
+  Widget _buildAppBar() {
+    return PageToolbar(
+      title: '音乐库',
+      subtitle: _viewModel.songs.isNotEmpty
+          ? '${_viewModel.songs.length} 首'
+          : null,
+      actions: [
+        if (_viewModel.songs.isNotEmpty)
+          PopupMenuButton<SongSortOrder>(
+            tooltip: '排序',
+            icon: const Icon(Icons.sort),
+            onSelected: _viewModel.setSortOrder,
+            itemBuilder: (context) => [
+              for (final order in SongSortOrder.values)
+                CheckedPopupMenuItem(
+                  value: order,
+                  checked: order == _viewModel.sortOrder,
+                  child: Text(order.label),
+                ),
+            ],
+          ),
+        if (_musicFolders.isNotEmpty) ...[
+          if (!_viewModel.isScanning)
+            IconButton(
+              onPressed: _viewModel.startScan,
+              icon: const Icon(Icons.refresh),
+              tooltip: '重新扫描',
+            ),
+          FilledButton.icon(
+            onPressed: _pickFolder,
+            icon: const Icon(Icons.folder_open, size: 18),
+            label: const Text('导入文件夹'),
+          ),
+        ],
+      ],
     );
   }
 
@@ -267,40 +335,44 @@ class _LibraryPageState extends State<LibraryPage> {
   Widget _buildFolderList(ThemeData theme) {
     return ConstrainedBox(
       constraints: const BoxConstraints(maxHeight: 160),
-      child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        shrinkWrap: true,
-        itemCount: _musicFolders.length,
-        itemBuilder: (context, index) {
-          final folder = _musicFolders[index];
-          return Card(
-            child: ListTile(
-              dense: true,
-              leading: const Icon(Icons.folder),
-              title: Text(
-                folder,
-                style: theme.textTheme.bodySmall,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!_viewModel.isScanning)
+      child: Material(
+        type: MaterialType.transparency,
+        clipBehavior: Clip.hardEdge,
+        child: ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          shrinkWrap: true,
+          itemCount: _musicFolders.length,
+          itemBuilder: (context, index) {
+            final folder = _musicFolders[index];
+            return Card(
+              child: ListTile(
+                dense: true,
+                leading: const Icon(Icons.folder),
+                title: Text(
+                  folder,
+                  style: theme.textTheme.bodySmall,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!_viewModel.isScanning)
+                      IconButton(
+                        icon: const Icon(Icons.refresh, size: 18),
+                        tooltip: '重新扫描此文件夹',
+                        onPressed: () => _viewModel.rescanFolder(folder),
+                      ),
                     IconButton(
-                      icon: const Icon(Icons.refresh, size: 18),
-                      tooltip: '重新扫描此文件夹',
-                      onPressed: () => _viewModel.rescanFolder(folder),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      tooltip: '移除',
+                      onPressed: () => _removeFolder(folder),
                     ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    tooltip: '移除',
-                    onPressed: () => _removeFolder(folder),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

@@ -1,9 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:metadata_god/metadata_god.dart';
 
 import 'theme.dart';
 import 'router.dart';
+import '../core/constants/layout.dart';
 import '../core/services/service_locator.dart';
+import '../features/player/player_page.dart';
+import '../features/shell/now_playing_bar.dart';
 import '../features/shell/shell_page.dart';
 
 class App extends StatefulWidget {
@@ -15,10 +20,19 @@ class App extends StatefulWidget {
 
 class _AppState extends State<App> {
   bool _initialized = false;
+  final _navKey = GlobalKey<NavigatorState>();
+  final _showBar = ValueNotifier<bool>(true);
+
+  /// 与原生层（MainFlutterWindow.swift）通信的通道。
+  static const _windowChannel = MethodChannel('flutter_music/window');
 
   @override
   void initState() {
     super.initState();
+    // 首帧后将顶部高度参数同步给原生层（红绿灯定位用）。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncTopBarHeightToNative();
+    });
     ServiceLocator.initialize().then((_) async {
       try {
         await MetadataGod.initialize();
@@ -33,6 +47,33 @@ class _AppState extends State<App> {
   }
 
   @override
+  void dispose() {
+    _showBar.dispose();
+    super.dispose();
+  }
+
+  /// 将左侧边栏顶部预留高度（layoutConfig.sidebarTopInset）传给原生层，用于红绿灯定位。
+  Future<void> _syncTopBarHeightToNative() async {
+    // 红绿灯仅 macOS 有；其他平台没有该 MethodChannel handler，
+    // 不调用可避免 MissingPluginException 噪音。
+    if (defaultTargetPlatform != TargetPlatform.macOS) return;
+    try {
+      await _windowChannel.invokeMethod(
+        'setTopBarHeight',
+        layoutConfig.sidebarTopInset,
+      );
+    } catch (e) {
+      debugPrint('Failed to sync top bar height to native: $e');
+    }
+  }
+
+  void _openPlayer() {
+    _navKey.currentState!.push(
+      AppRouter.bottomUpRoute(const PlayerPage(), name: PlayerPage.routeName),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Music',
@@ -41,7 +82,64 @@ class _AppState extends State<App> {
       themeMode: ThemeMode.system,
       home: ShellPage(isInitialized: _initialized),
       onGenerateRoute: AppRouter.generateRoute,
+      navigatorKey: _navKey,
+      navigatorObservers: [_NowPlayingBarVisibilityObserver(_showBar)],
       debugShowCheckedModeBanner: false,
+      builder: (context, child) {
+        // 根 Overlay 包裹整个应用：底栏位于 Navigator（含 Overlay）之外，
+        // 没有这个根 Overlay，底栏里的 Tooltip 等依赖 Overlay 的组件
+        // 会报 "No Overlay widgets found"。
+        return Overlay(
+          initialEntries: [
+            OverlayEntry(
+              builder: (context) => Scaffold(
+                // 所有页面（Shell + 子页面 + 播放页）都渲染在底栏上方，底栏不被
+                // 子页面盖住。顶部不再有全局顶栏，改由各页面自行避让（左侧边栏
+                // 顶部预留 45 给红绿灯，右侧内容区用统一高度的 PageToolbar）。
+                body: child ?? const SizedBox.shrink(),
+                bottomNavigationBar: ValueListenableBuilder<bool>(
+                  valueListenable: _showBar,
+                  builder: (context, show, _) {
+                    // 全屏“正在播放”打开时隐藏底栏，关闭后恢复。
+                    if (!show) return const SizedBox.shrink();
+                    return NowPlayingBar(onTap: _openPlayer);
+                  },
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
+  }
+}
+
+/// 全屏“正在播放”页打开时隐藏底栏，关闭后恢复显示。
+class _NowPlayingBarVisibilityObserver extends NavigatorObserver {
+  _NowPlayingBarVisibilityObserver(this.showBar);
+
+  final ValueNotifier<bool> showBar;
+
+  bool _isPlayer(Route<dynamic> route) =>
+      route.settings.name == PlayerPage.routeName;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    showBar.value = !_isPlayer(route);
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    showBar.value = previousRoute == null || !_isPlayer(previousRoute);
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    showBar.value = previousRoute == null || !_isPlayer(previousRoute);
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    showBar.value = newRoute == null || !_isPlayer(newRoute);
   }
 }

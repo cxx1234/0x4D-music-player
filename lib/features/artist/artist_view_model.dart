@@ -30,9 +30,22 @@ class ArtistsViewModel extends ChangeNotifier {
     }
   }
 
-  /// Returns albums belonging to [artist].
+  /// Returns albums that [artist] has songs in.
+  ///
+  /// Derived from the artist's songs (grouped by albumId) so compilation /
+  /// multi-artist albums appear under every contributing artist, consistent
+  /// with the artist detail page.
   List<Album> albumsForArtist(Artist artist) {
-    return _albums.where((a) => a.artistId == artist.id).toList();
+    final albumById = {for (final a in _albums) a.id: a};
+    final albumsById = <int, Album>{};
+    for (final s in _songs) {
+      if (s.artistId != artist.id) continue;
+      final albumId = s.albumId;
+      if (albumId == null) continue;
+      final album = albumById[albumId];
+      if (album != null) albumsById[albumId] = album;
+    }
+    return albumsById.values.toList();
   }
 
   /// Returns songs belonging to [artist].

@@ -17,6 +17,8 @@ import '../database/database.dart';
 class PlayQueue extends ChangeNotifier {
   List<Song> _queue = [];
   int _currentIndex = 0;
+  String _repeatModeName = 'off';
+  bool _isShuffled = false;
 
   // ─── Public state ──────────────────────────────────────
 
@@ -37,6 +39,12 @@ class PlayQueue extends ChangeNotifier {
 
   /// The number of items in the queue.
   int get length => _queue.length;
+
+  /// Persisted repeat-mode name ('off' | 'one' | 'all').
+  String get repeatModeName => _repeatModeName;
+
+  /// Whether shuffle is enabled (persisted).
+  bool get isShuffled => _isShuffled;
 
   // ─── Queue mutations (all audio-safe) ──────────────────
 
@@ -106,10 +114,55 @@ class PlayQueue extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Remove every song whose `filePath` is **not** in [validFilePaths].
+  ///
+  /// Keeps the queue in sync with the library after songs are deleted or
+  /// become unavailable (e.g. their folder was removed). The current song
+  /// is preserved if it survives; otherwise the index falls back to 0.
+  ///
+  /// Returns `true` if any song was actually removed, `false` otherwise.
+  bool pruneTo(Set<String> validFilePaths) {
+    if (_queue.every((s) => validFilePaths.contains(s.filePath))) {
+      return false; // nothing to prune
+    }
+
+    final currentFilePath = currentSong?.filePath;
+    _queue.removeWhere((s) => !validFilePaths.contains(s.filePath));
+
+    if (_queue.isEmpty) {
+      _currentIndex = 0;
+    } else if (currentFilePath != null) {
+      final newIndex = _queue.indexWhere((s) => s.filePath == currentFilePath);
+      _currentIndex = newIndex < 0 ? 0 : newIndex;
+    } else {
+      _currentIndex = _currentIndex.clamp(0, _queue.length - 1);
+    }
+    _save();
+    notifyListeners();
+    return true;
+  }
+
   /// Update [_currentIndex] without touching audio.
   void setCurrentIndex(int index) {
     if (index < 0 || index >= _queue.length) return;
     _currentIndex = index;
+    _save();
+    notifyListeners();
+  }
+
+  /// Persist the repeat-mode name.
+  void setRepeatModeName(String name) {
+    if (_repeatModeName == name) return;
+    _repeatModeName = name;
+    _save();
+    notifyListeners();
+  }
+
+  /// Persist the shuffle flag.
+  void setIsShuffled(bool value) {
+    if (_isShuffled == value) return;
+    _isShuffled = value;
+    _save();
     notifyListeners();
   }
 
@@ -139,8 +192,12 @@ class PlayQueue extends ChangeNotifier {
 
       if (restored.isNotEmpty) {
         _queue = restored;
-        _currentIndex = 0;
+        final savedIndex = data['currentIndex'] as int? ?? 0;
+        _currentIndex = savedIndex.clamp(0, restored.length - 1);
       }
+
+      _repeatModeName = data['repeatMode'] as String? ?? 'off';
+      _isShuffled = data['isShuffled'] as bool? ?? false;
     } catch (_) {
       _queue = [];
       _currentIndex = 0;
@@ -155,7 +212,12 @@ class PlayQueue extends ChangeNotifier {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final file = File(p.join(dir.path, _queueFileName));
-      final data = {'filePaths': _queue.map((s) => s.filePath).toList()};
+      final data = {
+        'filePaths': _queue.map((s) => s.filePath).toList(),
+        'currentIndex': _currentIndex,
+        'repeatMode': _repeatModeName,
+        'isShuffled': _isShuffled,
+      };
       await file.writeAsString(jsonEncode(data));
     } catch (_) {
       // Silently ignore persistence failures
