@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import 'package:just_audio_platform_interface/just_audio_platform_interface.dart';
+
 import '../audio/platform_media_controls.dart';
 import '../database/database.dart';
 import 'folder_watcher_service.dart';
@@ -115,7 +117,27 @@ class ServiceLocator {
     _sandboxRestoreFailures = 0;
   }
 
-  static Future<void> initialize() async {
+  /// 幂等初始化：整个 isolate 生命周期内只执行一次。
+  ///
+  /// 即使被重复调用（例如某些情况下 initState 再次触发），也返回同一份
+  /// 初始化 Future，不会重建任何服务——保证 PlayerService/AudioPlayer
+  /// 单例唯一，避免产生"幽灵播放器"（上一个实例的原生播放器未被销毁、
+  /// 仍在后台出声/切歌）。
+  static Future<void>? _initialization;
+
+  static Future<void> initialize() => _initialization ??= _doInitialize();
+
+  static Future<void> _doInitialize() async {
+    debugPrint('[ServiceLocator] initialize()');
+    // 清理上一个 isolate（热重启）遗留的 just_audio 原生播放器，避免
+    // "幽灵播放器"在新播放器首次激活前仍在后台出声/切歌。
+    try {
+      await JustAudioPlatform.instance.disposeAllPlayers(
+        DisposeAllPlayersRequest(),
+      );
+    } catch (e) {
+      debugPrint('[ServiceLocator] disposeAllPlayers failed: $e');
+    }
     _settings = SettingsService();
     await _settings!.initialize();
     _database = await FlutterMusicDatabase.create();

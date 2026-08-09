@@ -68,6 +68,10 @@ class _AppState extends State<App> {
   }
 
   void _openPlayer() {
+    // 点按迷你底栏进入播放页前先对账，确保首屏即引擎真相。
+    if (ServiceLocator.isReady) {
+      ServiceLocator.player.resyncFromAudio();
+    }
     _navKey.currentState!.push(
       AppRouter.bottomUpRoute(const PlayerPage(), name: PlayerPage.routeName),
     );

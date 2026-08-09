@@ -33,6 +33,13 @@ class _PlayerPageState extends State<PlayerPage> {
   bool _showQueue = true;
 
   @override
+  void initState() {
+    super.initState();
+    // 打开播放页即对账：把状态对齐到引擎真实值（兜住卡死/热重载失同步）。
+    WidgetsBinding.instance.addPostFrameCallback((_) => _viewModel.resync());
+  }
+
+  @override
   void dispose() {
     _viewModel.dispose();
     super.dispose();

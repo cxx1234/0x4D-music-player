@@ -38,6 +38,11 @@ class PlayerViewModel extends ChangeNotifier {
     super.dispose();
   }
 
+  // ─── State reconciliation ──────────────────────────────
+
+  /// 打开"正在播放"界面时，把状态重新对齐到引擎的真实状态。
+  void resync() => _player.resyncFromAudio();
+
   // ─── Playback control ──────────────────────────────────
 
   Future<void> play() => _player.play();

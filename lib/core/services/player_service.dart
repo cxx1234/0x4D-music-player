@@ -33,10 +33,13 @@ class PlayerService extends ChangeNotifier {
 
   // ─── Stream subscriptions ──────────────────────────────
 
-  StreamSubscription? _playerStateSub;
+  /// 权威事件源：切歌 / seek / 播完等每次引擎变化都会触发。
+  StreamSubscription<PlaybackEvent>? _playbackEventSub;
   StreamSubscription? _positionSub;
   StreamSubscription? _durationSub;
-  StreamSubscription? _sequenceSub;
+
+  /// 周期对账 watchdog：兜住引擎与 [PlayQueue] 的索引分叉。
+  Timer? _reconcileTimer;
 
   PlayerService({PlayQueue? playQueue})
     : _playQueue = playQueue ?? PlayQueue() {
@@ -50,23 +53,70 @@ class PlayerService extends ChangeNotifier {
     );
     _isShuffled = _playQueue.isShuffled;
 
-    _playerStateSub = _player.playerStateStream.listen((state) {
-      if (state.processingState == ProcessingState.completed &&
-          _repeatMode == PlayerRepeatMode.off) {
-        _player.seek(Duration.zero);
-        _player.pause();
-      }
-      notifyListeners();
-    });
+    _playbackEventSub = _player.playbackEventStream.listen(_onPlaybackEvent);
     _positionSub = _player.positionStream.listen((_) => notifyListeners());
     _durationSub = _player.durationStream.listen((_) => notifyListeners());
-    _sequenceSub = _player.sequenceStateStream.listen((_) {
-      final idx = _player.currentIndex ?? 0;
-      if (idx >= 0 && idx < _playQueue.length) {
-        _playQueue.setCurrentIndex(idx);
-      }
+    _reconcileTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _reconcile(),
+    );
+  }
+
+  // ─── Engine ↔ app state reconciliation ─────────────────
+
+  /// 处理引擎权威事件：切歌时原子对齐 [PlayQueue] 索引，队尾播完时收尾。
+  ///
+  /// just_audio 在 macOS 上每次切歌（自动切歌 / loop-all 回绕 / next /
+  /// prev / jump）都会广播一个 playback event，原子携带 currentIndex、
+  /// updatePosition、duration 与 processingState——这里是它们对齐的唯一点，
+  /// 避免 positionStream 与 sequenceStateStream 跨流不一致。
+  void _onPlaybackEvent(PlaybackEvent event) {
+    final idx = event.currentIndex;
+    if (idx != null &&
+        idx >= 0 &&
+        idx < _playQueue.length &&
+        idx != _playQueue.currentIndex) {
+      _playQueue.setCurrentIndex(idx);
+    }
+    // 队尾播完（repeat off）：seek 到 0 并暂停，行为与原先一致。
+    if (event.processingState == ProcessingState.completed &&
+        _repeatMode == PlayerRepeatMode.off) {
+      unawaited(_player.seek(Duration.zero));
+      unawaited(_player.pause());
+    }
+    notifyListeners();
+  }
+
+  /// 周期 watchdog：把 [PlayQueue] 索引对齐到引擎真实值。
+  ///
+  /// 兜底场景：切歌广播被 UI 卡死 / 热重载延误，或动态队列编辑
+  /// （removeAt / move / playNext 的 [_rebuildSequence] 回退）导致分叉。
+  /// 索引没变时不做任何事，因此几乎没有 CPU / UI 开销。
+  void _reconcile() {
+    if (_playQueue.isEmpty) return;
+    final idx = _player.currentIndex;
+    if (idx != null &&
+        idx >= 0 &&
+        idx < _playQueue.length &&
+        idx != _playQueue.currentIndex) {
+      _playQueue.setCurrentIndex(idx);
       notifyListeners();
-    });
+    }
+  }
+
+  /// 把应用状态重新对齐到引擎的真实状态。
+  ///
+  /// 用户打开"正在播放"界面等需要"立刻看到真相"的时刻调用；
+  /// 空队列 / 索引越界时安全返回。
+  void resyncFromAudio() {
+    final idx = _player.currentIndex;
+    if (idx != null &&
+        idx >= 0 &&
+        idx < _playQueue.length &&
+        idx != _playQueue.currentIndex) {
+      _playQueue.setCurrentIndex(idx);
+    }
+    notifyListeners();
   }
 
   // ─── Public state ──────────────────────────────────────
@@ -389,10 +439,10 @@ class PlayerService extends ChangeNotifier {
 
   @override
   void dispose() {
-    _playerStateSub?.cancel();
+    _playbackEventSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
-    _sequenceSub?.cancel();
+    _reconcileTimer?.cancel();
     _player.dispose();
     super.dispose();
   }
