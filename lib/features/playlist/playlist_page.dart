@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
+import '../../widgets/cover_card.dart';
 import '../../widgets/page_toolbar.dart';
 import 'favorites_page.dart';
 import 'playlist_cover.dart';
@@ -206,34 +207,74 @@ class _PlaylistPageState extends State<PlaylistPage> {
     }
   }
 
-  void _showPlaylistMenu(Playlist playlist) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('重命名'),
-              onTap: () {
-                Navigator.pop(context);
-                _rename(playlist);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text('删除'),
-              onTap: () {
-                Navigator.pop(context);
-                _delete(playlist);
-              },
-            ),
-          ],
-        ),
-      ),
+  /// 播放列表卡片的统一菜单（三点按钮与长按共用），内容保持一致。
+  List<PopupMenuEntry<String>> _playlistMenuItems() => const [
+    PopupMenuItem(value: 'play', child: Text('播放')),
+    PopupMenuItem(value: 'rename', child: Text('重命名')),
+    PopupMenuItem(value: 'export', child: Text('导出')),
+    PopupMenuItem(value: 'delete', child: Text('删除')),
+  ];
+
+  /// 菜单项分发：播放 / 重命名 / 导出 / 删除。
+  Future<void> _handlePlaylistMenu(Playlist playlist, String value) async {
+    switch (value) {
+      case 'play':
+        final songs = await ServiceLocator.songRepo.getSongsInPlaylist(
+          playlist.id,
+        );
+        if (!mounted) return;
+        if (songs.isEmpty) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('播放列表为空')));
+        } else {
+          ServiceLocator.player.playFromList(songs, startIndex: 0);
+        }
+        break;
+      case 'rename':
+        await _rename(playlist);
+        break;
+      case 'export':
+        await _export(playlist);
+        break;
+      case 'delete':
+        await _delete(playlist);
+        break;
+    }
+  }
+
+  /// 导出播放列表为 M3U 文件。
+  Future<void> _export(Playlist playlist) async {
+    final path = await FilePicker.saveFile(
+      dialogTitle: '导出播放列表',
+      fileName: '${playlist.name}.m3u8',
+      type: FileType.custom,
+      allowedExtensions: const ['m3u8', 'm3u'],
     );
+    if (path == null || !mounted) return;
+    final count = await exportPlaylistToFile(playlist.id, path);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已导出 $count 首歌曲')));
+  }
+
+  /// 长按卡片弹出统一菜单（与右下角三点按钮一致），锚定在卡片位置。
+  Future<void> _showPlaylistMenu(Playlist playlist, BuildContext anchor) async {
+    final box = anchor.findRenderObject() as RenderBox?;
+    final overlay = Overlay.of(anchor).context.findRenderObject() as RenderBox?;
+    if (box == null || overlay == null) return;
+    final value = await showMenu<String>(
+      context: anchor,
+      position: RelativeRect.fromRect(
+        box.localToGlobal(Offset.zero) & box.size,
+        Offset.zero & overlay.size,
+      ),
+      items: _playlistMenuItems(),
+    );
+    if (value != null && mounted) {
+      await _handlePlaylistMenu(playlist, value);
+    }
   }
 
   Future<void> _openDetail(Playlist playlist) async {
@@ -352,10 +393,34 @@ class _PlaylistPageState extends State<PlaylistPage> {
                 crossAxisSpacing: 12,
                 childAspectRatio: 0.76,
               ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) => _buildPlaylistCard(theme, playlists[index]),
-                childCount: playlists.length,
-              ),
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final playlist = playlists[index];
+                return CoverCard(
+                  cover: PlaylistCover(
+                    playlistId: playlist.id,
+                    size: double.infinity,
+                    borderRadius: 0,
+                    revision: _viewModel.songCountFor(playlist),
+                  ),
+                  title: playlist.name,
+                  subtitle: '${_viewModel.songCountFor(playlist)} 首歌曲',
+                  onTap: () => _openDetail(playlist),
+                  onLongPress: () => _showPlaylistMenu(playlist, context),
+                  trailing: PopupMenuButton<String>(
+                    tooltip: '更多',
+                    // child 模式：用固定 20×20 盒子承载图标，命中区即 20×20。
+                    // （icon 模式内部走 IconButton，默认 48 命中区且不接收
+                    //   constraints；PopupMenuButton.constraints 只控制菜单宽度）
+                    child: const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: Icon(Icons.more_vert, size: 16),
+                    ),
+                    onSelected: (value) => _handlePlaylistMenu(playlist, value),
+                    itemBuilder: (context) => _playlistMenuItems(),
+                  ),
+                );
+              }, childCount: playlists.length),
             ),
           ),
         ],
@@ -407,53 +472,6 @@ class _PlaylistPageState extends State<PlaylistPage> {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPlaylistCard(ThemeData theme, Playlist playlist) {
-    return Card(
-      clipBehavior: Clip.hardEdge,
-      child: InkWell(
-        onTap: () => _openDetail(playlist),
-        onLongPress: () => _showPlaylistMenu(playlist),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 封面：弹性填满剩余高度，保证下方文字在任何格子宽下不被裁切
-            Expanded(
-              child: PlaylistCover(
-                playlistId: playlist.id,
-                size: double.infinity,
-                borderRadius: 0,
-                revision: _viewModel.songCountFor(playlist),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-              child: Text(
-                playlist.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                '${_viewModel.songCountFor(playlist)} 首歌曲',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-          ],
         ),
       ),
     );

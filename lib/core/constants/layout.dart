@@ -58,7 +58,7 @@ class PlatformLayoutConfig {
 /// 工具栏 112 = 32 + 80；详情页顶栏 52，左侧让过红绿灯（95）；播放页顶部红绿灯预留 40。
 const _macOS = PlatformLayoutConfig(
   sidebarTopInset: 52,
-  sidebarWidth: 92,
+  sidebarWidth: 90,
   pageToolbarHeight: 112,
   pageToolbarTopInset: 32,
   pageToolbarContentHeight: 80,
@@ -71,11 +71,11 @@ const _macOS = PlatformLayoutConfig(
 /// 播放页顶部无预留（0）；工具栏数值暂与 macOS 一致，调试 Windows 版时再微调。
 const _default = PlatformLayoutConfig(
   sidebarTopInset: 0,
-  sidebarWidth: 92,
-  pageToolbarHeight: 112,
+  sidebarWidth: 90,
+  pageToolbarHeight: 62,
   pageToolbarTopInset: 32,
   pageToolbarContentHeight: 80,
-  detailTopBarHeight: 56,
+  detailTopBarHeight: 52,
   detailTopBarLeftInset: 0,
   playerTopBarTopReserve: 0,
 );

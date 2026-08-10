@@ -4,9 +4,11 @@ import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../widgets/cached_album_art.dart';
 import '../../widgets/detail_top_bar.dart';
+import '../../widgets/list_item_tile.dart';
 import '../../widgets/page_toolbar.dart';
 import '../../widgets/play_all_button.dart';
 import '../../widgets/song_tile.dart';
+import '../album/album_page.dart';
 import '../playlist/song_actions.dart';
 import 'artist_view_model.dart';
 
@@ -97,8 +99,10 @@ class _ArtistsPageState extends State<ArtistsPage> {
           final artist = artists[index];
           final albumCount = _viewModel.albumsForArtist(artist).length;
           final songCount = _viewModel.songsForArtist(artist).length;
-          return ListTile(
+          return ListItemTile(
             leading: CircleAvatar(
+              // 44 直径，与 SongTile 默认封面同宽，保证标题位置一致
+              radius: 22,
               backgroundColor: theme.colorScheme.primaryContainer,
               child: Text(
                 artist.name.isNotEmpty ? artist.name[0].toUpperCase() : '?',
@@ -108,15 +112,9 @@ class _ArtistsPageState extends State<ArtistsPage> {
                 ),
               ),
             ),
-            title: Text(
-              artist.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              '$songCount 首歌曲${albumCount > 0 ? ' · $albumCount 张专辑' : ''}',
-              style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-            ),
+            title: artist.name,
+            subtitle:
+                '$songCount 首歌曲${albumCount > 0 ? ' · $albumCount 张专辑' : ''}',
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _openArtistDetail(context, artist),
           );
@@ -205,63 +203,69 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
 
-    return CustomScrollView(
-      slivers: [
-        // Albums section
-        if (_albums.isNotEmpty) ...[
+    // 有界滚动区含 ListTile(SongTile) 交互项，外包透明 Material + Clip.hardEdge
+    // 防止墨迹渗入上方标题区（项目约定）。
+    return Material(
+      type: MaterialType.transparency,
+      clipBehavior: Clip.hardEdge,
+      child: CustomScrollView(
+        slivers: [
+          // Albums section
+          if (_albums.isNotEmpty) ...[
+            SliverToBoxAdapter(
+              child: _SectionHeader(title: '专辑 (${_albums.length})'),
+            ),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 200,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _albums.length,
+                  itemBuilder: (context, index) {
+                    final album = _albums[index];
+                    return _ArtistAlbumCard(album: album);
+                  },
+                ),
+              ),
+            ),
+          ],
+
+          // Songs section
           SliverToBoxAdapter(
-            child: _SectionHeader(title: '专辑 (${_albums.length})'),
-          ),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 200,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _albums.length,
-                itemBuilder: (context, index) {
-                  final album = _albums[index];
-                  return _ArtistAlbumCard(album: album);
-                },
+            child: _SectionHeader(
+              title: '歌曲 (${_songs.length})',
+              trailing: PlayAllButton(
+                onPlayAll: () =>
+                    ServiceLocator.player.playFromList(_songs, startIndex: 0),
               ),
             ),
           ),
-        ],
-
-        // Songs section
-        SliverToBoxAdapter(
-          child: _SectionHeader(
-            title: '歌曲 (${_songs.length})',
-            trailing: PlayAllButton(
-              onPlayAll: () =>
-                  ServiceLocator.player.playFromList(_songs, startIndex: 0),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final song = _songs[index];
+                final player = ServiceLocator.player;
+                final isCurrent = song.id == player.currentSong?.id;
+                return SongTile(
+                  song: song,
+                  isCurrentSong: isCurrent,
+                  onTap: () => ServiceLocator.player.playFromList(
+                    _songs,
+                    startIndex: index,
+                  ),
+                  menuBuilder: (song) => songMenuItems(song),
+                  onMenuSelected: (song, value) async {
+                    await handleSongMenuAction(context, song, value);
+                    await _load();
+                  },
+                );
+              }, childCount: _songs.length),
             ),
           ),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate((context, index) {
-              final song = _songs[index];
-              final player = ServiceLocator.player;
-              final isCurrent = song.id == player.currentSong?.id;
-              return SongTile(
-                song: song,
-                isCurrentSong: isCurrent,
-                onTap: () => ServiceLocator.player.playFromList(
-                  _songs,
-                  startIndex: index,
-                ),
-                menuBuilder: (song) => songMenuItems(song),
-                onMenuSelected: (song, value) async {
-                  await handleSongMenuAction(context, song, value);
-                  await _load();
-                },
-              );
-            }, childCount: _songs.length),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -304,14 +308,9 @@ class _ArtistAlbumCard extends StatelessWidget {
     final theme = Theme.of(context);
     return GestureDetector(
       onTap: () {
-        // Navigate to album detail using the existing AlbumDetailPage
+        // 跳转正式专辑详情页（DetailTopBar + 分碟 + 播放全部）
         Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => Scaffold(
-              appBar: AppBar(title: Text(album.name)),
-              body: _AlbumDetailContent(album: album),
-            ),
-          ),
+          MaterialPageRoute(builder: (_) => AlbumDetailPage(album: album)),
         );
       },
       child: Container(
@@ -345,138 +344,6 @@ class _ArtistAlbumCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// Re-export AlbumDetailContent for use from Artist detail.
-/// Imported from the album feature.
-class _AlbumDetailContent extends StatefulWidget {
-  final Album album;
-
-  const _AlbumDetailContent({required this.album});
-
-  @override
-  State<_AlbumDetailContent> createState() => _AlbumDetailContentState();
-}
-
-class _AlbumDetailContentState extends State<_AlbumDetailContent> {
-  List<Song> _songs = [];
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final songs = await ServiceLocator.songRepo.getSongsByAlbum(
-      widget.album.id,
-    );
-    if (mounted) {
-      setState(() {
-        _songs = songs;
-        _loading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final player = ServiceLocator.player;
-
-    if (_loading) return const Center(child: CircularProgressIndicator());
-
-    return ListenableBuilder(
-      listenable: player,
-      builder: (context, _) {
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: SizedBox(
-                      width: 120,
-                      height: 120,
-                      child: CachedAlbumArt(
-                        albumArtFilePath: widget.album.albumArtFilePath,
-                        hasEmbeddedArt: widget.album.albumArtFilePath != null,
-                        size: 120,
-                        borderRadius: 12,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.album.name,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${_songs.length} 首歌曲',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: Material(
-                type: MaterialType.transparency,
-                clipBehavior: Clip.hardEdge,
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                  itemCount: _songs.length,
-                  itemBuilder: (context, index) {
-                    final song = _songs[index];
-                    final isCurrent = song.id == player.currentSong?.id;
-                    return SongTile(
-                      song: song,
-                      isCurrentSong: isCurrent,
-                      onTap: () => ServiceLocator.player.playFromList(
-                        _songs,
-                        startIndex: index,
-                      ),
-                      leading: SizedBox(
-                        width: 32,
-                        child: Text(
-                          '${index + 1}',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: isCurrent
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                      menuBuilder: (song) => songMenuItems(song),
-                      onMenuSelected: (song, value) async {
-                        await handleSongMenuAction(context, song, value);
-                        await _load();
-                      },
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
+import '../../widgets/song_tile.dart';
 import 'player_view_model.dart';
 
 /// 当前播放队列视图：清空 / 选择删除 / 手动排序。
@@ -74,14 +75,6 @@ class _QueueViewState extends State<QueueView> {
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeOutCubic,
     );
-  }
-
-  String _formatDuration(int? ms) {
-    if (ms == null) return '';
-    final d = Duration(milliseconds: ms);
-    final min = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final sec = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$min:$sec';
   }
 
   void _toggleDeleteMode() {
@@ -265,10 +258,23 @@ class _QueueViewState extends State<QueueView> {
   }
 
   Widget _buildListTile(Song song, int index, bool isCurrent, {Key? key}) {
-    return ListTile(
+    return SongTile(
       key: key,
-      selected: isCurrent,
-      selectedTileColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+      song: song,
+      isCurrentSong: isCurrent,
+      // 队列用 leading 指示当前项（播放图标/序号），隐藏行尾音量图标避免重复
+      showCurrentIndicator: false,
+      onTap: _deleteMode
+          ? () {
+              setState(() {
+                if (_selectedIndices.contains(index)) {
+                  _selectedIndices.remove(index);
+                } else {
+                  _selectedIndices.add(index);
+                }
+              });
+            }
+          : (isCurrent ? null : () => vm.jumpTo(index)),
       leading: _deleteMode
           ? Checkbox(
               value: _selectedIndices.contains(index),
@@ -285,67 +291,38 @@ class _QueueViewState extends State<QueueView> {
           : _reorderMode
           ? ReorderableDragStartListener(
               index: index,
-              child: const Icon(Icons.drag_handle, size: 20),
+              child: SizedBox(
+                width: 36,
+                height: 32,
+                child: Center(
+                  child: Icon(
+                    Icons.drag_handle,
+                    size: 20,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
             )
-          : (isCurrent
-                ? SizedBox(
-                    width: 32,
-                    child: Icon(
-                      Icons.play_arrow_rounded,
-                      color: theme.colorScheme.primary,
-                      size: 20,
-                    ),
-                  )
-                : SizedBox(
-                    width: 32,
-                    child: Text(
-                      '${index + 1}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+          : SizedBox(
+              width: 36,
+              height: 32,
+              child: Center(
+                child: isCurrent
+                    ? Icon(
+                        Icons.play_arrow_rounded,
+                        color: theme.colorScheme.primary,
+                        size: 20,
+                      )
+                    : Text(
+                        '${index + 1}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  )),
-      title: Text(
-        song.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontWeight: isCurrent ? FontWeight.bold : null,
-          color: isCurrent ? theme.colorScheme.primary : null,
-        ),
-      ),
-      subtitle: song.artist != null
-          ? Text(
-              song.artist!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
               ),
-            )
-          : null,
-      trailing: song.durationMs != null
-          ? Text(
-              _formatDuration(song.durationMs),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            )
-          : null,
-      onTap: _deleteMode
-          ? () {
-              setState(() {
-                if (_selectedIndices.contains(index)) {
-                  _selectedIndices.remove(index);
-                } else {
-                  _selectedIndices.add(index);
-                }
-              });
-            }
-          : (isCurrent ? null : () => vm.jumpTo(index)),
+            ),
     );
   }
 }
