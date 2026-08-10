@@ -24,7 +24,7 @@ class AppDelegate: FlutterAppDelegate {
   @objc private func showMainWindow() {
     mainFlutterWindow?.makeKeyAndOrderFront(nil)
     // 前台激活:NSRunningApplication.current.activate(options:) 自 macOS 10.6 起可用、
-    // 至今未被弃用,兼容部署目标(10.15)与 macOS 14+ 对 NSApp.activate(ignoringOtherApps:) 的弃用变更。
+    // 至今未被弃用,兼容部署目标(11.0)与 macOS 14+ 对 NSApp.activate(ignoringOtherApps:) 的弃用变更。
     NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
   }
 
