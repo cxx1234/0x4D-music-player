@@ -67,11 +67,18 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       allowedExtensions: const ['m3u8', 'm3u'],
     );
     if (path == null || !mounted) return;
-    final count = await exportPlaylistToFile(widget.playlist.id, path);
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('已导出 $count 首歌曲')));
+    try {
+      final count = await exportPlaylistToFile(widget.playlist.id, path);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已导出 $count 首歌曲')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('导出失败：无法写入文件')));
+    }
   }
 
   Future<void> _rename() async {

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../database/database.dart';
+import '../utils/logger.dart';
 import 'play_queue.dart';
 
 /// Available repeat modes for the player.
@@ -30,6 +31,15 @@ class PlayerService extends ChangeNotifier {
 
   PlayerRepeatMode _repeatMode = PlayerRepeatMode.off;
   bool _isShuffled = false;
+
+  /// 连续播放失败计数上限:达到后停止自动跳转(防坏文件死循环)。
+  static const int _kMaxConsecutiveErrors = 3;
+
+  /// 最近一次播放错误的用户可读消息(消费即清,供 UI 提示一次)。
+  String? _lastPlaybackError;
+
+  /// 连续播放失败计数。
+  int _consecutiveErrors = 0;
 
   // ─── Stream subscriptions ──────────────────────────────
 
@@ -145,6 +155,13 @@ class PlayerService extends ChangeNotifier {
   /// Whether shuffle is enabled.
   bool get isShuffled => _isShuffled;
 
+  /// 消费并清除最近的播放错误消息(返回 null 表示没有待提示的错误)。
+  String? takePlaybackError() {
+    final err = _lastPlaybackError;
+    _lastPlaybackError = null;
+    return err;
+  }
+
   // ─── Queue management ──────────────────────────────────
 
   /// Replace the queue with [songs] and start playing at [startIndex].
@@ -157,12 +174,18 @@ class PlayerService extends ChangeNotifier {
         .toList();
 
     _audioSource = ConcatenatingAudioSource(children: sources);
-    await _player.setAudioSource(
-      _audioSource!,
-      initialIndex: _playQueue.currentIndex,
-    );
-    await _applyAudioModes();
-    await _player.play();
+    try {
+      await _player.setAudioSource(
+        _audioSource!,
+        initialIndex: _playQueue.currentIndex,
+      );
+      await _applyAudioModes();
+      await _player.play();
+      _clearPlaybackError();
+    } catch (e, s) {
+      _reportPlaybackError('playFromList', e, s);
+      await _skipOnFailure();
+    }
   }
 
   /// Play a single song (replaces the queue with just this one song).
@@ -180,16 +203,27 @@ class PlayerService extends ChangeNotifier {
           .map((s) => AudioSource.file(s.filePath) as AudioSource)
           .toList();
       _audioSource = ConcatenatingAudioSource(children: sources);
-      await _player.setAudioSource(_audioSource!, initialIndex: 0);
-      await _applyAudioModes();
-      await _player.play();
+      try {
+        await _player.setAudioSource(_audioSource!, initialIndex: 0);
+        await _applyAudioModes();
+        await _player.play();
+        _clearPlaybackError();
+      } catch (e, s) {
+        _reportPlaybackError('addToQueue', e, s);
+        await _skipOnFailure();
+      }
     } else {
       final newSources = songs
           .map((s) => AudioSource.file(s.filePath) as AudioSource)
           .toList();
       try {
         await _audioSource?.addAll(newSources);
-      } catch (_) {
+      } catch (e) {
+        AppLogger.warning(
+          'Player',
+          'addAll failed, falling back to rebuild',
+          e,
+        );
         await _rebuildSequence();
       }
     }
@@ -202,9 +236,21 @@ class PlayerService extends ChangeNotifier {
     // restored queue after startup) — play() on an empty player does nothing.
     if (_audioSource == null) {
       if (_playQueue.isEmpty) return;
-      await _rebuildSequence();
+      try {
+        await _rebuildSequence();
+      } catch (e, s) {
+        _reportPlaybackError('play', e, s);
+        await _skipOnFailure();
+        return;
+      }
     }
-    await _player.play();
+    try {
+      await _player.play();
+      _clearPlaybackError();
+    } catch (e, s) {
+      _reportPlaybackError('play', e, s);
+      await _skipOnFailure();
+    }
   }
 
   Future<void> pause() => _player.pause();
@@ -234,20 +280,38 @@ class PlayerService extends ChangeNotifier {
       final nextIndex = _playQueue.currentIndex + 1;
       if (nextIndex < _playQueue.length) {
         _playQueue.setCurrentIndex(nextIndex);
-        await _rebuildSequence();
-        await _player.play();
+        try {
+          await _rebuildSequence();
+          await _player.play();
+          _clearPlaybackError();
+        } catch (e, s) {
+          _reportPlaybackError('next', e, s);
+          await _skipOnFailure();
+        }
       } else if (_repeatMode == PlayerRepeatMode.all) {
         _playQueue.setCurrentIndex(0);
-        await _rebuildSequence();
-        await _player.play();
+        try {
+          await _rebuildSequence();
+          await _player.play();
+          _clearPlaybackError();
+        } catch (e, s) {
+          _reportPlaybackError('next', e, s);
+          await _skipOnFailure();
+        }
       }
       return;
     }
 
-    if (_playQueue.currentIndex < _playQueue.length - 1) {
-      await _player.seekToNext();
-    } else if (_repeatMode == PlayerRepeatMode.all) {
-      await _player.seek(Duration.zero, index: 0);
+    try {
+      if (_playQueue.currentIndex < _playQueue.length - 1) {
+        await _player.seekToNext();
+      } else if (_repeatMode == PlayerRepeatMode.all) {
+        await _player.seek(Duration.zero, index: 0);
+      }
+      _clearPlaybackError();
+    } catch (e, s) {
+      _reportPlaybackError('next', e, s);
+      await _skipOnFailure();
     }
     // If repeatMode is `off`, just let playback stop naturally.
   }
@@ -261,17 +325,29 @@ class PlayerService extends ChangeNotifier {
       final prevIndex = _playQueue.currentIndex - 1;
       if (prevIndex >= 0) {
         _playQueue.setCurrentIndex(prevIndex);
-        await _rebuildSequence();
-        await _player.play();
+        try {
+          await _rebuildSequence();
+          await _player.play();
+          _clearPlaybackError();
+        } catch (e, s) {
+          _reportPlaybackError('previous', e, s);
+          await _skipOnFailure();
+        }
       }
       return;
     }
 
-    // If more than 3 seconds in, restart the current song.
-    if (_player.position.inSeconds > 3) {
-      await _player.seek(Duration.zero);
-    } else {
-      await _player.seekToPrevious();
+    try {
+      // If more than 3 seconds in, restart the current song.
+      if (_player.position.inSeconds > 3) {
+        await _player.seek(Duration.zero);
+      } else {
+        await _player.seekToPrevious();
+      }
+      _clearPlaybackError();
+    } catch (e, s) {
+      _reportPlaybackError('previous', e, s);
+      await _skipOnFailure();
     }
   }
 
@@ -318,7 +394,12 @@ class PlayerService extends ChangeNotifier {
     }
     try {
       await _audioSource?.removeAt(index);
-    } catch (_) {
+    } catch (e) {
+      AppLogger.warning(
+        'Player',
+        'removeAt failed, falling back to rebuild',
+        e,
+      );
       await _rebuildSequence();
     }
   }
@@ -327,14 +408,20 @@ class PlayerService extends ChangeNotifier {
   Future<void> jumpTo(int index) async {
     if (index < 0 || index >= _playQueue.length) return;
     _playQueue.setCurrentIndex(index);
-    if (_audioSource == null) {
-      // Lazy-load the sequence on first playback — avoids accessing files
-      // before macOS sandbox bookmarks are resolved at startup.
-      await _rebuildSequence();
-    } else {
-      await _player.seek(Duration.zero, index: index);
+    try {
+      if (_audioSource == null) {
+        // Lazy-load the sequence on first playback — avoids accessing files
+        // before macOS sandbox bookmarks are resolved at startup.
+        await _rebuildSequence();
+      } else {
+        await _player.seek(Duration.zero, index: index);
+      }
+      await _player.play();
+      _clearPlaybackError();
+    } catch (e, s) {
+      _reportPlaybackError('jumpTo', e, s);
+      await _skipOnFailure();
     }
-    await _player.play();
   }
 
   /// Insert [songs] right after the currently playing song.
@@ -350,7 +437,12 @@ class PlayerService extends ChangeNotifier {
         .toList();
     try {
       await _audioSource?.insertAll(_playQueue.currentIndex + 1, newSources);
-    } catch (_) {
+    } catch (e) {
+      AppLogger.warning(
+        'Player',
+        'insertAll failed, falling back to rebuild',
+        e,
+      );
       await _rebuildSequence();
     }
   }
@@ -360,7 +452,8 @@ class PlayerService extends ChangeNotifier {
     _playQueue.move(oldIndex, newIndex);
     try {
       await _audioSource?.move(oldIndex, newIndex);
-    } catch (_) {
+    } catch (e) {
+      AppLogger.warning('Player', 'move failed, falling back to rebuild', e);
       await _rebuildSequence();
     }
   }
@@ -416,6 +509,45 @@ class PlayerService extends ChangeNotifier {
     } else {
       await _player.setShuffleModeEnabled(false);
     }
+  }
+
+  /// 记录一次播放失败:更新错误消息与连续失败计数。
+  ///
+  /// 自动跳转由 [_skipOnFailure] 驱动;错误消息由 UI 通过
+  /// [takePlaybackError] 消费并提示。
+  void _reportPlaybackError(String where, Object e, StackTrace s) {
+    _consecutiveErrors++;
+    final title = _playQueue.currentSong?.title;
+    _lastPlaybackError = '无法播放${title != null ? '：$title' : '该文件'}，已自动跳过';
+    AppLogger.error('Player', 'Playback failed in $where', e, s);
+    notifyListeners();
+  }
+
+  /// 播放成功后清除失败状态(连续计数归零、错误消息清空)。
+  void _clearPlaybackError() {
+    _consecutiveErrors = 0;
+    if (_lastPlaybackError != null) {
+      _lastPlaybackError = null;
+      notifyListeners();
+    }
+  }
+
+  /// 播放失败后自动跳到下一首,但连续失败达到上限即停止。
+  ///
+  /// 延迟 600ms 让错误 SnackBar 先展示;`next()` 内部若再次失败会继续
+  /// 走 [_reportPlaybackError] + [_skipOnFailure],形成有界的自动跳过链。
+  Future<void> _skipOnFailure() async {
+    if (_consecutiveErrors >= _kMaxConsecutiveErrors) {
+      _lastPlaybackError = '连续 $_kMaxConsecutiveErrors 次无法播放，已停止自动跳转';
+      AppLogger.error(
+        'Player',
+        'Reached $_kMaxConsecutiveErrors consecutive playback failures; auto-skip stopped',
+      );
+      notifyListeners();
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    await next();
   }
 
   /// Fallback: rebuild the entire audio sequence from scratch.

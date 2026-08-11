@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../constants/audio_extensions.dart';
+import '../utils/logger.dart';
 import 'metadata_service.dart';
 import 'song_repository.dart';
 
@@ -89,10 +90,12 @@ class LibraryScannerService {
       ),
     );
 
+    final errorDetails = <String>[];
     final diskFiles = <String>{};
     for (final folder in folderPaths) {
-      final files = await _collectAudioFiles(folder);
+      final (files, dirErrors) = await _collectAudioFiles(folder);
       diskFiles.addAll(files);
+      errorDetails.addAll(dirErrors);
     }
 
     // ── Phase 2: Diff with database ───────────────────────
@@ -125,10 +128,8 @@ class LibraryScannerService {
     );
 
     // ── Phase 3: Parse files ──────────────────────────────
-    final errorDetails = <String>[];
-
     if (filesToParse.isNotEmpty) {
-      final scanned = await _metadataService.parseAll(
+      final (scanned, failures) = await _metadataService.parseAll(
         filesToParse,
         onProgress: (processed, total, currentFile) {
           onProgress?.call(
@@ -141,6 +142,7 @@ class LibraryScannerService {
           );
         },
       );
+      errorDetails.addAll(failures);
 
       await _songRepository.insertOrUpdateFromScan(scanned);
     }
@@ -169,6 +171,16 @@ class LibraryScannerService {
     // Count newly added (or updated) files for the result summary.
     final addedCount = updateExisting ? filesToParse.length : newFiles.length;
 
+    // 批量失败聚合为一条 error 日志,避免逐文件刷屏(单文件失败已在上层
+    // 记录 warning)。
+    if (errorDetails.isNotEmpty) {
+      AppLogger.error(
+        'Scan',
+        'Scan finished with ${errorDetails.length} failure(s):\n'
+            '  ${errorDetails.join('\n  ')}',
+      );
+    }
+
     return ScanResult(
       added: addedCount,
       markedMissing: markedMissing.length,
@@ -179,11 +191,21 @@ class LibraryScannerService {
   }
 
   /// Recursively collects all supported audio files under [rootPath].
-  Future<List<String>> _collectAudioFiles(String rootPath) async {
+  ///
+  /// 返回 (文件列表, 目录级错误列表)。目录不存在或不可读时,错误会
+  /// 计入统计并在日志中记录,而不是静默跳过。
+  Future<(List<String>, List<String>)> _collectAudioFiles(
+    String rootPath,
+  ) async {
     final files = <String>[];
+    final errors = <String>[];
     final dir = Directory(rootPath);
 
-    if (!await dir.exists()) return files;
+    if (!await dir.exists()) {
+      errors.add('Directory does not exist: $rootPath');
+      AppLogger.warning('Scan', 'Cannot read directory: $rootPath');
+      return (files, errors);
+    }
 
     try {
       await for (final entity in dir.list(
@@ -194,10 +216,12 @@ class LibraryScannerService {
           files.add(entity.path);
         }
       }
-    } catch (_) {
-      // Skip folders that can't be read
+    } catch (e, s) {
+      // 目录不可读:记录日志并计入错误统计(用户可在扫描结果中看到)。
+      errors.add('Cannot read directory: $rootPath');
+      AppLogger.warning('Scan', 'Cannot read directory: $rootPath', e, s);
     }
 
-    return files;
+    return (files, errors);
   }
 }

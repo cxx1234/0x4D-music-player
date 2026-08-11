@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../../models/scanned_song.dart';
 import '../database/database.dart';
 import '../database/song_sort_order.dart';
+import '../utils/logger.dart';
 import '../utils/sort_key.dart';
 import 'album_art_cache_service.dart';
 import 'service_locator.dart';
@@ -293,8 +294,8 @@ class SongRepository {
             song.pictureBytes!,
             song.pictureMimeType!,
           );
-        } catch (_) {
-          // Best-effort: if caching fails, leave art null.
+        } catch (e) {
+          AppLogger.warning('Cache', 'Failed to cache album art', e);
         }
       } else {
         albumArtPath = await _artCache.getAlbumArtPath(albumKey);
@@ -355,8 +356,8 @@ class SongRepository {
         album.id,
       );
       return path;
-    } catch (_) {
-      // Best-effort: if caching fails, leave art null.
+    } catch (e) {
+      AppLogger.warning('Cache', 'Failed to cache album art', e);
       return null;
     }
   }

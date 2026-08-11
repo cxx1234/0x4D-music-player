@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../utils/logger.dart';
+
 /// Manages on-disk caching of embedded album art images.
 ///
 /// Images are stored under `{appDocDir}/covers/{hash}.{ext}`.
@@ -65,8 +67,8 @@ class AlbumArtCacheService {
       if (await file.exists()) {
         await file.delete();
       }
-    } catch (_) {
-      // Best-effort cleanup — not fatal.
+    } catch (e) {
+      AppLogger.warning('Cache', 'Failed to delete cached art', e);
     }
   }
 

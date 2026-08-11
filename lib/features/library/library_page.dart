@@ -322,7 +322,8 @@ class _LibraryPageState extends State<LibraryPage> {
           const SizedBox(width: 8),
           Text(
             '扫描完成：${result.added > 0 ? '添加 ${result.added} 首' : '无新文件'}'
-            '${result.markedMissing > 0 ? '，${result.markedMissing} 首已移除' : ''}',
+            '${result.markedMissing > 0 ? '，${result.markedMissing} 首已移除' : ''}'
+            '${result.errors > 0 ? '，${result.errors} 处失败' : ''}',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),

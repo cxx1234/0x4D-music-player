@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../database/database.dart';
+import '../utils/logger.dart';
 
 /// Pure data layer for the playback queue.
 ///
@@ -198,7 +199,8 @@ class PlayQueue extends ChangeNotifier {
 
       _repeatModeName = data['repeatMode'] as String? ?? 'off';
       _isShuffled = data['isShuffled'] as bool? ?? false;
-    } catch (_) {
+    } catch (e) {
+      AppLogger.warning('Queue', 'Failed to restore queue', e);
       _queue = [];
       _currentIndex = 0;
     }
@@ -219,8 +221,8 @@ class PlayQueue extends ChangeNotifier {
         'isShuffled': _isShuffled,
       };
       await file.writeAsString(jsonEncode(data));
-    } catch (_) {
-      // Silently ignore persistence failures
+    } catch (e) {
+      AppLogger.warning('Queue', 'Failed to save queue', e);
     }
   }
 }

@@ -1,11 +1,10 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
-
 import 'package:just_audio_platform_interface/just_audio_platform_interface.dart';
 
 import '../audio/platform_media_controls.dart';
 import '../database/database.dart';
+import '../utils/logger.dart';
 import 'folder_watcher_service.dart';
 import 'media_control_service.dart';
 import 'play_queue.dart';
@@ -127,8 +126,16 @@ class ServiceLocator {
 
   static Future<void> initialize() => _initialization ??= _doInitialize();
 
+  /// 重置初始化缓存,允许重试初始化(启动失败后用户点击重试)。
+  ///
+  /// [initialize] 是幂等的(`_initialization ??=`),失败后缓存的 Future
+  /// 已处于 failed 状态,必须清掉才能重新执行 [_doInitialize]。
+  static void resetInitialization() {
+    _initialization = null;
+  }
+
   static Future<void> _doInitialize() async {
-    debugPrint('[ServiceLocator] initialize()');
+    AppLogger.info('Startup', 'ServiceLocator.initialize()');
     // 清理上一个 isolate（热重启）遗留的 just_audio 原生播放器，避免
     // "幽灵播放器"在新播放器首次激活前仍在后台出声/切歌。
     try {
@@ -136,7 +143,7 @@ class ServiceLocator {
         DisposeAllPlayersRequest(),
       );
     } catch (e) {
-      debugPrint('[ServiceLocator] disposeAllPlayers failed: $e');
+      AppLogger.warning('Startup', 'disposeAllPlayers failed', e);
     }
     _settings = SettingsService();
     await _settings!.initialize();
@@ -172,7 +179,10 @@ class ServiceLocator {
       final restoredPath = await _sandbox!.resolveBookmark(item.bookmark);
       if (restoredPath == null) {
         _sandboxRestoreFailures++;
-        debugPrint('[Sandbox] 音乐文件夹 bookmark 解析失败（可能已失效）：${item.path}');
+        AppLogger.warning(
+          'Sandbox',
+          'Failed to resolve bookmark for music folder (may be stale): ${item.path}',
+        );
         continue;
       }
 
@@ -181,11 +191,18 @@ class ServiceLocator {
         final dir = Directory(restoredPath);
         if (!await dir.exists()) {
           _sandboxRestoreFailures++;
-          debugPrint('[Sandbox] 音乐文件夹不存在：$restoredPath');
+          AppLogger.warning(
+            'Sandbox',
+            'Music folder does not exist: $restoredPath',
+          );
         }
       } catch (e) {
         _sandboxRestoreFailures++;
-        debugPrint('[Sandbox] 音乐文件夹读探测失败：$restoredPath ($e)');
+        AppLogger.warning(
+          'Sandbox',
+          'Music folder read probe failed: $restoredPath',
+          e,
+        );
       }
     }
   }

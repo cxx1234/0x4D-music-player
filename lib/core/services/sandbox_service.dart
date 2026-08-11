@@ -1,5 +1,6 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+import '../utils/logger.dart';
 
 /// Manages macOS Security-Scoped Bookmarks via a native MethodChannel.
 ///
@@ -43,7 +44,11 @@ class SandboxService {
       // STALE / RESOLVE_FAILED / ACCESS_FAILED — the bookmark can't be
       // restored. Log the reason so callers can decide whether to ask the
       // user to re-authorize the folder.
-      debugPrint('[Sandbox] resolveBookmark 失败: ${e.code} - ${e.message}');
+      AppLogger.warning(
+        'Sandbox',
+        'Failed to resolve bookmark: ${e.code} - ${e.message}',
+        e,
+      );
       return null;
     } on MissingPluginException {
       return null;

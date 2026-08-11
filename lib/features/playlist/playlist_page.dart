@@ -96,7 +96,17 @@ class _PlaylistPageState extends State<PlaylistPage> {
     final filePath = result?.files.single.path;
     if (filePath == null || !mounted) return;
 
-    final imported = await importM3uFromFile(filePath);
+    final M3uImportResult imported;
+    try {
+      imported = await importM3uFromFile(filePath);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('导入失败：无法读取文件')));
+      }
+      return;
+    }
     if (imported.songs.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

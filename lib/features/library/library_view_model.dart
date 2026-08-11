@@ -5,6 +5,7 @@ import '../../core/database/song_sort_order.dart';
 import '../../core/services/library_scanner_service.dart';
 import '../../core/services/player_service.dart';
 import '../../core/services/service_locator.dart';
+import '../../core/utils/logger.dart';
 
 /// Possible states of the library scan.
 enum LibraryScanState {
@@ -184,8 +185,8 @@ class LibraryViewModel extends ChangeNotifier {
   Future<void> _quickSync(List<String> folders) async {
     try {
       await _scanner.scanFolders(folders, markMissing: false);
-    } catch (_) {
-      // Silently handle quick sync errors
+    } catch (e) {
+      AppLogger.warning('Scan', 'Quick sync failed', e);
     }
     await _syncQueueWithLibrary();
   }
