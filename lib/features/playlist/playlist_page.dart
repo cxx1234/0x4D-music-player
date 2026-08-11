@@ -405,29 +405,34 @@ class _PlaylistPageState extends State<PlaylistPage> {
               ),
               delegate: SliverChildBuilderDelegate((context, index) {
                 final playlist = playlists[index];
-                return CoverCard(
-                  cover: PlaylistCover(
-                    playlistId: playlist.id,
-                    size: double.infinity,
-                    borderRadius: 0,
-                    revision: _viewModel.songCountFor(playlist),
-                  ),
-                  title: playlist.name,
-                  subtitle: '${_viewModel.songCountFor(playlist)} 首歌曲',
-                  onTap: () => _openDetail(playlist),
-                  onLongPress: () => _showPlaylistMenu(playlist, context),
-                  trailing: PopupMenuButton<String>(
-                    tooltip: '更多',
-                    // child 模式：用固定 20×20 盒子承载图标，命中区即 20×20。
-                    // （icon 模式内部走 IconButton，默认 48 命中区且不接收
-                    //   constraints；PopupMenuButton.constraints 只控制菜单宽度）
-                    child: const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: Icon(Icons.more_vert, size: 16),
+                // Builder 提供卡片自身的 context，findRenderObject 才能取到卡片
+                // RenderBox（itemBuilder 的 context 会解析到 RenderSliverGrid）。
+                return Builder(
+                  builder: (cardContext) => CoverCard(
+                    cover: PlaylistCover(
+                      playlistId: playlist.id,
+                      size: double.infinity,
+                      borderRadius: 0,
+                      revision: _viewModel.songCountFor(playlist),
                     ),
-                    onSelected: (value) => _handlePlaylistMenu(playlist, value),
-                    itemBuilder: (context) => _playlistMenuItems(),
+                    title: playlist.name,
+                    subtitle: '${_viewModel.songCountFor(playlist)} 首歌曲',
+                    onTap: () => _openDetail(playlist),
+                    onLongPress: () => _showPlaylistMenu(playlist, cardContext),
+                    trailing: PopupMenuButton<String>(
+                      tooltip: '更多',
+                      // child 模式：用固定 20×20 盒子承载图标，命中区即 20×20。
+                      // （icon 模式内部走 IconButton，默认 48 命中区且不接收
+                      //   constraints；PopupMenuButton.constraints 只控制菜单宽度）
+                      child: const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: Icon(Icons.more_vert, size: 16),
+                      ),
+                      onSelected: (value) =>
+                          _handlePlaylistMenu(playlist, value),
+                      itemBuilder: (context) => _playlistMenuItems(),
+                    ),
                   ),
                 );
               }, childCount: playlists.length),
