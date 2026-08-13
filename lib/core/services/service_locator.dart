@@ -154,7 +154,10 @@ class ServiceLocator {
     _folderWatcher = FolderWatcherService();
     _playQueue = PlayQueue();
     await _playQueue!.restoreQueue(_database!);
-    _player = PlayerService(playQueue: _playQueue!);
+    _player = PlayerService(
+      playQueue: _playQueue!,
+      resumePlaybackPosition: _settings!.settings.resumePlaybackPosition,
+    );
     _sandbox = SandboxService();
 
     // macOS 沙箱：恢复 security-scoped bookmarks（与 UI 生命周期解耦，

@@ -37,10 +37,14 @@ class AppSettings {
   /// 音乐库歌曲排序方式（[SongSortOrder.name]）。
   final String songSortOrder;
 
+  /// 启动恢复队列后是否应用上次播放位置（续播）。
+  final bool resumePlaybackPosition;
+
   const AppSettings({
     this.musicFolders = const [],
     this.themeMode = 'system',
     this.songSortOrder = 'title',
+    this.resumePlaybackPosition = true,
   });
 
   /// The raw folder paths (convenience getter).
@@ -50,6 +54,7 @@ class AppSettings {
     'musicFolders': musicFolders.map((f) => f.toJson()).toList(),
     'themeMode': themeMode,
     'songSortOrder': songSortOrder,
+    'resumePlaybackPosition': resumePlaybackPosition,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -72,6 +77,7 @@ class AppSettings {
       musicFolders: folders,
       themeMode: json['themeMode'] as String? ?? 'system',
       songSortOrder: json['songSortOrder'] as String? ?? 'title',
+      resumePlaybackPosition: json['resumePlaybackPosition'] as bool? ?? true,
     );
   }
 
@@ -79,11 +85,14 @@ class AppSettings {
     List<MusicFolder>? musicFolders,
     String? themeMode,
     String? songSortOrder,
+    bool? resumePlaybackPosition,
   }) {
     return AppSettings(
       musicFolders: musicFolders ?? this.musicFolders,
       themeMode: themeMode ?? this.themeMode,
       songSortOrder: songSortOrder ?? this.songSortOrder,
+      resumePlaybackPosition:
+          resumePlaybackPosition ?? this.resumePlaybackPosition,
     );
   }
 
@@ -120,6 +129,15 @@ class SettingsService {
   /// 持久化排序方式到 settings.json。
   Future<void> setSongSortOrder(SongSortOrder order) async {
     _settings = _settings.copyWith(songSortOrder: order.name);
+    await _save();
+  }
+
+  /// 启动恢复队列后是否应用上次播放位置（续播）。供设置界面使用。
+  bool get resumePlaybackPosition => _settings.resumePlaybackPosition;
+
+  /// 持久化续播设置。
+  Future<void> setResumePlaybackPosition(bool value) async {
+    _settings = _settings.copyWith(resumePlaybackPosition: value);
     await _save();
   }
 

@@ -20,6 +20,8 @@ class PlayQueue extends ChangeNotifier {
   int _currentIndex = 0;
   String _repeatModeName = 'off';
   bool _isShuffled = false;
+  int _positionMs = 0;
+  int _durationMs = 0;
 
   // ─── Public state ──────────────────────────────────────
 
@@ -47,12 +49,20 @@ class PlayQueue extends ChangeNotifier {
   /// Whether shuffle is enabled (persisted).
   bool get isShuffled => _isShuffled;
 
+  /// 当前歌曲的播放位置（启动续播用）。
+  Duration get position => Duration(milliseconds: _positionMs);
+
+  /// 当前歌曲的总时长（启动续播 / 进度条显示用）。
+  Duration get duration => Duration(milliseconds: _durationMs);
+
   // ─── Queue mutations (all audio-safe) ──────────────────
 
   /// Replace the entire queue with [songs], resetting to [startIndex].
   void replace(List<Song> songs, int startIndex) {
     _queue = List.from(songs);
     _currentIndex = startIndex.clamp(0, songs.length - 1);
+    _positionMs = 0;
+    _durationMs = 0;
     _save();
     notifyListeners();
   }
@@ -111,6 +121,8 @@ class PlayQueue extends ChangeNotifier {
   void clear() {
     _queue = [];
     _currentIndex = 0;
+    _positionMs = 0;
+    _durationMs = 0;
     _save();
     notifyListeners();
   }
@@ -167,6 +179,17 @@ class PlayQueue extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 持久化当前歌曲的播放位置与总时长（不触发 notify；UI 从
+  /// positionStream/durationStream 更新，这里仅供启动续播）。
+  void setPlaybackState(Duration position, Duration duration) {
+    final posMs = position.inMilliseconds;
+    final durMs = duration.inMilliseconds;
+    if (posMs == _positionMs && durMs == _durationMs) return;
+    _positionMs = posMs;
+    _durationMs = durMs;
+    _save();
+  }
+
   // ─── JSON persistence ──────────────────────────────────
 
   static const _queueFileName = 'play_queue.json';
@@ -199,10 +222,14 @@ class PlayQueue extends ChangeNotifier {
 
       _repeatModeName = data['repeatMode'] as String? ?? 'off';
       _isShuffled = data['isShuffled'] as bool? ?? false;
+      _positionMs = data['positionMs'] as int? ?? 0;
+      _durationMs = data['durationMs'] as int? ?? 0;
     } catch (e) {
       AppLogger.warning('Queue', 'Failed to restore queue', e);
       _queue = [];
       _currentIndex = 0;
+      _positionMs = 0;
+      _durationMs = 0;
     }
   }
 
@@ -219,6 +246,8 @@ class PlayQueue extends ChangeNotifier {
         'currentIndex': _currentIndex,
         'repeatMode': _repeatModeName,
         'isShuffled': _isShuffled,
+        'positionMs': _positionMs,
+        'durationMs': _durationMs,
       };
       await file.writeAsString(jsonEncode(data));
     } catch (e) {
