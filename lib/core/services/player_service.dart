@@ -27,7 +27,9 @@ enum PlayerRepeatMode {
 class PlayerService extends ChangeNotifier {
   final AudioPlayer _player = AudioPlayer();
   final PlayQueue _playQueue;
-  ConcatenatingAudioSource? _audioSource;
+
+  /// 音频序列是否已交给引擎（惰性加载标志，见 macOS 沙箱时序）。
+  bool _sequenceLoaded = false;
 
   PlayerRepeatMode _repeatMode = PlayerRepeatMode.off;
   bool _isShuffled = false;
@@ -169,14 +171,11 @@ class PlayerService extends ChangeNotifier {
     if (songs.isEmpty) return;
     _playQueue.replace(songs, startIndex);
 
-    final sources = songs
-        .map((s) => AudioSource.file(s.filePath) as AudioSource)
-        .toList();
-
-    _audioSource = ConcatenatingAudioSource(children: sources);
+    final sources = songs.map((s) => AudioSource.file(s.filePath)).toList();
+    _sequenceLoaded = true;
     try {
-      await _player.setAudioSource(
-        _audioSource!,
+      await _player.setAudioSources(
+        sources,
         initialIndex: _playQueue.currentIndex,
       );
       await _applyAudioModes();
@@ -199,12 +198,10 @@ class PlayerService extends ChangeNotifier {
     final wasEmpty = _playQueue.isEmpty;
     _playQueue.append(songs);
     if (wasEmpty) {
-      final sources = songs
-          .map((s) => AudioSource.file(s.filePath) as AudioSource)
-          .toList();
-      _audioSource = ConcatenatingAudioSource(children: sources);
+      final sources = songs.map((s) => AudioSource.file(s.filePath)).toList();
+      _sequenceLoaded = true;
       try {
-        await _player.setAudioSource(_audioSource!, initialIndex: 0);
+        await _player.setAudioSources(sources, initialIndex: 0);
         await _applyAudioModes();
         await _player.play();
         _clearPlaybackError();
@@ -214,17 +211,21 @@ class PlayerService extends ChangeNotifier {
       }
     } else {
       final newSources = songs
-          .map((s) => AudioSource.file(s.filePath) as AudioSource)
+          .map((s) => AudioSource.file(s.filePath))
           .toList();
-      try {
-        await _audioSource?.addAll(newSources);
-      } catch (e) {
-        AppLogger.warning(
-          'Player',
-          'addAll failed, falling back to rebuild',
-          e,
-        );
-        await _rebuildSequence();
+      // 序列尚未加载（如启动恢复的队列）时跳过：队列已更新，下次
+      // play()/_rebuildSequence() 会整体重建，行为与旧版一致。
+      if (_sequenceLoaded) {
+        try {
+          await _player.addAudioSources(newSources);
+        } catch (e) {
+          AppLogger.warning(
+            'Player',
+            'addAudioSources failed, falling back to rebuild',
+            e,
+          );
+          await _rebuildSequence();
+        }
       }
     }
   }
@@ -234,7 +235,7 @@ class PlayerService extends ChangeNotifier {
   Future<void> play() async {
     // Lazily build the sequence if no audio source is loaded yet (e.g.
     // restored queue after startup) — play() on an empty player does nothing.
-    if (_audioSource == null) {
+    if (!_sequenceLoaded) {
       if (_playQueue.isEmpty) return;
       try {
         await _rebuildSequence();
@@ -264,7 +265,7 @@ class PlayerService extends ChangeNotifier {
   }
 
   Future<void> stop() async {
-    _audioSource = null;
+    _sequenceLoaded = false;
     await _player.stop();
     _playQueue.clear();
   }
@@ -276,7 +277,7 @@ class PlayerService extends ChangeNotifier {
     // No audio source loaded yet (e.g. restored queue after startup) —
     // lazily build the sequence so navigation works without pre-loading
     // files (which would need macOS sandbox permissions too early).
-    if (_audioSource == null) {
+    if (!_sequenceLoaded) {
       final nextIndex = _playQueue.currentIndex + 1;
       if (nextIndex < _playQueue.length) {
         _playQueue.setCurrentIndex(nextIndex);
@@ -321,7 +322,7 @@ class PlayerService extends ChangeNotifier {
     if (_playQueue.isEmpty) return;
 
     // Lazily build the sequence if no audio source is loaded yet.
-    if (_audioSource == null) {
+    if (!_sequenceLoaded) {
       final prevIndex = _playQueue.currentIndex - 1;
       if (prevIndex >= 0) {
         _playQueue.setCurrentIndex(prevIndex);
@@ -375,7 +376,7 @@ class PlayerService extends ChangeNotifier {
   Future<void> toggleShuffle() async {
     _isShuffled = !_isShuffled;
     _playQueue.setIsShuffled(_isShuffled);
-    if (_audioSource != null) {
+    if (_sequenceLoaded) {
       await _applyAudioModes();
     }
     notifyListeners();
@@ -388,19 +389,21 @@ class PlayerService extends ChangeNotifier {
     if (index < 0 || index >= _playQueue.length) return;
     _playQueue.removeAt(index);
     if (_playQueue.isEmpty) {
-      _audioSource = null;
+      _sequenceLoaded = false;
       await _player.stop();
       return;
     }
-    try {
-      await _audioSource?.removeAt(index);
-    } catch (e) {
-      AppLogger.warning(
-        'Player',
-        'removeAt failed, falling back to rebuild',
-        e,
-      );
-      await _rebuildSequence();
+    if (_sequenceLoaded) {
+      try {
+        await _player.removeAudioSourceAt(index);
+      } catch (e) {
+        AppLogger.warning(
+          'Player',
+          'removeAudioSourceAt failed, falling back to rebuild',
+          e,
+        );
+        await _rebuildSequence();
+      }
     }
   }
 
@@ -409,7 +412,7 @@ class PlayerService extends ChangeNotifier {
     if (index < 0 || index >= _playQueue.length) return;
     _playQueue.setCurrentIndex(index);
     try {
-      if (_audioSource == null) {
+      if (!_sequenceLoaded) {
         // Lazy-load the sequence on first playback — avoids accessing files
         // before macOS sandbox bookmarks are resolved at startup.
         await _rebuildSequence();
@@ -432,36 +435,45 @@ class PlayerService extends ChangeNotifier {
       return;
     }
     _playQueue.insertAfterCurrent(songs);
-    final newSources = songs
-        .map((s) => AudioSource.file(s.filePath) as AudioSource)
-        .toList();
-    try {
-      await _audioSource?.insertAll(_playQueue.currentIndex + 1, newSources);
-    } catch (e) {
-      AppLogger.warning(
-        'Player',
-        'insertAll failed, falling back to rebuild',
-        e,
-      );
-      await _rebuildSequence();
+    final newSources = songs.map((s) => AudioSource.file(s.filePath)).toList();
+    if (_sequenceLoaded) {
+      try {
+        await _player.insertAudioSources(
+          _playQueue.currentIndex + 1,
+          newSources,
+        );
+      } catch (e) {
+        AppLogger.warning(
+          'Player',
+          'insertAudioSources failed, falling back to rebuild',
+          e,
+        );
+        await _rebuildSequence();
+      }
     }
   }
 
   /// Move a song from [oldIndex] to [newIndex] (drag-to-reorder).
   Future<void> moveInQueue(int oldIndex, int newIndex) async {
     _playQueue.move(oldIndex, newIndex);
-    try {
-      await _audioSource?.move(oldIndex, newIndex);
-    } catch (e) {
-      AppLogger.warning('Player', 'move failed, falling back to rebuild', e);
-      await _rebuildSequence();
+    if (_sequenceLoaded) {
+      try {
+        await _player.moveAudioSource(oldIndex, newIndex);
+      } catch (e) {
+        AppLogger.warning(
+          'Player',
+          'moveAudioSource failed, falling back to rebuild',
+          e,
+        );
+        await _rebuildSequence();
+      }
     }
   }
 
   /// Clear the entire queue and stop playback.
   Future<void> clearQueue() async {
     _playQueue.clear();
-    _audioSource = null;
+    _sequenceLoaded = false;
     await _player.stop();
   }
 
@@ -476,11 +488,11 @@ class PlayerService extends ChangeNotifier {
     final pruned = _playQueue.pruneTo(validFilePaths);
 
     if (_playQueue.isEmpty) {
-      _audioSource = null;
+      _sequenceLoaded = false;
       await _player.stop();
       return;
     }
-    if (pruned && _audioSource != null) {
+    if (pruned && _sequenceLoaded) {
       await _rebuildSequence();
     }
   }
@@ -551,18 +563,17 @@ class PlayerService extends ChangeNotifier {
   }
 
   /// Fallback: rebuild the entire audio sequence from scratch.
-  /// Used when a dynamic API call ([addAll]/[removeAt]/[move]/[insertAll])
-  /// fails — this ensures just_audio's internal sequence stays in sync with
-  /// [PlayQueue] even if the platform channel throws.
+  /// Used when a dynamic API call ([addAudioSources]/[removeAudioSourceAt]/
+  /// [moveAudioSource]/[insertAudioSources]) fails — this ensures just_audio's
+  /// internal sequence stays in sync with [PlayQueue] even if the platform
+  /// channel throws.
   Future<void> _rebuildSequence() async {
     final songs = _playQueue.songs;
     if (songs.isEmpty) return;
-    final sources = songs
-        .map((s) => AudioSource.file(s.filePath) as AudioSource)
-        .toList();
-    _audioSource = ConcatenatingAudioSource(children: sources);
-    await _player.setAudioSource(
-      _audioSource!,
+    final sources = songs.map((s) => AudioSource.file(s.filePath)).toList();
+    _sequenceLoaded = true;
+    await _player.setAudioSources(
+      sources,
       initialIndex: _playQueue.currentIndex.clamp(0, songs.length - 1),
       initialPosition: _player.position,
     );
