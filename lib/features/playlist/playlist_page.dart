@@ -5,8 +5,11 @@ import 'package:path/path.dart' as p;
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
+import '../../core/utils/search_util.dart';
 import '../../widgets/cover_card.dart';
 import '../../widgets/page_toolbar.dart';
+import '../../widgets/search_empty_state.dart';
+import '../../widgets/toolbar_search_field.dart';
 import 'favorites_page.dart';
 import 'playlist_cover.dart';
 import 'playlist_detail_page.dart';
@@ -22,6 +25,8 @@ class PlaylistPage extends StatefulWidget {
 
 class _PlaylistPageState extends State<PlaylistPage> {
   final _viewModel = PlaylistsViewModel();
+  bool _searchActive = false;
+  String _query = '';
 
   @override
   void initState() {
@@ -301,6 +306,23 @@ class _PlaylistPageState extends State<PlaylistPage> {
     await _viewModel.load();
   }
 
+  // ─── Search ─────────────────────────────────────────────
+
+  List<Playlist> get _filteredPlaylists {
+    final q = normalizeQuery(_query);
+    if (q.isEmpty) return _viewModel.playlists;
+    return _viewModel.playlists
+        .where((p) => containsIgnoreCase(p.name, q))
+        .toList();
+  }
+
+  void _enterSearch() => setState(() => _searchActive = true);
+
+  void _exitSearch() => setState(() {
+    _searchActive = false;
+    _query = '';
+  });
+
   // ─── Build ─────────────────────────────────────────────
 
   @override
@@ -311,17 +333,24 @@ class _PlaylistPageState extends State<PlaylistPage> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final playlists = _viewModel.playlists;
-    final hasAnything = _viewModel.favoriteCount > 0 || playlists.isNotEmpty;
+    final playlists = _filteredPlaylists;
+    // 搜索模式下收藏卡片隐藏，仅以播放列表是否匹配为准。
+    final hasAnything = _searchActive
+        ? playlists.isNotEmpty
+        : _viewModel.favoriteCount > 0 || playlists.isNotEmpty;
 
     return Column(
       children: [
         _buildAppBar(playlists.length),
         const Divider(height: 1),
         Expanded(
-          child: hasAnything
-              ? _buildContent(theme, playlists)
-              : _buildEmptyState(theme),
+          child: _searchActive
+              ? (playlists.isEmpty
+                    ? SearchEmptyState(query: _query)
+                    : _buildContent(theme, playlists))
+              : (hasAnything
+                    ? _buildContent(theme, playlists)
+                    : _buildEmptyState(theme)),
         ),
       ],
     );
@@ -330,23 +359,36 @@ class _PlaylistPageState extends State<PlaylistPage> {
   Widget _buildAppBar(int count) {
     return PageToolbar(
       title: '播放列表',
-      subtitle: '$count 个',
-      actions: [
-        PopupMenuButton<String>(
-          tooltip: '更多',
-          onSelected: (value) {
-            if (value == 'import') _importM3u();
-          },
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'import', child: Text('导入播放列表')),
-          ],
-        ),
-        IconButton(
-          icon: const Icon(Icons.add),
-          tooltip: '新建播放列表',
-          onPressed: _createPlaylist,
-        ),
-      ],
+      subtitle: _searchActive ? '匹配 $count 个' : '$count 个',
+      actions: _searchActive
+          ? [
+              ToolbarSearchField(
+                hintText: '搜索播放列表',
+                onChanged: (v) => setState(() => _query = v),
+                onClose: _exitSearch,
+              ),
+            ]
+          : [
+              IconButton(
+                icon: const Icon(Icons.add),
+                tooltip: '新建播放列表',
+                onPressed: _createPlaylist,
+              ),
+              IconButton(
+                icon: const Icon(Icons.search),
+                tooltip: '搜索',
+                onPressed: _enterSearch,
+              ),
+              PopupMenuButton<String>(
+                tooltip: '更多',
+                onSelected: (value) {
+                  if (value == 'import') _importM3u();
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'import', child: Text('导入播放列表')),
+                ],
+              ),
+            ],
     );
   }
 
@@ -379,7 +421,16 @@ class _PlaylistPageState extends State<PlaylistPage> {
   Widget _buildContent(ThemeData theme, List<Playlist> playlists) {
     return CustomScrollView(
       slivers: [
-        SliverToBoxAdapter(child: _buildFavoritesCard(theme)),
+        // 搜索模式下收藏卡片收起（AnimatedSize 高度塌陷），网格平滑上移。
+        SliverToBoxAdapter(
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeInOutCubic,
+            child: _searchActive
+                ? const SizedBox.shrink()
+                : _buildFavoritesCard(theme),
+          ),
+        ),
         if (playlists.isNotEmpty) ...[
           SliverToBoxAdapter(
             child: Padding(

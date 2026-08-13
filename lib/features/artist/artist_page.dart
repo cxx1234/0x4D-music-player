@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
+import '../../core/utils/search_util.dart';
 import '../../widgets/cached_album_art.dart';
 import '../../widgets/detail_top_bar.dart';
 import '../../widgets/list_item_tile.dart';
 import '../../widgets/page_toolbar.dart';
 import '../../widgets/play_all_button.dart';
+import '../../widgets/search_empty_state.dart';
 import '../../widgets/song_tile.dart';
+import '../../widgets/toolbar_search_field.dart';
 import '../album/album_page.dart';
 import '../playlist/song_actions.dart';
 import 'artist_view_model.dart';
@@ -21,6 +24,8 @@ class ArtistsPage extends StatefulWidget {
 
 class _ArtistsPageState extends State<ArtistsPage> {
   final _viewModel = ArtistsViewModel();
+  bool _searchActive = false;
+  String _query = '';
 
   @override
   void initState() {
@@ -40,6 +45,23 @@ class _ArtistsPageState extends State<ArtistsPage> {
     if (mounted) setState(() {});
   }
 
+  // ─── Search ─────────────────────────────────────────────
+
+  List<Artist> get _filteredArtists {
+    final q = normalizeQuery(_query);
+    if (q.isEmpty) return _viewModel.artists;
+    return _viewModel.artists
+        .where((a) => containsIgnoreCase(a.name, q))
+        .toList();
+  }
+
+  void _enterSearch() => setState(() => _searchActive = true);
+
+  void _exitSearch() => setState(() {
+    _searchActive = false;
+    _query = '';
+  });
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -48,14 +70,16 @@ class _ArtistsPageState extends State<ArtistsPage> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final artists = _viewModel.artists;
+    final artists = _filteredArtists;
 
     return Column(
       children: [
         _buildAppBar(artists.length),
         const Divider(height: 1),
         if (artists.isEmpty)
-          _buildEmptyState(theme)
+          _searchActive
+              ? Expanded(child: SearchEmptyState(query: _query))
+              : _buildEmptyState(theme)
         else
           Expanded(child: _buildList(theme, artists)),
       ],
@@ -63,7 +87,25 @@ class _ArtistsPageState extends State<ArtistsPage> {
   }
 
   Widget _buildAppBar(int count) {
-    return PageToolbar(title: '歌手', subtitle: '$count 位');
+    return PageToolbar(
+      title: '歌手',
+      subtitle: _searchActive ? '匹配 $count 位' : '$count 位',
+      actions: _searchActive
+          ? [
+              ToolbarSearchField(
+                hintText: '搜索歌手',
+                onChanged: (v) => setState(() => _query = v),
+                onClose: _exitSearch,
+              ),
+            ]
+          : [
+              IconButton(
+                icon: const Icon(Icons.search),
+                tooltip: '搜索',
+                onPressed: _enterSearch,
+              ),
+            ],
+    );
   }
 
   Widget _buildEmptyState(ThemeData theme) {

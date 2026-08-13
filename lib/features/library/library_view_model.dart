@@ -60,6 +60,13 @@ class LibraryViewModel extends ChangeNotifier {
     return ServiceLocator.player.playFromSong(song);
   }
 
+  /// Play songs in [songs] starting at [index].
+  ///
+  /// 用于搜索结果等过滤列表，保证"下一首"队列语义限定在该列表内。
+  Future<void> playSongsFromList(List<Song> songs, int startIndex) {
+    return ServiceLocator.player.playFromList(songs, startIndex: startIndex);
+  }
+
   final _scanner = LibraryScannerService();
 
   /// 本 ViewModel 是否已注册到 PlayerService 的监听。

@@ -5,7 +5,7 @@ import 'cached_album_art.dart';
 
 /// 歌曲行组件：封面 + 标题 + 歌手/专辑 + 时长 + 播放态高亮 + 可选"更多"菜单。
 ///
-/// 供音乐库、专辑详情、歌手详情、搜索等页面复用。
+/// 供音乐库、专辑详情、歌手详情等页面复用。
 class SongTile extends StatelessWidget {
   final Song song;
   final bool isCurrentSong;

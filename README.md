@@ -22,7 +22,6 @@ A local music player built with **Flutter**.
 
 - Gapless playback
 - DSD support
-- Search
 
 ## Getting Started
 
@@ -46,7 +45,7 @@ Feature-oriented layout — shared infrastructure in `core/`, business features 
 lib/
 ├── app/          # app configuration, routing, themes
 ├── core/         # audio, database, services, utils, constants
-├── features/     # library, album, artist, playlist, player, search, settings, shell
+├── features/     # library, album, artist, playlist, player, settings, shell
 ├── models/       # application models
 └── widgets/      # reusable UI components
 ```

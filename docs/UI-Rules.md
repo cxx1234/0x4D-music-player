@@ -59,9 +59,20 @@
 - 组件：`lib/widgets/page_toolbar.dart`，参数 `{title, subtitle?, actions?}`。
 - 结构：总高 `layoutConfig.pageToolbarHeight`（112）= 顶部填充 `layoutConfig.pageToolbarTopInset`（32）
   + 内容块 `layoutConfig.pageToolbarContentHeight`（80，内容垂直居中）。
-- 已覆盖：音乐库 / 专辑 / 歌手 / 播放列表 / 搜索 / 设置。
+- 已覆盖：音乐库 / 专辑 / 歌手 / 播放列表 / 设置。
 - **新页面接入规范**：顶部标题区一律用 `PageToolbar`，不要自行写 padding/Row，
   以保证各页工具栏高度与视觉完全一致。
+
+### 4.3 页面内嵌搜索（PageToolbar actions）
+
+- **入口**：各功能页（音乐库/专辑/歌手/播放列表）标题栏 `PageToolbar.actions` 最前放搜索图标按钮（`Icons.search`，tooltip「搜索」）。设置页不做搜索。
+- **进入**：点击后其余 actions 清空，仅保留 `ToolbarSearchField`（`lib/widgets/toolbar_search_field.dart`）——内部放大镜 + 有输入时清空按钮 + 外部关闭按钮；搜索框宽度弹性：最小 `minWidth`（默认 240），最大 = 窗口宽 × `maxWidthFactor`（默认 0.4，最大化窗口时变宽）。
+- **过滤**：内存过滤，统一用 `lib/core/utils/search_util.dart` 的 `normalizeQuery`/`containsIgnoreCase`（纯函数，可单测）；查询为空显示全部内容。
+- **匹配数**：搜索中 `PageToolbar.subtitle` 显示「匹配 N 首/张/位/个」。
+- **无结果**：`Expanded(child: SearchEmptyState(query: …))`（`lib/widgets/search_empty_state.dart`）。
+- **关闭**：清空输入回到全部内容（仍在搜索模式）；点关闭按钮退出搜索模式并恢复原 actions。
+- **特例**：音乐库搜索时隐藏文件夹/扫描/沙箱横幅，仅显示歌曲结果；播放列表搜索时隐藏「我的收藏」卡片。
+- **播放**：音乐库搜索结果的播放走 `LibraryViewModel.playSongsFromList(filtered, index)`，保证"下一首"限定在搜索结果内。
 
 ### 4.1 详情页顶部栏（DetailTopBar）
 

@@ -3,13 +3,16 @@ import 'package:flutter/material.dart';
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
+import '../../core/utils/search_util.dart';
 import '../../widgets/cached_album_art.dart';
 import '../../widgets/cover_card.dart';
 import '../../widgets/detail_header.dart';
 import '../../widgets/detail_top_bar.dart';
 import '../../widgets/page_toolbar.dart';
 import '../../widgets/play_all_button.dart';
+import '../../widgets/search_empty_state.dart';
 import '../../widgets/song_tile.dart';
+import '../../widgets/toolbar_search_field.dart';
 import '../playlist/song_actions.dart';
 import 'album_view_model.dart';
 
@@ -28,6 +31,8 @@ class AlbumsPage extends StatefulWidget {
 
 class _AlbumsPageState extends State<AlbumsPage> {
   final _viewModel = AlbumsViewModel();
+  bool _searchActive = false;
+  String _query = '';
 
   @override
   void initState() {
@@ -47,6 +52,27 @@ class _AlbumsPageState extends State<AlbumsPage> {
     if (mounted) setState(() {});
   }
 
+  // ─── Search ─────────────────────────────────────────────
+
+  List<Album> get _filteredAlbums {
+    final q = normalizeQuery(_query);
+    if (q.isEmpty) return _viewModel.albums;
+    return _viewModel.albums
+        .where(
+          (a) =>
+              containsIgnoreCase(a.name, q) ||
+              containsIgnoreCase(a.albumArtist, q),
+        )
+        .toList();
+  }
+
+  void _enterSearch() => setState(() => _searchActive = true);
+
+  void _exitSearch() => setState(() {
+    _searchActive = false;
+    _query = '';
+  });
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -55,14 +81,16 @@ class _AlbumsPageState extends State<AlbumsPage> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final albums = _viewModel.albums;
+    final albums = _filteredAlbums;
 
     return Column(
       children: [
         _buildAppBar(albums.length),
         const Divider(height: 1),
         if (albums.isEmpty)
-          _buildEmptyState(theme)
+          _searchActive
+              ? Expanded(child: SearchEmptyState(query: _query))
+              : _buildEmptyState(theme)
         else
           Expanded(child: _buildGrid(albums)),
       ],
@@ -70,7 +98,25 @@ class _AlbumsPageState extends State<AlbumsPage> {
   }
 
   Widget _buildAppBar(int count) {
-    return PageToolbar(title: '专辑', subtitle: '$count 张');
+    return PageToolbar(
+      title: '专辑',
+      subtitle: _searchActive ? '匹配 $count 张' : '$count 张',
+      actions: _searchActive
+          ? [
+              ToolbarSearchField(
+                hintText: '搜索专辑',
+                onChanged: (v) => setState(() => _query = v),
+                onClose: _exitSearch,
+              ),
+            ]
+          : [
+              IconButton(
+                icon: const Icon(Icons.search),
+                tooltip: '搜索',
+                onPressed: _enterSearch,
+              ),
+            ],
+    );
   }
 
   Widget _buildEmptyState(ThemeData theme) {
