@@ -58,18 +58,21 @@ class _AnimatedCollapseState extends State<AnimatedCollapse> {
   @override
   void didUpdateWidget(AnimatedCollapse oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _unmountTimer?.cancel();
-    _unmountTimer = null;
 
     if (widget.visible && !oldWidget.visible) {
+      _unmountTimer?.cancel();
+      _unmountTimer = null;
       // 展开前恢复内容（didUpdateWidget 后框架必然重建）。
       _rendered = true;
     } else if (!widget.visible && oldWidget.visible) {
+      _unmountTimer?.cancel();
       // 先淡出（内容仍在），淡出结束卸载内容触发 AnimatedSize 塌陷。
       _unmountTimer = Timer(widget.fadeDuration, () {
         if (mounted && !widget.visible) setState(() => _rendered = false);
       });
     }
+    // visible 状态未变化（如播放中 positionStream 频繁触发父级重建）时
+    // 不取消 _unmountTimer，避免塌陷计时被永久丢弃（否则塌陷动画不生效）。
   }
 
   @override
