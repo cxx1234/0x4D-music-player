@@ -39,6 +39,9 @@ migrate_working_dir/
 # Symbolication related
 app.*.symbols
 
+# Test audio fixtures (large, not committed)
+test/music/
+
 # Xcode auto-generated build artifacts (deps via CocoaPods, not SPM)
 ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
 macos/Runner.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings
