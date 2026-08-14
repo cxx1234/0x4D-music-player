@@ -422,6 +422,7 @@ class SongRepository {
       sampleRate: Value(scanned.sampleRate),
       albumArtFilePath: Value(albumArtPath),
       hasEmbeddedArt: Value(scanned.hasEmbeddedArt ? 1 : 0),
+      hasEmbeddedLyrics: Value(scanned.hasEmbeddedLyrics ? 1 : 0),
       lyricsFilePath: Value(scanned.lyricsFilePath),
       dateAdded: Value(DateTime.now()),
       isAvailable: const Value(1),

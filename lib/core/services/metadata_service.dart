@@ -1,14 +1,19 @@
 import 'dart:io';
-import 'dart:typed_data';
+import 'dart:isolate';
 
-import 'package:metadata_god/metadata_god.dart';
+import 'package:audio_metadata_reader/audio_metadata_reader.dart';
 import 'package:path/path.dart' as p;
 
 import '../../models/scanned_song.dart';
 import '../constants/mime_types.dart';
 import '../utils/logger.dart';
 
-/// Parses audio metadata from files using [metadata_god].
+/// Parses audio metadata from files using [audio_metadata_reader].
+///
+/// `audio_metadata_reader` 提供**同步**解析 API（`openSync` 读文件）。扫描由
+/// UI isolate 触发，因此解析被包进 [Isolate.run] 在后台 isolate 执行，避免
+/// 阻塞 UI；并在 isolate 内把结果提取成纯数据 record 回传（`AudioMetadata`
+/// 携带 `File` 字段，无法跨 isolate 发送）。
 class MetadataService {
   /// Parses metadata from a single audio file.
   ///
@@ -22,23 +27,42 @@ class MetadataService {
   /// Also looks for an external `.lrc` lyrics file alongside the audio file.
   Future<ScannedSong> parse(String filePath) async {
     final file = File(filePath);
-    final metadata = await MetadataGod.readMetadata(file: filePath);
+
+    // audio_metadata_reader 是同步解析，丢到后台 isolate 防卡 UI。
+    // 闭包只捕获路径字符串（可发送），File 在 isolate 内新建；
+    // 返回纯数据 record（AudioMetadata 带 File 字段，不可跨 isolate 发送）。
+    final m = await Isolate.run(() {
+      final meta = readMetadata(File(filePath), getImage: true);
+      final pic = meta.pictures.isNotEmpty ? meta.pictures.first : null;
+      return (
+        title: meta.title,
+        artist: meta.artist,
+        albumArtist: meta.albumArtist,
+        album: meta.album,
+        trackNumber: meta.trackNumber,
+        discNumber: meta.discNumber,
+        duration: meta.duration,
+        year: meta.year,
+        genres: List<String>.from(meta.genres),
+        lyrics: meta.lyrics,
+        bitrate: meta.bitrate,
+        sampleRate: meta.sampleRate,
+        pictureBytes: pic?.bytes,
+        pictureMimeType: pic?.mimetype,
+      );
+    });
 
     final fileName = p.basename(filePath);
-    final title = (metadata.title?.trim().isNotEmpty == true)
-        ? metadata.title!.trim()
+    final title = (m.title?.trim().isNotEmpty == true)
+        ? m.title!.trim()
         : p.basenameWithoutExtension(filePath);
 
     // ── Extract embedded album art (raw bytes, no caching) ──
-    Uint8List? pictureBytes;
-    String? pictureMimeType;
-    var hasEmbeddedArt = false;
+    final hasEmbeddedArt = m.pictureBytes != null;
+    final pictureMimeType = m.pictureMimeType;
 
-    if (metadata.picture != null) {
-      pictureBytes = metadata.picture!.data;
-      pictureMimeType = metadata.picture!.mimeType;
-      hasEmbeddedArt = true;
-    }
+    // ── Embedded lyrics present? (only the flag; text not stored) ──
+    final hasEmbeddedLyrics = m.lyrics != null && m.lyrics!.trim().isNotEmpty;
 
     // ── Look for external .lrc lyrics file ────────────────
     final lyricsPath = _findLrcFile(filePath);
@@ -48,20 +72,21 @@ class MetadataService {
       fileName: fileName,
       fileSize: await file.length(),
       title: title,
-      artist: _nullIfEmpty(metadata.artist),
-      albumArtist: _nullIfEmpty(metadata.albumArtist),
-      album: _nullIfEmpty(metadata.album),
-      trackNumber: metadata.trackNumber,
-      discNumber: metadata.discNumber,
-      durationMs: metadata.durationMs?.round(),
-      year: metadata.year,
-      genre: _nullIfEmpty(metadata.genre),
-      bitrate: null,
-      sampleRate: null,
+      artist: _nullIfEmpty(m.artist),
+      albumArtist: _nullIfEmpty(m.albumArtist),
+      album: _nullIfEmpty(m.album),
+      trackNumber: m.trackNumber,
+      discNumber: m.discNumber,
+      durationMs: m.duration?.inMilliseconds,
+      year: _yearIfValid(m.year),
+      genre: m.genres.isEmpty ? null : m.genres.first,
+      bitrate: m.bitrate,
+      sampleRate: m.sampleRate,
       mimeType: mimeTypeForPath(filePath) ?? 'audio/unknown',
-      pictureBytes: pictureBytes,
+      pictureBytes: m.pictureBytes,
       pictureMimeType: pictureMimeType,
       hasEmbeddedArt: hasEmbeddedArt,
+      hasEmbeddedLyrics: hasEmbeddedLyrics,
       lyricsFilePath: lyricsPath,
     );
   }
@@ -130,5 +155,11 @@ class MetadataService {
     if (value == null) return null;
     final trimmed = value.trim();
     return trimmed.isEmpty ? null : trimmed;
+  }
+
+  /// 过滤无效年份（`AudioMetadata.year` 可能是 `DateTime(0)`，须 year > 0 才存）。
+  int? _yearIfValid(DateTime? value) {
+    final year = value?.year;
+    return (year == null || year <= 0) ? null : year;
   }
 }

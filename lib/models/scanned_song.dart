@@ -32,6 +32,10 @@ class ScannedSong {
   /// Whether the source audio file contains embedded album art.
   final bool hasEmbeddedArt;
 
+  /// Whether the source audio file carries embedded lyrics
+  /// (e.g. ID3 USLT / Vorbis LYRICS / MP4 ©lyr). 仅标志，歌词文本不入库。
+  final bool hasEmbeddedLyrics;
+
   /// Path to an external `.lrc` lyrics file found alongside the audio file.
   final String? lyricsFilePath;
 
@@ -54,6 +58,7 @@ class ScannedSong {
     this.pictureBytes,
     this.pictureMimeType,
     this.hasEmbeddedArt = false,
+    this.hasEmbeddedLyrics = false,
     this.lyricsFilePath,
   });
 }

@@ -11,7 +11,7 @@
 | **Fatal** | 应用不可用,无法恢复 | 全屏启动错误页 + 重试 | `fatal` | `ServiceLocator.initialize()` 失败、未捕获异步异常 |
 | **Error** | 单次操作失败,用户需感知 | SnackBar / 横幅 | `error` | 播放失败、M3U 导出/导入失败 |
 | **Warning** | 部分成功,已自动降级 | 汇总提示或不提示 | `warning` | 扫描单文件解析失败、队列保存失败 |
-| **Info** | 正常流程关键节点 | 无 | `info` | 启动完成、MetadataGod 初始化 |
+| **Info** | 正常流程关键节点 | 无 | `info` | 启动完成、扫描完成 |
 
 判定方法:用户是否能感知 → 能则 Error(提示 + error 日志),不能但异常发生了 → Warning(降级 + warning 日志)。
 
@@ -64,7 +64,6 @@
 | 文件夹监视 | 移除处理失败 | `folder_watcher_service.dart` `_onFileRemoved` | `warning` |
 | 沙箱 | bookmark 解析 / 读探测失败 | `service_locator.dart` + `sandbox_service.dart` | `warning` + 横幅引导重新授权 |
 | 启动 | 服务初始化失败 | `app.dart` `_initializeServices` | `fatal` + 启动错误页 |
-| 启动 | MetadataGod 初始化失败 | `app.dart` | `error`(降级继续) |
 
 ⸻
 

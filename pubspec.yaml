@@ -39,7 +39,11 @@ dependencies:
   sqlite3: ^3.3.4
   path_provider: ^2.1.0
   path: ^1.9.0
-  metadata_god: ^1.1.0
+  # 本地 fork 补强后的 audio_metadata_reader（feat/album-artist）：
+  # 纯 Dart，支持 albumArtist（TPE1/ALBUMARTIST/aART）+ 嵌入歌词解析。
+  # path 依赖指向本地 beta 版，PR 合并发布后换 ^1.8.0。
+  audio_metadata_reader:
+    path: ../audio_metadata_reader/audio_metadata_reader
   watcher: ^1.1.0
   just_audio: ^0.10.6
   just_audio_platform_interface: ^4.6.0
@@ -50,16 +54,10 @@ dev_dependencies:
     sdk: flutter
   drift_dev: ^2.26.0
   build_runner: ^2.4.0
-  # 本地 fork 补强后的 audio_metadata_reader（feat/album-artist）：
-  # 用 path 依赖实际验证 albumArtist / 歌词解析，验证完切回发布版即可。
-  audio_metadata_reader:
-    path: ../audio_metadata_reader/audio_metadata_reader
 
-# metadata_god 1.1.0 的内置原生库是用 flutter_rust_bridge 2.11.1 codegen 编译的，
-# 但 ^2.11.1 会解析到最新的 2.12.x，导致运行时版本不匹配。
-# 这里固定为 2.11.1 以匹配 metadata_god 的编译版本。
+# 注：flutter_rust_bridge override 已随 metadata_god 移除（它只服务 metadata_god 的
+# Rust codegen；audio_metadata_reader 是纯 Dart，无需原生绑定）。
 dependency_overrides:
-  flutter_rust_bridge: 2.11.1
   flutter_lints: ^6.0.0
   drift_dev: ^2.26.0
   build_runner: ^2.15.0

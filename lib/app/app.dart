@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:metadata_god/metadata_god.dart';
 
 import 'router.dart';
 import 'startup_error_page.dart';
@@ -51,12 +50,7 @@ class _AppState extends State<App> {
       }
       return;
     }
-    try {
-      await MetadataGod.initialize();
-      AppLogger.info('App', 'MetadataGod initialized successfully');
-    } catch (e) {
-      AppLogger.error('App', 'MetadataGod initialization failed', e);
-    }
+    // audio_metadata_reader 为纯 Dart 库，无需原生初始化。
     if (mounted) {
       setState(() => _initialized = true);
     }

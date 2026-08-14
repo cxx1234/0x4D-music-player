@@ -42,6 +42,9 @@ app.*.symbols
 # Test audio fixtures (large, not committed)
 test/music/
 
+# Xcode Swift Package Manager 本地解析缓存（构建生成物，勿提交）
+ios/Runner.xcworkspace/xcshareddata/swiftpm/
+
 # Xcode auto-generated build artifacts (deps via CocoaPods, not SPM)
 ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
 macos/Runner.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings
