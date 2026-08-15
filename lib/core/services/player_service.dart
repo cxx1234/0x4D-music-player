@@ -50,6 +50,14 @@ class PlayerService extends ChangeNotifier {
   /// 连续播放失败计数。
   int _consecutiveErrors = 0;
 
+  /// 队尾播完（repeat off）收尾标志。
+  ///
+  /// 收尾期间 seek/pause/enqueueFrom 会发出一系列仍带 completed 或旧索引的
+  /// 中间事件（macOS 上 seek 到已缓冲的项后甚至停留在 completed、不再发
+  /// ready），这些都不能当作权威：否则索引会被拉回最后一首、播完分支被反复
+  /// 触发。直到引擎回到 ready（用户点播放等操作会触发）才解除。
+  bool _handlingQueueEnd = false;
+
   // ─── Stream subscriptions ──────────────────────────────
 
   /// 权威事件源：切歌 / seek / 播完等每次引擎变化都会触发。
@@ -99,6 +107,18 @@ class PlayerService extends ChangeNotifier {
   /// updatePosition、duration 与 processingState——这里是它们对齐的唯一点，
   /// 避免 positionStream 与 sequenceStateStream 跨流不一致。
   void _onPlaybackEvent(PlaybackEvent event) {
+    // 队尾播完收尾中：seek/pause/enqueueFrom 会发出一系列仍带 completed 或
+    // 旧索引的中间事件，这些都不能当作权威（否则索引被拉回最后一首、播完
+    // 分支被反复触发）。只有引擎回到 ready（用户点播放等操作会触发）才解除。
+    if (_handlingQueueEnd) {
+      if (event.processingState != ProcessingState.ready) {
+        notifyListeners();
+        return;
+      }
+      // 引擎已确认回到就绪 → 解除防护，并继续正常处理本事件。
+      _handlingQueueEnd = false;
+    }
+
     final idx = event.currentIndex;
     // 序列未加载时的引擎事件（平台初始化/空闲态广播）currentIndex 无意义，
     // 绝不能覆盖 [PlayQueue] 恢复的索引，也不能把位置清零落盘（见 _reconcile）。
@@ -111,11 +131,21 @@ class PlayerService extends ChangeNotifier {
       // 切歌后立即把新歌的播放位置落盘（此时引擎已同步到新歌）。
       _persistPosition();
     }
-    // 队尾播完（repeat off）：seek 到 0 并暂停，行为与原先一致。
+    // 队尾播完（repeat off）：回到队列第一首但不播放，用户点播放才继续。
+    //
+    // 不能在这里从 completed 状态 seek(index:0)：macOS 上这会让引擎实际
+    // 停在最后一首的末尾，导致之后 play() 从末尾开始、进度被拉到结尾、
+    // 播放/下一首失灵。改为把序列标记为「未加载」并停止引擎（playing=false、
+    // 引擎转 idle），下次 play()/next() 会以第一首为起点干净地重建序列——
+    // 与「启动恢复队列后尚未播放」的懒加载路径一致。
     if (event.processingState == ProcessingState.completed &&
         _repeatMode == PlayerRepeatMode.off) {
-      unawaited(_player.seek(Duration.zero));
-      unawaited(_player.pause());
+      _handlingQueueEnd = true;
+      _playQueue.setCurrentIndex(0);
+      _playQueue.setPlaybackState(Duration.zero, Duration.zero);
+      _sequenceLoaded = false;
+      _resumePosition = Duration.zero;
+      unawaited(_player.stop());
     }
     notifyListeners();
   }
@@ -128,7 +158,8 @@ class PlayerService extends ChangeNotifier {
   void _reconcile() {
     // 序列未加载（如启动恢复的队列尚未播放）时引擎 currentIndex 恒为 0，
     // 绝不能用来覆盖 [PlayQueue] 恢复的索引，否则重启后当前歌会被重置成第一首。
-    if (_playQueue.isEmpty || !_sequenceLoaded) return;
+    // 队尾播完收尾期间引擎索引可能仍停在最后一首，同样不能对齐。
+    if (_playQueue.isEmpty || !_sequenceLoaded || _handlingQueueEnd) return;
     final idx = _player.currentIndex;
     if (idx != null &&
         idx >= 0 &&
@@ -188,11 +219,19 @@ class PlayerService extends ChangeNotifier {
 
   /// Duration of the current song, or [Duration.zero] if unknown.
   ///
-  /// 序列未加载时回退到上次保存的总时长，进度条可显示并可拖动。
+  /// 序列未加载时（播完跳回第一首、启动续播）不能用引擎的 duration（可能
+  /// 残留上一首的值）：优先上次保存的时长（续播显示），其次用当前歌曲在
+  /// 库里扫描到的时长（如播完跳回第一首时保存值已清零）。
   Duration get duration {
-    final d = _player.duration;
-    if (d != null && d > Duration.zero) return d;
-    return _playQueue.duration;
+    if (_sequenceLoaded) {
+      final d = _player.duration;
+      if (d != null && d > Duration.zero) return d;
+    }
+    final saved = _playQueue.duration;
+    if (saved > Duration.zero) return saved;
+    final ms = currentSong?.durationMs;
+    if (ms != null && ms > 0) return Duration(milliseconds: ms);
+    return Duration.zero;
   }
 
   /// Current repeat mode.

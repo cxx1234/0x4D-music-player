@@ -260,7 +260,7 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
             SliverToBoxAdapter(
               child: Padding(
                 // 专辑卡片区域顶部留 5pt，与上方标题栏隔开
-                padding: const EdgeInsets.only(top: 5),
+                padding: const EdgeInsets.only(top: 5, left: 10),
                 child: Column(
                   children: [
                     SizedBox(
@@ -295,7 +295,7 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
             ),
           ),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.fromLTRB(24, 0, 8, 16),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate((context, index) {
                 final song = _songs[index];

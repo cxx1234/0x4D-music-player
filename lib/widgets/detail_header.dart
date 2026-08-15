@@ -50,7 +50,7 @@ class DetailHeader extends StatelessWidget {
       color: theme.colorScheme.surface,
       elevation: 3,
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
         child: Row(
           children: [
             ClipRRect(
