@@ -152,9 +152,72 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
     );
   }
 
+  /// Deletes all songs under [folderPath], then removes orphaned
+  /// albums / artists / playlist references that no longer point at any song.
+  ///
+  /// Runs in a single transaction so the cleanup is atomic with the delete.
   Future<int> deleteFolderSongs(String folderPath) async {
     final pattern = '$folderPath%';
-    return (delete(songs)..where((t) => t.filePath.like(pattern))).go();
+    return transaction(() async {
+      final deleted = await (delete(
+        songs,
+      )..where((t) => t.filePath.like(pattern))).go();
+      await _cleanupOrphans();
+      return deleted;
+    });
+  }
+
+  /// Removes rows in [playlistSongs] / [albums] / [artists] that no longer
+  /// reference any song in the `songs` table (e.g. after a folder is removed).
+  ///
+  /// Rows for songs merely marked unavailable (`isAvailable=0`) are kept —
+  /// those still exist and may come back on a later scan.
+  Future<void> _cleanupOrphans() async {
+    // 1. Playlist rows pointing at deleted songs.
+    final songRows = await (selectOnly(songs)..addColumns([songs.id])).get();
+    final songIds = songRows
+        .map((row) => row.read(songs.id))
+        .whereType<int>()
+        .toList();
+    if (songIds.isEmpty) {
+      await delete(playlistSongs).go();
+    } else {
+      await (delete(
+        playlistSongs,
+      )..where((t) => t.songId.isNotIn(songIds))).go();
+    }
+
+    // 2. Albums with no remaining songs.
+    final albumRows =
+        await (selectOnly(songs)
+              ..addColumns([songs.albumId])
+              ..where(songs.albumId.isNotNull()))
+            .get();
+    final albumIds = albumRows
+        .map((row) => row.read(songs.albumId))
+        .whereType<int>()
+        .toList();
+    if (albumIds.isEmpty) {
+      await delete(albums).go();
+    } else {
+      await (delete(albums)..where((t) => t.id.isNotIn(albumIds))).go();
+    }
+
+    // 3. Artists with no remaining songs.
+    final artistRows =
+        await (selectOnly(songs)
+              ..addColumns([songs.artistId])
+              ..where(songs.artistId.isNotNull()))
+            .get();
+    final artistIds = artistRows
+        .map((row) => row.read(songs.artistId))
+        .whereType<int>()
+        .toList();
+    if (artistIds.isEmpty) {
+      await delete(artists).go();
+    } else {
+      await (delete(artists)..where((t) => t.id.isNotIn(artistIds))).go();
+    }
   }
 
   Future<List<Song>> getUnavailableSongs() {

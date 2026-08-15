@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../../models/scanned_song.dart';
 import '../constants/mime_types.dart';
+import '../utils/logger.dart';
 
 /// Parses audio metadata from files using [metadata_god].
 class MetadataService {
@@ -68,11 +69,12 @@ class MetadataService {
   /// Parses metadata for multiple files sequentially.
   ///
   /// [onProgress] is called after each file is parsed.
-  Future<List<ScannedSong>> parseAll(
+  Future<(List<ScannedSong>, List<String>)> parseAll(
     List<String> filePaths, {
     void Function(int processed, int total, String currentFile)? onProgress,
   }) async {
     final results = <ScannedSong>[];
+    final failures = <String>[];
     final total = filePaths.length;
 
     for (var i = 0; i < total; i++) {
@@ -80,7 +82,9 @@ class MetadataService {
       try {
         final song = await parse(path);
         results.add(song);
-      } catch (e) {
+      } catch (e, s) {
+        failures.add(path);
+        AppLogger.warning('Scan', 'Failed to parse metadata: $path', e, s);
         // If parsing fails, still create a minimal entry with file info
         // and attempt to associate a .lrc file.
         final fileName = p.basename(path);
@@ -99,7 +103,7 @@ class MetadataService {
       onProgress?.call(i + 1, total, p.basename(path));
     }
 
-    return results;
+    return (results, failures);
   }
 
   /// Looks for a `.lrc` file with the same base name as [audioPath].

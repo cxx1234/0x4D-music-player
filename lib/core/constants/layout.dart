@@ -54,15 +54,15 @@ class PlatformLayoutConfig {
   final double playerTopBarTopReserve;
 }
 
-/// macOS：红绿灯所在区域 56；侧栏宽 100；工具栏 112 = 32 + 80；
-/// 详情页顶栏 56，左侧让过红绿灯（80）；播放页顶部红绿灯预留 45。
+/// macOS：unified 工具栏，红绿灯原生居中（中心 ≈26，顶栏 52）；侧栏宽 92；
+/// 工具栏 112 = 32 + 80；详情页顶栏 52，左侧让过红绿灯（95）；播放页顶部红绿灯预留 40。
 const _macOS = PlatformLayoutConfig(
-  sidebarTopInset: 56,
-  sidebarWidth: 92,
+  sidebarTopInset: 52,
+  sidebarWidth: 90,
   pageToolbarHeight: 112,
   pageToolbarTopInset: 32,
   pageToolbarContentHeight: 80,
-  detailTopBarHeight: 56,
+  detailTopBarHeight: 52,
   detailTopBarLeftInset: 95,
   playerTopBarTopReserve: 40,
 );
@@ -71,11 +71,11 @@ const _macOS = PlatformLayoutConfig(
 /// 播放页顶部无预留（0）；工具栏数值暂与 macOS 一致，调试 Windows 版时再微调。
 const _default = PlatformLayoutConfig(
   sidebarTopInset: 0,
-  sidebarWidth: 92,
-  pageToolbarHeight: 112,
+  sidebarWidth: 90,
+  pageToolbarHeight: 62,
   pageToolbarTopInset: 32,
   pageToolbarContentHeight: 80,
-  detailTopBarHeight: 56,
+  detailTopBarHeight: 52,
   detailTopBarLeftInset: 0,
   playerTopBarTopReserve: 0,
 );

@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../widgets/cached_album_art.dart';
+import '../../widgets/detail_header.dart';
 import '../../widgets/detail_top_bar.dart';
 import '../../widgets/play_all_button.dart';
+import '../../widgets/song_tile.dart';
 import 'add_songs_sheet.dart';
 import 'playlist_cover.dart';
 import 'playlist_io.dart';
@@ -24,6 +26,7 @@ class PlaylistDetailPage extends StatefulWidget {
 class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   List<Song> _songs = [];
   bool _loading = true;
+  bool _reorderMode = false;
   late String _name = widget.playlist.name;
 
   @override
@@ -64,11 +67,18 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       allowedExtensions: const ['m3u8', 'm3u'],
     );
     if (path == null || !mounted) return;
-    final count = await exportPlaylistToFile(widget.playlist.id, path);
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('已导出 $count 首歌曲')));
+    try {
+      final count = await exportPlaylistToFile(widget.playlist.id, path);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已导出 $count 首歌曲')));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('导出失败：无法写入文件')));
+    }
   }
 
   Future<void> _rename() async {
@@ -151,6 +161,10 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     await _load();
   }
 
+  void _toggleReorderMode() {
+    setState(() => _reorderMode = !_reorderMode);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -160,6 +174,11 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       appBar: DetailTopBar(
         title: _name,
         actions: [
+          IconButton(
+            icon: Icon(_reorderMode ? Icons.check : Icons.reorder_rounded),
+            tooltip: _reorderMode ? '完成排序' : '手动排序',
+            onPressed: _toggleReorderMode,
+          ),
           IconButton(
             icon: const Icon(Icons.playlist_add),
             tooltip: '添加歌曲',
@@ -186,10 +205,16 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           return Column(
             children: [
               // 头部（底部 Material 阴影分隔列表区）
-              Material(
-                color: theme.colorScheme.surface,
-                elevation: 3,
-                child: _buildHeader(theme),
+              DetailHeader(
+                cover: PlaylistCover(
+                  playlistId: widget.playlist.id,
+                  size: 140,
+                  borderRadius: 12,
+                  revision: _songs.length,
+                ),
+                title: _name,
+                info: '${_songs.length} 首歌曲',
+                action: PlayAllButton(onPlayAll: _playAll),
               ),
               if (_loading)
                 const Expanded(
@@ -198,66 +223,10 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
               else if (_songs.isEmpty)
                 _buildEmptyState(theme)
               else
-                Expanded(
-                  child: Material(
-                    type: MaterialType.transparency,
-                    clipBehavior: Clip.hardEdge,
-                    child: ReorderableListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                      buildDefaultDragHandles: false,
-                      onReorderItem: _onReorder,
-                      itemCount: _songs.length,
-                      itemBuilder: (context, index) {
-                        final song = _songs[index];
-                        final isCurrent = song.id == player.currentSong?.id;
-                        return _buildSongRow(theme, song, index, isCurrent);
-                      },
-                    ),
-                  ),
-                ),
+                Expanded(child: _buildSongListView(theme)),
             ],
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildHeader(ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Row(
-        children: [
-          PlaylistCover(
-            playlistId: widget.playlist.id,
-            size: 140,
-            borderRadius: 12,
-            revision: _songs.length,
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _name,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${_songs.length} 首歌曲',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // 椭圆形「播放全部」文本按钮，位于信息文本下方
-                PlayAllButton(onPlayAll: _playAll),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -288,22 +257,79 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     );
   }
 
+  /// 歌曲列表：默认普通列表（显示序号，不可拖拽）；开启排序后为可拖拽列表。
+  Widget _buildSongListView(ThemeData theme) {
+    final list = _reorderMode
+        ? ReorderableListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            buildDefaultDragHandles: false,
+            onReorderItem: _onReorder,
+            itemCount: _songs.length,
+            itemBuilder: (context, index) => _songRow(theme, index),
+          )
+        : ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            itemCount: _songs.length,
+            itemBuilder: (context, index) => _songRow(theme, index),
+          );
+    return Material(
+      type: MaterialType.transparency,
+      clipBehavior: Clip.hardEdge,
+      child: list,
+    );
+  }
+
+  Widget _songRow(ThemeData theme, int index) {
+    final song = _songs[index];
+    final isCurrent = song.id == ServiceLocator.player.currentSong?.id;
+    return _buildSongRow(theme, song, index, isCurrent);
+  }
+
   Widget _buildSongRow(ThemeData theme, Song song, int index, bool isCurrent) {
-    final primaryColor = theme.colorScheme.primary;
-    return ListTile(
+    return SongTile(
       key: ValueKey(song.id),
-      selected: isCurrent,
-      selectedTileColor: primaryColor.withValues(alpha: 0.1),
+      song: song,
+      isCurrentSong: isCurrent,
+      onTap: () =>
+          ServiceLocator.player.playFromList(_songs, startIndex: index),
       leading: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ReorderableDragStartListener(
-            index: index,
-            child: Icon(
-              Icons.drag_handle,
-              color: theme.colorScheme.onSurfaceVariant,
+          // 固定宽度槽位：序号与拖拽把手同宽、居中，切换排序模式宽度不跳动。
+          // 排序模式下整个槽位都是拖拽命中区。
+          if (_reorderMode)
+            ReorderableDragStartListener(
+              index: index,
+              child: SizedBox(
+                width: 36,
+                height: 32,
+                child: Center(
+                  child: Icon(
+                    Icons.drag_handle,
+                    size: 20,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            )
+          else
+            SizedBox(
+              width: 36,
+              height: 32,
+              child: Center(
+                child: Text(
+                  '${index + 1}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: isCurrent
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
             ),
-          ),
+          // 序号/拖拽把手与封面间距（翻倍，避免贴住封面）
           const SizedBox(width: 8),
           SizedBox(
             width: 40,
@@ -320,34 +346,17 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           ),
         ],
       ),
-      title: Text(
-        song.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: isCurrent ? primaryColor : null,
-          fontWeight: isCurrent ? FontWeight.bold : null,
-        ),
-      ),
-      subtitle: song.artist != null
-          ? Text(song.artist!, maxLines: 1, overflow: TextOverflow.ellipsis)
-          : null,
-      trailing: PopupMenuButton<String>(
-        tooltip: '更多',
-        onSelected: (value) {
-          if (value == 'play') {
-            ServiceLocator.player.playFromList(_songs, startIndex: index);
-          } else if (value == 'remove') {
-            _removeSong(song);
-          }
-        },
-        itemBuilder: (context) => const [
-          PopupMenuItem(value: 'play', child: Text('播放')),
-          PopupMenuItem(value: 'remove', child: Text('从播放列表移除')),
-        ],
-      ),
-      onTap: () =>
-          ServiceLocator.player.playFromList(_songs, startIndex: index),
+      menuBuilder: (song) => const [
+        PopupMenuItem(value: 'play', child: Text('播放')),
+        PopupMenuItem(value: 'remove', child: Text('从播放列表移除')),
+      ],
+      onMenuSelected: (song, value) {
+        if (value == 'play') {
+          ServiceLocator.player.playFromList(_songs, startIndex: index);
+        } else if (value == 'remove') {
+          _removeSong(song);
+        }
+      },
     );
   }
 }

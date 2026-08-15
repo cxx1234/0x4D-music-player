@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../database/database.dart';
+import '../utils/logger.dart';
 import 'play_queue.dart';
 
 /// Available repeat modes for the player.
@@ -26,19 +27,40 @@ enum PlayerRepeatMode {
 class PlayerService extends ChangeNotifier {
   final AudioPlayer _player = AudioPlayer();
   final PlayQueue _playQueue;
-  ConcatenatingAudioSource? _audioSource;
+
+  /// 音频序列是否已交给引擎（惰性加载标志，见 macOS 沙箱时序）。
+  bool _sequenceLoaded = false;
 
   PlayerRepeatMode _repeatMode = PlayerRepeatMode.off;
   bool _isShuffled = false;
 
+  /// 待应用的启动续播位置（构造时从 [PlayQueue] 读取，首次加载序列时消费）。
+  Duration? _resumePosition;
+
+  /// 周期兜底落盘当前位置的时间间隔（避免频繁写盘）。
+  static const _kPositionSaveInterval = Duration(seconds: 5);
+  DateTime _lastPositionSave = DateTime.now();
+
+  /// 连续播放失败计数上限:达到后停止自动跳转(防坏文件死循环)。
+  static const int _kMaxConsecutiveErrors = 3;
+
+  /// 最近一次播放错误的用户可读消息(消费即清,供 UI 提示一次)。
+  String? _lastPlaybackError;
+
+  /// 连续播放失败计数。
+  int _consecutiveErrors = 0;
+
   // ─── Stream subscriptions ──────────────────────────────
 
-  StreamSubscription? _playerStateSub;
+  /// 权威事件源：切歌 / seek / 播完等每次引擎变化都会触发。
+  StreamSubscription<PlaybackEvent>? _playbackEventSub;
   StreamSubscription? _positionSub;
   StreamSubscription? _durationSub;
-  StreamSubscription? _sequenceSub;
 
-  PlayerService({PlayQueue? playQueue})
+  /// 周期对账 watchdog：兜住引擎与 [PlayQueue] 的索引分叉。
+  Timer? _reconcileTimer;
+
+  PlayerService({PlayQueue? playQueue, bool resumePlaybackPosition = true})
     : _playQueue = playQueue ?? PlayQueue() {
     // Forward PlayQueue changes to this service's listeners
     _playQueue.addListener(notifyListeners);
@@ -50,23 +72,95 @@ class PlayerService extends ChangeNotifier {
     );
     _isShuffled = _playQueue.isShuffled;
 
-    _playerStateSub = _player.playerStateStream.listen((state) {
-      if (state.processingState == ProcessingState.completed &&
-          _repeatMode == PlayerRepeatMode.off) {
-        _player.seek(Duration.zero);
-        _player.pause();
+    // 续播：仅当设置了该选项且保存的位置有效（0 < pos < dur）时应用。
+    if (resumePlaybackPosition) {
+      final pos = _playQueue.position;
+      final dur = _playQueue.duration;
+      if (dur > Duration.zero && pos > Duration.zero && pos < dur) {
+        _resumePosition = pos;
       }
-      notifyListeners();
-    });
+    }
+
+    _playbackEventSub = _player.playbackEventStream.listen(_onPlaybackEvent);
     _positionSub = _player.positionStream.listen((_) => notifyListeners());
     _durationSub = _player.durationStream.listen((_) => notifyListeners());
-    _sequenceSub = _player.sequenceStateStream.listen((_) {
-      final idx = _player.currentIndex ?? 0;
-      if (idx >= 0 && idx < _playQueue.length) {
+    _reconcileTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (_) => _reconcile(),
+    );
+  }
+
+  // ─── Engine ↔ app state reconciliation ─────────────────
+
+  /// 处理引擎权威事件：切歌时原子对齐 [PlayQueue] 索引，队尾播完时收尾。
+  ///
+  /// just_audio 在 macOS 上每次切歌（自动切歌 / loop-all 回绕 / next /
+  /// prev / jump）都会广播一个 playback event，原子携带 currentIndex、
+  /// updatePosition、duration 与 processingState——这里是它们对齐的唯一点，
+  /// 避免 positionStream 与 sequenceStateStream 跨流不一致。
+  void _onPlaybackEvent(PlaybackEvent event) {
+    final idx = event.currentIndex;
+    // 序列未加载时的引擎事件（平台初始化/空闲态广播）currentIndex 无意义，
+    // 绝不能覆盖 [PlayQueue] 恢复的索引，也不能把位置清零落盘（见 _reconcile）。
+    if (_sequenceLoaded &&
+        idx != null &&
+        idx >= 0 &&
+        idx < _playQueue.length &&
+        idx != _playQueue.currentIndex) {
+      _playQueue.setCurrentIndex(idx);
+      // 切歌后立即把新歌的播放位置落盘（此时引擎已同步到新歌）。
+      _persistPosition();
+    }
+    // 队尾播完（repeat off）：seek 到 0 并暂停，行为与原先一致。
+    if (event.processingState == ProcessingState.completed &&
+        _repeatMode == PlayerRepeatMode.off) {
+      unawaited(_player.seek(Duration.zero));
+      unawaited(_player.pause());
+    }
+    notifyListeners();
+  }
+
+  /// 周期 watchdog：把 [PlayQueue] 索引对齐到引擎真实值。
+  ///
+  /// 兜底场景：切歌广播被 UI 卡死 / 热重载延误，或动态队列编辑
+  /// （removeAt / move / playNext 的 [_rebuildSequence] 回退）导致分叉。
+  /// 索引没变时不做任何事，因此几乎没有 CPU / UI 开销。
+  void _reconcile() {
+    // 序列未加载（如启动恢复的队列尚未播放）时引擎 currentIndex 恒为 0，
+    // 绝不能用来覆盖 [PlayQueue] 恢复的索引，否则重启后当前歌会被重置成第一首。
+    if (_playQueue.isEmpty || !_sequenceLoaded) return;
+    final idx = _player.currentIndex;
+    if (idx != null &&
+        idx >= 0 &&
+        idx < _playQueue.length &&
+        idx != _playQueue.currentIndex) {
+      _playQueue.setCurrentIndex(idx);
+      notifyListeners();
+    }
+    // 周期兜底落盘当前播放位置（暂停/切歌之外的崩溃、强杀兜底）。
+    final now = DateTime.now();
+    if (now.difference(_lastPositionSave) >= _kPositionSaveInterval) {
+      _lastPositionSave = now;
+      _persistPosition();
+    }
+  }
+
+  /// 把应用状态重新对齐到引擎的真实状态。
+  ///
+  /// 用户打开"正在播放"界面等需要"立刻看到真相"的时刻调用；
+  /// 空队列 / 索引越界时安全返回。
+  void resyncFromAudio() {
+    // 引擎未加载时同样不能把恢复的索引覆盖成 0，见 [_reconcile]。
+    if (_sequenceLoaded) {
+      final idx = _player.currentIndex;
+      if (idx != null &&
+          idx >= 0 &&
+          idx < _playQueue.length &&
+          idx != _playQueue.currentIndex) {
         _playQueue.setCurrentIndex(idx);
       }
-      notifyListeners();
-    });
+    }
+    notifyListeners();
   }
 
   // ─── Public state ──────────────────────────────────────
@@ -84,10 +178,22 @@ class PlayerService extends ChangeNotifier {
   bool get isPlaying => _player.playing;
 
   /// Current playback position.
-  Duration get position => _player.position;
+  ///
+  /// 序列未加载（如启动恢复的队列尚未播放）时回退到上次保存的位置，
+  /// 让播放页进度条直接显示续播点。
+  Duration get position {
+    if (_sequenceLoaded) return _player.position;
+    return _playQueue.position;
+  }
 
   /// Duration of the current song, or [Duration.zero] if unknown.
-  Duration get duration => _player.duration ?? Duration.zero;
+  ///
+  /// 序列未加载时回退到上次保存的总时长，进度条可显示并可拖动。
+  Duration get duration {
+    final d = _player.duration;
+    if (d != null && d > Duration.zero) return d;
+    return _playQueue.duration;
+  }
 
   /// Current repeat mode.
   PlayerRepeatMode get repeatMode => _repeatMode;
@@ -95,24 +201,38 @@ class PlayerService extends ChangeNotifier {
   /// Whether shuffle is enabled.
   bool get isShuffled => _isShuffled;
 
+  /// 消费并清除最近的播放错误消息(返回 null 表示没有待提示的错误)。
+  String? takePlaybackError() {
+    final err = _lastPlaybackError;
+    _lastPlaybackError = null;
+    return err;
+  }
+
   // ─── Queue management ──────────────────────────────────
 
   /// Replace the queue with [songs] and start playing at [startIndex].
   Future<void> playFromList(List<Song> songs, {int startIndex = 0}) async {
     if (songs.isEmpty) return;
     _playQueue.replace(songs, startIndex);
+    // 用户主动选歌播放：放弃启动续播位置。
+    _resumePosition = null;
 
-    final sources = songs
-        .map((s) => AudioSource.file(s.filePath) as AudioSource)
-        .toList();
-
-    _audioSource = ConcatenatingAudioSource(children: sources);
-    await _player.setAudioSource(
-      _audioSource!,
-      initialIndex: _playQueue.currentIndex,
-    );
-    await _applyAudioModes();
-    await _player.play();
+    final sources = songs.map((s) => AudioSource.file(s.filePath)).toList();
+    try {
+      await _player.setAudioSources(
+        sources,
+        initialIndex: _playQueue.currentIndex,
+      );
+      // 序列成功交给引擎后才标记已加载：加载过程中的中间事件
+      // （如 currentIndex=0）不能被当作权威，避免播放页闪烁成第一首。
+      _sequenceLoaded = true;
+      await _applyAudioModes();
+      await _player.play();
+      _clearPlaybackError();
+    } catch (e, s) {
+      _reportPlaybackError('playFromList', e, s);
+      await _skipOnFailure();
+    }
   }
 
   /// Play a single song (replaces the queue with just this one song).
@@ -126,21 +246,36 @@ class PlayerService extends ChangeNotifier {
     final wasEmpty = _playQueue.isEmpty;
     _playQueue.append(songs);
     if (wasEmpty) {
-      final sources = songs
-          .map((s) => AudioSource.file(s.filePath) as AudioSource)
-          .toList();
-      _audioSource = ConcatenatingAudioSource(children: sources);
-      await _player.setAudioSource(_audioSource!, initialIndex: 0);
-      await _applyAudioModes();
-      await _player.play();
+      final sources = songs.map((s) => AudioSource.file(s.filePath)).toList();
+      _resumePosition = null;
+      try {
+        await _player.setAudioSources(sources, initialIndex: 0);
+        // 序列成功交给引擎后才标记已加载，见 playFromList。
+        _sequenceLoaded = true;
+        await _applyAudioModes();
+        await _player.play();
+        _clearPlaybackError();
+      } catch (e, s) {
+        _reportPlaybackError('addToQueue', e, s);
+        await _skipOnFailure();
+      }
     } else {
       final newSources = songs
-          .map((s) => AudioSource.file(s.filePath) as AudioSource)
+          .map((s) => AudioSource.file(s.filePath))
           .toList();
-      try {
-        await _audioSource?.addAll(newSources);
-      } catch (_) {
-        await _rebuildSequence();
+      // 序列尚未加载（如启动恢复的队列）时跳过：队列已更新，下次
+      // play()/_rebuildSequence() 会整体重建，行为与旧版一致。
+      if (_sequenceLoaded) {
+        try {
+          await _player.addAudioSources(newSources);
+        } catch (e) {
+          AppLogger.warning(
+            'Player',
+            'addAudioSources failed, falling back to rebuild',
+            e,
+          );
+          await _rebuildSequence();
+        }
       }
     }
   }
@@ -150,14 +285,33 @@ class PlayerService extends ChangeNotifier {
   Future<void> play() async {
     // Lazily build the sequence if no audio source is loaded yet (e.g.
     // restored queue after startup) — play() on an empty player does nothing.
-    if (_audioSource == null) {
+    if (!_sequenceLoaded) {
       if (_playQueue.isEmpty) return;
-      await _rebuildSequence();
+      try {
+        // 首次续播：把启动续播位置交给引擎（仅此一次，消费后清空）。
+        final resume = _resumePosition;
+        _resumePosition = null;
+        await _rebuildSequence(initialPosition: resume);
+      } catch (e, s) {
+        _reportPlaybackError('play', e, s);
+        await _skipOnFailure();
+        return;
+      }
     }
-    await _player.play();
+    try {
+      await _player.play();
+      _clearPlaybackError();
+    } catch (e, s) {
+      _reportPlaybackError('play', e, s);
+      await _skipOnFailure();
+    }
   }
 
-  Future<void> pause() => _player.pause();
+  Future<void> pause() async {
+    await _player.pause();
+    // 暂停是最常见的“离开播放”动作，立即落盘当前位置。
+    _persistPosition();
+  }
 
   Future<void> togglePlay() async {
     if (_player.playing) {
@@ -168,7 +322,8 @@ class PlayerService extends ChangeNotifier {
   }
 
   Future<void> stop() async {
-    _audioSource = null;
+    _sequenceLoaded = false;
+    _resumePosition = null;
     await _player.stop();
     _playQueue.clear();
   }
@@ -180,24 +335,45 @@ class PlayerService extends ChangeNotifier {
     // No audio source loaded yet (e.g. restored queue after startup) —
     // lazily build the sequence so navigation works without pre-loading
     // files (which would need macOS sandbox permissions too early).
-    if (_audioSource == null) {
+    if (!_sequenceLoaded) {
       final nextIndex = _playQueue.currentIndex + 1;
       if (nextIndex < _playQueue.length) {
         _playQueue.setCurrentIndex(nextIndex);
-        await _rebuildSequence();
-        await _player.play();
+        _resumePosition = null;
+        try {
+          // 手动切歌：从新歌开头播放，不使用续播位置。
+          await _rebuildSequence(initialPosition: Duration.zero);
+          await _player.play();
+          _clearPlaybackError();
+        } catch (e, s) {
+          _reportPlaybackError('next', e, s);
+          await _skipOnFailure();
+        }
       } else if (_repeatMode == PlayerRepeatMode.all) {
         _playQueue.setCurrentIndex(0);
-        await _rebuildSequence();
-        await _player.play();
+        _resumePosition = null;
+        try {
+          await _rebuildSequence(initialPosition: Duration.zero);
+          await _player.play();
+          _clearPlaybackError();
+        } catch (e, s) {
+          _reportPlaybackError('next', e, s);
+          await _skipOnFailure();
+        }
       }
       return;
     }
 
-    if (_playQueue.currentIndex < _playQueue.length - 1) {
-      await _player.seekToNext();
-    } else if (_repeatMode == PlayerRepeatMode.all) {
-      await _player.seek(Duration.zero, index: 0);
+    try {
+      if (_playQueue.currentIndex < _playQueue.length - 1) {
+        await _player.seekToNext();
+      } else if (_repeatMode == PlayerRepeatMode.all) {
+        await _player.seek(Duration.zero, index: 0);
+      }
+      _clearPlaybackError();
+    } catch (e, s) {
+      _reportPlaybackError('next', e, s);
+      await _skipOnFailure();
     }
     // If repeatMode is `off`, just let playback stop naturally.
   }
@@ -207,21 +383,35 @@ class PlayerService extends ChangeNotifier {
     if (_playQueue.isEmpty) return;
 
     // Lazily build the sequence if no audio source is loaded yet.
-    if (_audioSource == null) {
+    if (!_sequenceLoaded) {
       final prevIndex = _playQueue.currentIndex - 1;
       if (prevIndex >= 0) {
         _playQueue.setCurrentIndex(prevIndex);
-        await _rebuildSequence();
-        await _player.play();
+        _resumePosition = null;
+        try {
+          // 手动切歌：从新歌开头播放，不使用续播位置。
+          await _rebuildSequence(initialPosition: Duration.zero);
+          await _player.play();
+          _clearPlaybackError();
+        } catch (e, s) {
+          _reportPlaybackError('previous', e, s);
+          await _skipOnFailure();
+        }
       }
       return;
     }
 
-    // If more than 3 seconds in, restart the current song.
-    if (_player.position.inSeconds > 3) {
-      await _player.seek(Duration.zero);
-    } else {
-      await _player.seekToPrevious();
+    try {
+      // If more than 3 seconds in, restart the current song.
+      if (_player.position.inSeconds > 3) {
+        await _player.seek(Duration.zero);
+      } else {
+        await _player.seekToPrevious();
+      }
+      _clearPlaybackError();
+    } catch (e, s) {
+      _reportPlaybackError('previous', e, s);
+      await _skipOnFailure();
     }
   }
 
@@ -249,7 +439,7 @@ class PlayerService extends ChangeNotifier {
   Future<void> toggleShuffle() async {
     _isShuffled = !_isShuffled;
     _playQueue.setIsShuffled(_isShuffled);
-    if (_audioSource != null) {
+    if (_sequenceLoaded) {
       await _applyAudioModes();
     }
     notifyListeners();
@@ -262,14 +452,21 @@ class PlayerService extends ChangeNotifier {
     if (index < 0 || index >= _playQueue.length) return;
     _playQueue.removeAt(index);
     if (_playQueue.isEmpty) {
-      _audioSource = null;
+      _sequenceLoaded = false;
       await _player.stop();
       return;
     }
-    try {
-      await _audioSource?.removeAt(index);
-    } catch (_) {
-      await _rebuildSequence();
+    if (_sequenceLoaded) {
+      try {
+        await _player.removeAudioSourceAt(index);
+      } catch (e) {
+        AppLogger.warning(
+          'Player',
+          'removeAudioSourceAt failed, falling back to rebuild',
+          e,
+        );
+        await _rebuildSequence();
+      }
     }
   }
 
@@ -277,14 +474,20 @@ class PlayerService extends ChangeNotifier {
   Future<void> jumpTo(int index) async {
     if (index < 0 || index >= _playQueue.length) return;
     _playQueue.setCurrentIndex(index);
-    if (_audioSource == null) {
-      // Lazy-load the sequence on first playback — avoids accessing files
-      // before macOS sandbox bookmarks are resolved at startup.
-      await _rebuildSequence();
-    } else {
-      await _player.seek(Duration.zero, index: index);
+    try {
+      if (!_sequenceLoaded) {
+        // 手动选歌播放：从目标歌开头播放，不使用续播位置。
+        _resumePosition = null;
+        await _rebuildSequence(initialPosition: Duration.zero);
+      } else {
+        await _player.seek(Duration.zero, index: index);
+      }
+      await _player.play();
+      _clearPlaybackError();
+    } catch (e, s) {
+      _reportPlaybackError('jumpTo', e, s);
+      await _skipOnFailure();
     }
-    await _player.play();
   }
 
   /// Insert [songs] right after the currently playing song.
@@ -295,30 +498,46 @@ class PlayerService extends ChangeNotifier {
       return;
     }
     _playQueue.insertAfterCurrent(songs);
-    final newSources = songs
-        .map((s) => AudioSource.file(s.filePath) as AudioSource)
-        .toList();
-    try {
-      await _audioSource?.insertAll(_playQueue.currentIndex + 1, newSources);
-    } catch (_) {
-      await _rebuildSequence();
+    final newSources = songs.map((s) => AudioSource.file(s.filePath)).toList();
+    if (_sequenceLoaded) {
+      try {
+        await _player.insertAudioSources(
+          _playQueue.currentIndex + 1,
+          newSources,
+        );
+      } catch (e) {
+        AppLogger.warning(
+          'Player',
+          'insertAudioSources failed, falling back to rebuild',
+          e,
+        );
+        await _rebuildSequence();
+      }
     }
   }
 
   /// Move a song from [oldIndex] to [newIndex] (drag-to-reorder).
   Future<void> moveInQueue(int oldIndex, int newIndex) async {
     _playQueue.move(oldIndex, newIndex);
-    try {
-      await _audioSource?.move(oldIndex, newIndex);
-    } catch (_) {
-      await _rebuildSequence();
+    if (_sequenceLoaded) {
+      try {
+        await _player.moveAudioSource(oldIndex, newIndex);
+      } catch (e) {
+        AppLogger.warning(
+          'Player',
+          'moveAudioSource failed, falling back to rebuild',
+          e,
+        );
+        await _rebuildSequence();
+      }
     }
   }
 
   /// Clear the entire queue and stop playback.
   Future<void> clearQueue() async {
     _playQueue.clear();
-    _audioSource = null;
+    _sequenceLoaded = false;
+    _resumePosition = null;
     await _player.stop();
   }
 
@@ -333,11 +552,11 @@ class PlayerService extends ChangeNotifier {
     final pruned = _playQueue.pruneTo(validFilePaths);
 
     if (_playQueue.isEmpty) {
-      _audioSource = null;
+      _sequenceLoaded = false;
       await _player.stop();
       return;
     }
-    if (pruned && _audioSource != null) {
+    if (pruned && _sequenceLoaded) {
       await _rebuildSequence();
     }
   }
@@ -368,31 +587,88 @@ class PlayerService extends ChangeNotifier {
     }
   }
 
+  /// 记录一次播放失败:更新错误消息与连续失败计数。
+  ///
+  /// 自动跳转由 [_skipOnFailure] 驱动;错误消息由 UI 通过
+  /// [takePlaybackError] 消费并提示。
+  void _reportPlaybackError(String where, Object e, StackTrace s) {
+    _consecutiveErrors++;
+    final title = _playQueue.currentSong?.title;
+    _lastPlaybackError = '无法播放${title != null ? '：$title' : '该文件'}，已自动跳过';
+    AppLogger.error('Player', 'Playback failed in $where', e, s);
+    notifyListeners();
+  }
+
+  /// 播放成功后清除失败状态(连续计数归零、错误消息清空)。
+  void _clearPlaybackError() {
+    _consecutiveErrors = 0;
+    if (_lastPlaybackError != null) {
+      _lastPlaybackError = null;
+      notifyListeners();
+    }
+  }
+
+  /// 播放失败后自动跳到下一首,但连续失败达到上限即停止。
+  ///
+  /// 延迟 600ms 让错误 SnackBar 先展示;`next()` 内部若再次失败会继续
+  /// 走 [_reportPlaybackError] + [_skipOnFailure],形成有界的自动跳过链。
+  Future<void> _skipOnFailure() async {
+    if (_consecutiveErrors >= _kMaxConsecutiveErrors) {
+      _lastPlaybackError = '连续 $_kMaxConsecutiveErrors 次无法播放，已停止自动跳转';
+      AppLogger.error(
+        'Player',
+        'Reached $_kMaxConsecutiveErrors consecutive playback failures; auto-skip stopped',
+      );
+      notifyListeners();
+      return;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    await next();
+  }
+
+  /// 持久化当前歌曲的播放位置与总时长（供启动续播）。
+  ///
+  /// 仅在序列已加载且时长已知时落盘——避免引擎在未加载/时长未解析时用
+  /// 0 或 null 覆盖已恢复的播放位置（just_audio 在 idle 态也可能推送
+  /// currentIndex=0 的事件）。
+  void _persistPosition() {
+    if (!_sequenceLoaded) return;
+    final dur = _player.duration;
+    if (dur == null) return;
+    _playQueue.setPlaybackState(_player.position, dur);
+  }
+
   /// Fallback: rebuild the entire audio sequence from scratch.
-  /// Used when a dynamic API call ([addAll]/[removeAt]/[move]/[insertAll])
-  /// fails — this ensures just_audio's internal sequence stays in sync with
-  /// [PlayQueue] even if the platform channel throws.
-  Future<void> _rebuildSequence() async {
+  /// Used when a dynamic API call ([addAudioSources]/[removeAudioSourceAt]/
+  /// [moveAudioSource]/[insertAudioSources]) fails — this ensures just_audio's
+  /// internal sequence stays in sync with [PlayQueue] even if the platform
+  /// channel throws.
+  /// Fallback: rebuild the entire audio sequence from scratch.
+  ///
+  /// [initialPosition] 由调用方决定——`play()` 首次续播传保存的位置，
+  /// `jumpTo`/`next`/`previous` 手动切歌传 [Duration.zero]（从头播），
+  /// 运行时动态编辑回退不传（保持引擎当前位置）。
+  Future<void> _rebuildSequence({Duration? initialPosition}) async {
     final songs = _playQueue.songs;
     if (songs.isEmpty) return;
-    final sources = songs
-        .map((s) => AudioSource.file(s.filePath) as AudioSource)
-        .toList();
-    _audioSource = ConcatenatingAudioSource(children: sources);
-    await _player.setAudioSource(
-      _audioSource!,
+    final sources = songs.map((s) => AudioSource.file(s.filePath)).toList();
+    await _player.setAudioSources(
+      sources,
       initialIndex: _playQueue.currentIndex.clamp(0, songs.length - 1),
-      initialPosition: _player.position,
+      initialPosition: initialPosition ?? _player.position,
     );
+    // 序列成功交给引擎后才标记已加载：加载过程中的中间事件
+    // （如 currentIndex=0）不能被当作权威，避免播放页闪烁成第一首。
+    _sequenceLoaded = true;
     await _applyAudioModes();
   }
 
   @override
   void dispose() {
-    _playerStateSub?.cancel();
+    _playbackEventSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
-    _sequenceSub?.cancel();
+    _reconcileTimer?.cancel();
     _player.dispose();
     super.dispose();
   }

@@ -3,11 +3,16 @@ import 'package:flutter/material.dart';
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
+import '../../core/utils/search_util.dart';
 import '../../widgets/cached_album_art.dart';
+import '../../widgets/cover_card.dart';
+import '../../widgets/detail_header.dart';
 import '../../widgets/detail_top_bar.dart';
 import '../../widgets/page_toolbar.dart';
 import '../../widgets/play_all_button.dart';
+import '../../widgets/search_empty_state.dart';
 import '../../widgets/song_tile.dart';
+import '../../widgets/toolbar_search_field.dart';
 import '../playlist/song_actions.dart';
 import 'album_view_model.dart';
 
@@ -26,6 +31,8 @@ class AlbumsPage extends StatefulWidget {
 
 class _AlbumsPageState extends State<AlbumsPage> {
   final _viewModel = AlbumsViewModel();
+  bool _searchActive = false;
+  String _query = '';
 
   @override
   void initState() {
@@ -45,6 +52,27 @@ class _AlbumsPageState extends State<AlbumsPage> {
     if (mounted) setState(() {});
   }
 
+  // ─── Search ─────────────────────────────────────────────
+
+  List<Album> get _filteredAlbums {
+    final q = normalizeQuery(_query);
+    if (q.isEmpty) return _viewModel.albums;
+    return _viewModel.albums
+        .where(
+          (a) =>
+              containsIgnoreCase(a.name, q) ||
+              containsIgnoreCase(a.albumArtist, q),
+        )
+        .toList();
+  }
+
+  void _enterSearch() => setState(() => _searchActive = true);
+
+  void _exitSearch() => setState(() {
+    _searchActive = false;
+    _query = '';
+  });
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -53,22 +81,42 @@ class _AlbumsPageState extends State<AlbumsPage> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final albums = _viewModel.albums;
+    final albums = _filteredAlbums;
 
     return Column(
       children: [
         _buildAppBar(albums.length),
         const Divider(height: 1),
         if (albums.isEmpty)
-          _buildEmptyState(theme)
+          _searchActive
+              ? Expanded(child: SearchEmptyState(query: _query))
+              : _buildEmptyState(theme)
         else
-          Expanded(child: _buildGrid(theme, albums)),
+          Expanded(child: _buildGrid(albums)),
       ],
     );
   }
 
   Widget _buildAppBar(int count) {
-    return PageToolbar(title: '专辑', subtitle: '$count 张');
+    return PageToolbar(
+      title: '专辑',
+      subtitle: _searchActive ? '匹配 $count 张' : '$count 张',
+      actions: _searchActive
+          ? [
+              ToolbarSearchField(
+                hintText: '搜索专辑',
+                onChanged: (v) => setState(() => _query = v),
+                onClose: _exitSearch,
+              ),
+            ]
+          : [
+              IconButton(
+                icon: const Icon(Icons.search),
+                tooltip: '搜索',
+                onPressed: _enterSearch,
+              ),
+            ],
+    );
   }
 
   Widget _buildEmptyState(ThemeData theme) {
@@ -93,7 +141,7 @@ class _AlbumsPageState extends State<AlbumsPage> {
     );
   }
 
-  Widget _buildGrid(ThemeData theme, List<Album> albums) {
+  Widget _buildGrid(List<Album> albums) {
     return Material(
       type: MaterialType.transparency,
       clipBehavior: Clip.hardEdge,
@@ -110,9 +158,15 @@ class _AlbumsPageState extends State<AlbumsPage> {
         itemCount: albums.length,
         itemBuilder: (context, index) {
           final album = albums[index];
-          return _AlbumCard(
-            album: album,
-            theme: theme,
+          return CoverCard(
+            cover: CachedAlbumArt(
+              albumArtFilePath: album.albumArtFilePath,
+              hasEmbeddedArt: album.albumArtFilePath != null,
+              size: double.infinity,
+              borderRadius: 0,
+            ),
+            title: album.name,
+            subtitle: _albumSubtitle(album),
             onTap: () => _openAlbumDetail(context, album),
           );
         },
@@ -124,65 +178,6 @@ class _AlbumsPageState extends State<AlbumsPage> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => AlbumDetailPage(album: album)));
-  }
-}
-
-class _AlbumCard extends StatelessWidget {
-  final Album album;
-  final ThemeData theme;
-  final VoidCallback onTap;
-
-  const _AlbumCard({
-    required this.album,
-    required this.theme,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.hardEdge,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Album art：弹性填满剩余高度，保证下方文字在任何格子宽下不被裁切
-            Expanded(
-              child: CachedAlbumArt(
-                albumArtFilePath: album.albumArtFilePath,
-                hasEmbeddedArt: album.albumArtFilePath != null,
-                size: double.infinity,
-                borderRadius: 0,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-              child: Text(
-                album.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                _albumSubtitle(album),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            const SizedBox(height: 4),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -262,7 +257,6 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final player = ServiceLocator.player;
 
     if (_loading) return const Center(child: CircularProgressIndicator());
@@ -273,10 +267,20 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
         return Column(
           children: [
             // Album header（底部 Material 阴影分隔列表区）
-            Material(
-              color: theme.colorScheme.surface,
-              elevation: 3,
-              child: _buildHeader(theme),
+            DetailHeader(
+              cover: CachedAlbumArt(
+                albumArtFilePath: widget.album.albumArtFilePath,
+                hasEmbeddedArt: widget.album.albumArtFilePath != null,
+                size: 140,
+                borderRadius: 12,
+              ),
+              title: widget.album.name,
+              subtitle: _albumSubtitle(widget.album),
+              info: '${_songs.length} 首歌曲',
+              action: PlayAllButton(
+                onPlayAll: () =>
+                    ServiceLocator.player.playFromList(_songs, startIndex: 0),
+              ),
             ),
             // Song list
             Expanded(
@@ -300,18 +304,7 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
                         _songs,
                         startIndex: row.songIndex,
                       ),
-                      leading: SizedBox(
-                        width: 36,
-                        child: Text(
-                          song.trackNumber?.toString() ?? '',
-                          textAlign: TextAlign.right,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: isCurrent
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
+                      leadingText: song.trackNumber?.toString() ?? '',
                       menuBuilder: (song) => songMenuItems(song),
                       onMenuSelected: (song, value) async {
                         await handleSongMenuAction(context, song, value);
@@ -325,63 +318,6 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
           ],
         );
       },
-    );
-  }
-
-  Widget _buildHeader(ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              width: 140,
-              height: 140,
-              child: CachedAlbumArt(
-                albumArtFilePath: widget.album.albumArtFilePath,
-                hasEmbeddedArt: widget.album.albumArtFilePath != null,
-                size: 140,
-                borderRadius: 12,
-              ),
-            ),
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.album.name,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _albumSubtitle(widget.album),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${_songs.length} 首歌曲',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // 椭圆形「播放全部」文本按钮，位于信息文本下方
-                PlayAllButton(
-                  onPlayAll: () =>
-                      ServiceLocator.player.playFromList(_songs, startIndex: 0),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

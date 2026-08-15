@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:metadata_god/metadata_god.dart';
 
-import 'theme.dart';
 import 'router.dart';
+import 'startup_error_page.dart';
+import 'theme.dart';
 import '../core/constants/layout.dart';
+import '../core/services/player_service.dart';
 import '../core/services/service_locator.dart';
+import '../core/utils/logger.dart';
 import '../features/player/player_page.dart';
 import '../features/shell/now_playing_bar.dart';
 import '../features/shell/shell_page.dart';
@@ -20,6 +23,7 @@ class App extends StatefulWidget {
 
 class _AppState extends State<App> {
   bool _initialized = false;
+  Object? _startupError;
   final _navKey = GlobalKey<NavigatorState>();
   final _showBar = ValueNotifier<bool>(true);
 
@@ -33,17 +37,36 @@ class _AppState extends State<App> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncTopBarHeightToNative();
     });
-    ServiceLocator.initialize().then((_) async {
-      try {
-        await MetadataGod.initialize();
-        debugPrint('MetadataGod initialized successfully');
-      } catch (e) {
-        debugPrint('MetadataGod initialization failed: $e');
-      }
+    _initializeServices();
+  }
+
+  /// 初始化核心服务(幂等),失败时进入启动错误页。
+  Future<void> _initializeServices() async {
+    try {
+      await ServiceLocator.initialize();
+    } catch (e, s) {
+      AppLogger.fatal('Startup', 'ServiceLocator.initialize() failed', e, s);
       if (mounted) {
-        setState(() => _initialized = true);
+        setState(() => _startupError = e);
       }
-    });
+      return;
+    }
+    try {
+      await MetadataGod.initialize();
+      AppLogger.info('App', 'MetadataGod initialized successfully');
+    } catch (e) {
+      AppLogger.error('App', 'MetadataGod initialization failed', e);
+    }
+    if (mounted) {
+      setState(() => _initialized = true);
+    }
+  }
+
+  /// 启动失败后重试:清掉失败缓存的初始化 Future 再走一遍。
+  void _retry() {
+    ServiceLocator.resetInitialization();
+    setState(() => _startupError = null);
+    _initializeServices();
   }
 
   @override
@@ -63,11 +86,15 @@ class _AppState extends State<App> {
         layoutConfig.sidebarTopInset,
       );
     } catch (e) {
-      debugPrint('Failed to sync top bar height to native: $e');
+      AppLogger.warning('App', 'Failed to sync top bar height to native', e);
     }
   }
 
   void _openPlayer() {
+    // 点按迷你底栏进入播放页前先对账，确保首屏即引擎真相。
+    if (ServiceLocator.isReady) {
+      ServiceLocator.player.resyncFromAudio();
+    }
     _navKey.currentState!.push(
       AppRouter.bottomUpRoute(const PlayerPage(), name: PlayerPage.routeName),
     );
@@ -80,7 +107,9 @@ class _AppState extends State<App> {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
-      home: ShellPage(isInitialized: _initialized),
+      home: _startupError != null
+          ? StartupErrorPage(error: _startupError!, onRetry: _retry)
+          : ShellPage(isInitialized: _initialized),
       onGenerateRoute: AppRouter.generateRoute,
       navigatorKey: _navKey,
       navigatorObservers: [_NowPlayingBarVisibilityObserver(_showBar)],
@@ -96,12 +125,17 @@ class _AppState extends State<App> {
                 // 所有页面（Shell + 子页面 + 播放页）都渲染在底栏上方，底栏不被
                 // 子页面盖住。顶部不再有全局顶栏，改由各页面自行避让（左侧边栏
                 // 顶部预留 45 给红绿灯，右侧内容区用统一高度的 PageToolbar）。
-                body: child ?? const SizedBox.shrink(),
+                body: _PlaybackErrorConsumer(
+                  child: child ?? const SizedBox.shrink(),
+                ),
                 bottomNavigationBar: ValueListenableBuilder<bool>(
                   valueListenable: _showBar,
                   builder: (context, show, _) {
                     // 全屏“正在播放”打开时隐藏底栏，关闭后恢复。
-                    if (!show) return const SizedBox.shrink();
+                    // 启动失败时不显示底栏（此时没有播放器/队列）。
+                    if (!show || _startupError != null) {
+                      return const SizedBox.shrink();
+                    }
                     return NowPlayingBar(onTap: _openPlayer);
                   },
                 ),
@@ -111,6 +145,50 @@ class _AppState extends State<App> {
         );
       },
     );
+  }
+}
+
+/// 全局消费播放错误并用 SnackBar 提示。
+///
+/// 挂在 MaterialApp.builder 的根 Scaffold body 内：任何页面触发播放失败
+/// (文件缺失/损坏/权限)都会弹出提示,不依赖某个页面是否打开。
+class _PlaybackErrorConsumer extends StatefulWidget {
+  const _PlaybackErrorConsumer({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_PlaybackErrorConsumer> createState() => _PlaybackErrorConsumerState();
+}
+
+class _PlaybackErrorConsumerState extends State<_PlaybackErrorConsumer> {
+  PlayerService? _player;
+
+  /// 惰性挂接播放器监听:启动初始化完成(ServiceLocator 就绪)前不挂。
+  ///
+  /// 在 [build] 中调用以利用 _AppState 初始化完成后的重建时机自动挂上。
+  void _maybeAttach() {
+    if (_player != null || !ServiceLocator.isReady) return;
+    _player = ServiceLocator.player;
+    _player!.addListener(_onPlayerChanged);
+  }
+
+  void _onPlayerChanged() {
+    final err = _player!.takePlaybackError();
+    if (err == null || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+  }
+
+  @override
+  void dispose() {
+    _player?.removeListener(_onPlayerChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _maybeAttach();
+    return widget.child;
   }
 }
 

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:watcher/watcher.dart';
 
 import '../constants/audio_extensions.dart';
+import '../utils/logger.dart';
 import 'metadata_service.dart';
 import 'song_repository.dart';
 
@@ -109,24 +110,39 @@ class FolderWatcherService {
             ),
           );
         })
-        .catchError((_) {
-          // Silently ignore files that can't be parsed
+        .catchError((e, s) {
+          AppLogger.warning(
+            'FolderWatch',
+            'Failed to parse added file: $filePath',
+            e,
+            s,
+          );
         });
   }
 
   void _onFileRemoved(String filePath, String folderPath) {
-    _songRepository.getSongByFilePath(filePath).then((song) async {
-      if (song != null) {
-        await _songRepository.markMissingFiles({filePath}, {});
-        _controller.add(
-          FolderWatcherEvent(
-            filePath: filePath,
-            folderPath: folderPath,
-            description: '歌曲文件已移除',
-          ),
-        );
-      }
-    });
+    _songRepository
+        .getSongByFilePath(filePath)
+        .then((song) async {
+          if (song != null) {
+            await _songRepository.markMissingFiles({filePath}, {});
+            _controller.add(
+              FolderWatcherEvent(
+                filePath: filePath,
+                folderPath: folderPath,
+                description: '歌曲文件已移除',
+              ),
+            );
+          }
+        })
+        .catchError((e, s) {
+          AppLogger.warning(
+            'FolderWatch',
+            'Failed to handle removed file: $filePath',
+            e,
+            s,
+          );
+        });
   }
 
   void _onFileModified(String filePath, String folderPath) {
@@ -142,6 +158,13 @@ class FolderWatcherService {
             ),
           );
         })
-        .catchError((_) {});
+        .catchError((e, s) {
+          AppLogger.warning(
+            'FolderWatch',
+            'Failed to parse modified file: $filePath',
+            e,
+            s,
+          );
+        });
   }
 }

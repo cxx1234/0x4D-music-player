@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
+import '../../core/utils/search_util.dart';
 import '../../widgets/cached_album_art.dart';
 import '../../widgets/detail_top_bar.dart';
+import '../../widgets/list_item_tile.dart';
 import '../../widgets/page_toolbar.dart';
 import '../../widgets/play_all_button.dart';
+import '../../widgets/search_empty_state.dart';
 import '../../widgets/song_tile.dart';
+import '../../widgets/toolbar_search_field.dart';
+import '../album/album_page.dart';
 import '../playlist/song_actions.dart';
 import 'artist_view_model.dart';
 
@@ -19,6 +24,8 @@ class ArtistsPage extends StatefulWidget {
 
 class _ArtistsPageState extends State<ArtistsPage> {
   final _viewModel = ArtistsViewModel();
+  bool _searchActive = false;
+  String _query = '';
 
   @override
   void initState() {
@@ -38,6 +45,23 @@ class _ArtistsPageState extends State<ArtistsPage> {
     if (mounted) setState(() {});
   }
 
+  // ─── Search ─────────────────────────────────────────────
+
+  List<Artist> get _filteredArtists {
+    final q = normalizeQuery(_query);
+    if (q.isEmpty) return _viewModel.artists;
+    return _viewModel.artists
+        .where((a) => containsIgnoreCase(a.name, q))
+        .toList();
+  }
+
+  void _enterSearch() => setState(() => _searchActive = true);
+
+  void _exitSearch() => setState(() {
+    _searchActive = false;
+    _query = '';
+  });
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -46,14 +70,16 @@ class _ArtistsPageState extends State<ArtistsPage> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final artists = _viewModel.artists;
+    final artists = _filteredArtists;
 
     return Column(
       children: [
         _buildAppBar(artists.length),
         const Divider(height: 1),
         if (artists.isEmpty)
-          _buildEmptyState(theme)
+          _searchActive
+              ? Expanded(child: SearchEmptyState(query: _query))
+              : _buildEmptyState(theme)
         else
           Expanded(child: _buildList(theme, artists)),
       ],
@@ -61,7 +87,25 @@ class _ArtistsPageState extends State<ArtistsPage> {
   }
 
   Widget _buildAppBar(int count) {
-    return PageToolbar(title: '歌手', subtitle: '$count 位');
+    return PageToolbar(
+      title: '歌手',
+      subtitle: _searchActive ? '匹配 $count 位' : '$count 位',
+      actions: _searchActive
+          ? [
+              ToolbarSearchField(
+                hintText: '搜索歌手',
+                onChanged: (v) => setState(() => _query = v),
+                onClose: _exitSearch,
+              ),
+            ]
+          : [
+              IconButton(
+                icon: const Icon(Icons.search),
+                tooltip: '搜索',
+                onPressed: _enterSearch,
+              ),
+            ],
+    );
   }
 
   Widget _buildEmptyState(ThemeData theme) {
@@ -97,8 +141,10 @@ class _ArtistsPageState extends State<ArtistsPage> {
           final artist = artists[index];
           final albumCount = _viewModel.albumsForArtist(artist).length;
           final songCount = _viewModel.songsForArtist(artist).length;
-          return ListTile(
+          return ListItemTile(
             leading: CircleAvatar(
+              // 44 直径，与 SongTile 默认封面同宽，保证标题位置一致
+              radius: 22,
               backgroundColor: theme.colorScheme.primaryContainer,
               child: Text(
                 artist.name.isNotEmpty ? artist.name[0].toUpperCase() : '?',
@@ -108,15 +154,9 @@ class _ArtistsPageState extends State<ArtistsPage> {
                 ),
               ),
             ),
-            title: Text(
-              artist.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              '$songCount 首歌曲${albumCount > 0 ? ' · $albumCount 张专辑' : ''}',
-              style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-            ),
+            title: artist.name,
+            subtitle:
+                '$songCount 首歌曲${albumCount > 0 ? ' · $albumCount 张专辑' : ''}',
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _openArtistDetail(context, artist),
           );
@@ -205,63 +245,80 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
 
-    return CustomScrollView(
-      slivers: [
-        // Albums section
-        if (_albums.isNotEmpty) ...[
+    // 有界滚动区含 ListTile(SongTile) 交互项，外包透明 Material + Clip.hardEdge
+    // 防止墨迹渗入上方标题区（项目约定）。
+    return Material(
+      type: MaterialType.transparency,
+      clipBehavior: Clip.hardEdge,
+      child: CustomScrollView(
+        slivers: [
+          // Albums section
+          if (_albums.isNotEmpty) ...[
+            SliverToBoxAdapter(
+              child: _SectionHeader(title: '专辑 (${_albums.length})'),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                // 专辑卡片区域顶部留 5pt，与上方标题栏隔开
+                padding: const EdgeInsets.only(top: 5),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      // 高度 210：容纳封面 150 + 最多两行标题 + 年份行，年份不会被挤掉
+                      height: 210,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: _albums.length,
+                        itemBuilder: (context, index) {
+                          final album = _albums[index];
+                          return _ArtistAlbumCard(album: album);
+                        },
+                      ),
+                    ),
+                    // 横向列表下方的空白区域，分隔专辑卡片与「歌曲」标题
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
+          // Songs section
           SliverToBoxAdapter(
-            child: _SectionHeader(title: '专辑 (${_albums.length})'),
-          ),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 200,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _albums.length,
-                itemBuilder: (context, index) {
-                  final album = _albums[index];
-                  return _ArtistAlbumCard(album: album);
-                },
+            child: _SectionHeader(
+              title: '歌曲 (${_songs.length})',
+              trailing: PlayAllButton(
+                onPlayAll: () =>
+                    ServiceLocator.player.playFromList(_songs, startIndex: 0),
               ),
             ),
           ),
-        ],
-
-        // Songs section
-        SliverToBoxAdapter(
-          child: _SectionHeader(
-            title: '歌曲 (${_songs.length})',
-            trailing: PlayAllButton(
-              onPlayAll: () =>
-                  ServiceLocator.player.playFromList(_songs, startIndex: 0),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final song = _songs[index];
+                final player = ServiceLocator.player;
+                final isCurrent = song.id == player.currentSong?.id;
+                return SongTile(
+                  song: song,
+                  isCurrentSong: isCurrent,
+                  onTap: () => ServiceLocator.player.playFromList(
+                    _songs,
+                    startIndex: index,
+                  ),
+                  menuBuilder: (song) => songMenuItems(song),
+                  onMenuSelected: (song, value) async {
+                    await handleSongMenuAction(context, song, value);
+                    await _load();
+                  },
+                );
+              }, childCount: _songs.length),
             ),
           ),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate((context, index) {
-              final song = _songs[index];
-              final player = ServiceLocator.player;
-              final isCurrent = song.id == player.currentSong?.id;
-              return SongTile(
-                song: song,
-                isCurrentSong: isCurrent,
-                onTap: () => ServiceLocator.player.playFromList(
-                  _songs,
-                  startIndex: index,
-                ),
-                menuBuilder: (song) => songMenuItems(song),
-                onMenuSelected: (song, value) async {
-                  await handleSongMenuAction(context, song, value);
-                  await _load();
-                },
-              );
-            }, childCount: _songs.length),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -302,181 +359,85 @@ class _ArtistAlbumCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: () {
-        // Navigate to album detail using the existing AlbumDetailPage
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => Scaffold(
-              appBar: AppBar(title: Text(album.name)),
-              body: _AlbumDetailContent(album: album),
-            ),
-          ),
-        );
-      },
-      child: Container(
-        width: 150,
-        margin: const EdgeInsets.only(right: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                width: 150,
-                height: 150,
-                child: CachedAlbumArt(
-                  albumArtFilePath: album.albumArtFilePath,
-                  hasEmbeddedArt: album.albumArtFilePath != null,
-                  size: 150,
-                  borderRadius: 8,
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              album.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Re-export AlbumDetailContent for use from Artist detail.
-/// Imported from the album feature.
-class _AlbumDetailContent extends StatefulWidget {
-  final Album album;
-
-  const _AlbumDetailContent({required this.album});
-
-  @override
-  State<_AlbumDetailContent> createState() => _AlbumDetailContentState();
-}
-
-class _AlbumDetailContentState extends State<_AlbumDetailContent> {
-  List<Song> _songs = [];
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final songs = await ServiceLocator.songRepo.getSongsByAlbum(
-      widget.album.id,
-    );
-    if (mounted) {
-      setState(() {
-        _songs = songs;
-        _loading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final player = ServiceLocator.player;
-
-    if (_loading) return const Center(child: CircularProgressIndicator());
-
-    return ListenableBuilder(
-      listenable: player,
-      builder: (context, _) {
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Row(
+    // 卡片自带透明 Material + Clip.hardEdge：InkWell 的墨迹画在最近的 Material
+    // 上，若不包这一层会画到外层 CustomScrollView 的 Material，水波/hover 高亮
+    // 会渗出横向列表边界；圆角 8 与封面一致，高亮被裁剪在卡片内。
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Material(
+        type: MaterialType.transparency,
+        clipBehavior: Clip.hardEdge,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          // 悬停/按下高亮，与其余可交互卡片保持一致
+          hoverColor: theme.colorScheme.onSurface.withValues(alpha: 0.06),
+          onTap: () {
+            // 跳转正式专辑详情页（DetailTopBar + 分碟 + 播放全部）
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => AlbumDetailPage(album: album)),
+            );
+          },
+          // 卡片内部 2pt padding：内容内缩，墨迹仍覆盖整卡，hover 高亮更清晰
+          child: Padding(
+            padding: const EdgeInsets.all(2),
+            child: SizedBox(
+              width: 150,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(8),
                     child: SizedBox(
-                      width: 120,
-                      height: 120,
+                      width: 150,
+                      height: 150,
                       child: CachedAlbumArt(
-                        albumArtFilePath: widget.album.albumArtFilePath,
-                        hasEmbeddedArt: widget.album.albumArtFilePath != null,
-                        size: 120,
-                        borderRadius: 12,
+                        albumArtFilePath: album.albumArtFilePath,
+                        hasEmbeddedArt: album.albumArtFilePath != null,
+                        size: 150,
+                        borderRadius: 8,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(height: 6),
+                  // 文本区弹性填满剩余高度：标题在上、年份沉底（spaceBetween），
+                  // 两行标题 + 年份也放得下；单行标题时中间空白由 spaceBetween 吸收，
+                  // 底部不显空。标题 Flexible 防超长溢出。
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          widget.album.name,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
+                        Flexible(
+                          child: Text(
+                            album.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${_songs.length} 首歌曲',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                        // 年份独立文本块：更小一号、颜色更灰；无年份则整块隐藏
+                        if (album.year != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            '(${album.year})',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontSize: 11,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
                 ],
               ),
             ),
-            const Divider(height: 1),
-            Expanded(
-              child: Material(
-                type: MaterialType.transparency,
-                clipBehavior: Clip.hardEdge,
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                  itemCount: _songs.length,
-                  itemBuilder: (context, index) {
-                    final song = _songs[index];
-                    final isCurrent = song.id == player.currentSong?.id;
-                    return SongTile(
-                      song: song,
-                      isCurrentSong: isCurrent,
-                      onTap: () => ServiceLocator.player.playFromList(
-                        _songs,
-                        startIndex: index,
-                      ),
-                      leading: SizedBox(
-                        width: 32,
-                        child: Text(
-                          '${index + 1}',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: isCurrent
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                      menuBuilder: (song) => songMenuItems(song),
-                      onMenuSelected: (song, value) async {
-                        await handleSongMenuAction(context, song, value);
-                        await _load();
-                      },
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+          ),
+        ),
+      ),
     );
   }
 }

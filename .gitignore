@@ -36,8 +36,16 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Test audio fixtures (large, not committed)
+test/music/
+
 # Symbolication related
 app.*.symbols
+
+# Xcode auto-generated build artifacts (deps via CocoaPods, not SPM)
+ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+ios/Runner.xcworkspace/xcshareddata/swiftpm/
+macos/Runner.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings
 
 # Obfuscation related
 app.*.map.json

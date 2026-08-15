@@ -94,7 +94,6 @@ Examples:
 * Library
 * Player
 * Playlist
-* Search
 * Settings
 
 models/

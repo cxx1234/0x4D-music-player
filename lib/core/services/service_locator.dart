@@ -1,9 +1,10 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
+import 'package:just_audio_platform_interface/just_audio_platform_interface.dart';
 
 import '../audio/platform_media_controls.dart';
 import '../database/database.dart';
+import '../utils/logger.dart';
 import 'folder_watcher_service.dart';
 import 'media_control_service.dart';
 import 'play_queue.dart';
@@ -115,7 +116,35 @@ class ServiceLocator {
     _sandboxRestoreFailures = 0;
   }
 
-  static Future<void> initialize() async {
+  /// 幂等初始化：整个 isolate 生命周期内只执行一次。
+  ///
+  /// 即使被重复调用（例如某些情况下 initState 再次触发），也返回同一份
+  /// 初始化 Future，不会重建任何服务——保证 PlayerService/AudioPlayer
+  /// 单例唯一，避免产生"幽灵播放器"（上一个实例的原生播放器未被销毁、
+  /// 仍在后台出声/切歌）。
+  static Future<void>? _initialization;
+
+  static Future<void> initialize() => _initialization ??= _doInitialize();
+
+  /// 重置初始化缓存,允许重试初始化(启动失败后用户点击重试)。
+  ///
+  /// [initialize] 是幂等的(`_initialization ??=`),失败后缓存的 Future
+  /// 已处于 failed 状态,必须清掉才能重新执行 [_doInitialize]。
+  static void resetInitialization() {
+    _initialization = null;
+  }
+
+  static Future<void> _doInitialize() async {
+    AppLogger.info('Startup', 'ServiceLocator.initialize()');
+    // 清理上一个 isolate（热重启）遗留的 just_audio 原生播放器，避免
+    // "幽灵播放器"在新播放器首次激活前仍在后台出声/切歌。
+    try {
+      await JustAudioPlatform.instance.disposeAllPlayers(
+        DisposeAllPlayersRequest(),
+      );
+    } catch (e) {
+      AppLogger.warning('Startup', 'disposeAllPlayers failed', e);
+    }
     _settings = SettingsService();
     await _settings!.initialize();
     _database = await FlutterMusicDatabase.create();
@@ -125,7 +154,10 @@ class ServiceLocator {
     _folderWatcher = FolderWatcherService();
     _playQueue = PlayQueue();
     await _playQueue!.restoreQueue(_database!);
-    _player = PlayerService(playQueue: _playQueue!);
+    _player = PlayerService(
+      playQueue: _playQueue!,
+      resumePlaybackPosition: _settings!.settings.resumePlaybackPosition,
+    );
     _sandbox = SandboxService();
 
     // macOS 沙箱：恢复 security-scoped bookmarks（与 UI 生命周期解耦，
@@ -150,7 +182,10 @@ class ServiceLocator {
       final restoredPath = await _sandbox!.resolveBookmark(item.bookmark);
       if (restoredPath == null) {
         _sandboxRestoreFailures++;
-        debugPrint('[Sandbox] 音乐文件夹 bookmark 解析失败（可能已失效）：${item.path}');
+        AppLogger.warning(
+          'Sandbox',
+          'Failed to resolve bookmark for music folder (may be stale): ${item.path}',
+        );
         continue;
       }
 
@@ -159,11 +194,18 @@ class ServiceLocator {
         final dir = Directory(restoredPath);
         if (!await dir.exists()) {
           _sandboxRestoreFailures++;
-          debugPrint('[Sandbox] 音乐文件夹不存在：$restoredPath');
+          AppLogger.warning(
+            'Sandbox',
+            'Music folder does not exist: $restoredPath',
+          );
         }
       } catch (e) {
         _sandboxRestoreFailures++;
-        debugPrint('[Sandbox] 音乐文件夹读探测失败：$restoredPath ($e)');
+        AppLogger.warning(
+          'Sandbox',
+          'Music folder read probe failed: $restoredPath',
+          e,
+        );
       }
     }
   }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/constants/layout.dart';
 
-/// 页面顶部标题工具栏：统一各页（音乐库/专辑/歌手/播放列表/搜索/设置）的标题区。
+/// 页面顶部标题工具栏：统一各页（音乐库/专辑/歌手/播放列表/设置）的标题区。
 ///
 /// 结构：总高 [PlatformLayoutConfig.pageToolbarHeight] = 顶部填充
 /// [PlatformLayoutConfig.pageToolbarTopInset]

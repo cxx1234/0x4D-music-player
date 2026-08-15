@@ -5,7 +5,6 @@ import '../album/album_page.dart';
 import '../artist/artist_page.dart';
 import '../library/library_page.dart';
 import '../playlist/playlist_page.dart';
-import '../search/search_page.dart';
 import '../settings/settings_page.dart';
 
 enum NavigationItem {
@@ -13,7 +12,6 @@ enum NavigationItem {
   albums('专辑', Icons.album),
   artists('歌手', Icons.person),
   playlists('播放列表', Icons.playlist_play),
-  search('搜索', Icons.search),
   settings('设置', Icons.settings);
 
   final String label;
@@ -44,8 +42,6 @@ class _ShellPageState extends State<ShellPage> {
         return const ArtistsPage();
       case NavigationItem.playlists:
         return const PlaylistPage();
-      case NavigationItem.search:
-        return const SearchPage();
       case NavigationItem.settings:
         return const SettingsPage();
     }

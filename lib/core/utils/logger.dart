@@ -1,0 +1,242 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+
+/// 日志级别,按严重度升序。
+enum AppLogLevel {
+  debug('DEBUG'),
+  info('INFO'),
+  warning('WARN'),
+  error('ERROR'),
+  fatal('FATAL');
+
+  const AppLogLevel(this.label);
+
+  /// 5 字符定宽标签(右对齐填充),便于 grep/对齐。
+  final String label;
+}
+
+/// 统一的分级日志出口。
+///
+/// 所有日志同时输出到:
+/// 1. `debugPrint`(开发期控制台,保留原有调试体验);
+/// 2. `{appDocDir}/logs/app-YYYY-MM-DD.log`(按天分文件,启动时清理旧文件)。
+///
+/// **落盘策略**:
+/// - **Debug 默认不落盘**——只走 `debugPrint` 控制台(开发期在 VS Code 终端可见即可,
+///   避免无谓磁盘 I/O)。若测试显式调用 `setLogDirectory` 覆盖目录,则 debug 下仍落盘。
+/// - **Release/Profile 始终落盘**——正式版用户机器上的日志依赖文件回传诊断。
+/// - 因此 Debug 构建下应用内"日志查看页"(`LogPage`)为空属预期,日志请从控制台查看。
+///
+/// 约定:消息用英文(与堆栈/框架日志统一);tag 用分类名
+/// (App/Startup/Player/Scan/Sandbox/DB/Cache/M3U/Settings/FolderWatch/Zone/Flutter/Platform)。
+///
+/// 日志系统自身失败绝不抛异常(否则会递归崩溃),一律降级为 `debugPrint`。
+abstract final class AppLogger {
+  /// 单文件大小防御上限(超过则截断)。一天正常日志远小于该值。
+  static const int _maxFileBytes = 5 * 1024 * 1024;
+
+  /// 单条日志写入超时,防止某次 flush 挂起把整条写队列卡死。
+  static const Duration _writeTimeout = Duration(seconds: 2);
+
+  static Directory? _logDir;
+  static IOSink? _sink;
+  static String? _sinkDay;
+
+  /// 写文件队列链:保证同一文件被串行追加,避免并发交错。
+  static Future<void> _pending = Future.value();
+
+  static void debug(
+    String tag,
+    String message, [
+    Object? error,
+    StackTrace? stack,
+  ]) => _log(AppLogLevel.debug, tag, message, error, stack);
+
+  static void info(
+    String tag,
+    String message, [
+    Object? error,
+    StackTrace? stack,
+  ]) => _log(AppLogLevel.info, tag, message, error, stack);
+
+  static void warning(
+    String tag,
+    String message, [
+    Object? error,
+    StackTrace? stack,
+  ]) => _log(AppLogLevel.warning, tag, message, error, stack);
+
+  static void error(
+    String tag,
+    String message, [
+    Object? error,
+    StackTrace? stack,
+  ]) => _log(AppLogLevel.error, tag, message, error, stack);
+
+  static void fatal(
+    String tag,
+    String message, [
+    Object? error,
+    StackTrace? stack,
+  ]) => _log(AppLogLevel.fatal, tag, message, error, stack);
+
+  /// 覆盖日志根目录(仅测试使用)。传入后日志写到 `{dir}/logs/`。
+  @visibleForTesting
+  static void setLogDirectory(Directory dir) {
+    _logDir = dir;
+  }
+
+  /// 日志根目录(供日志查看页读取日志文件)。
+  static Future<Directory> logDirectory() => _resolveLogDir();
+
+  /// 等待所有已排队的日志写入落盘(仅测试使用)。
+  @visibleForTesting
+  static Future<void> flushPending() => _pending;
+
+  /// 关闭底层文件句柄,等待所有待写日志落盘(仅测试使用)。
+  @visibleForTesting
+  static Future<void> dispose() async {
+    await _pending;
+    await _closeSink();
+  }
+
+  /// 删除 [keepDays] 天前的日志文件。默认保留最近 7 天。
+  ///
+  /// 建议在应用启动时调用一次;清理失败不抛异常,仅记录。
+  static Future<void> pruneOldLogs({int keepDays = 7}) async {
+    try {
+      final dir = await _resolveLogDir();
+      if (!await dir.exists()) return;
+      final cutoff = DateTime.now().subtract(Duration(days: keepDays));
+      await for (final entity in dir.list()) {
+        if (entity is! File) continue;
+        final name = p.basename(entity.path);
+        if (!name.startsWith('app-') || !name.endsWith('.log')) continue;
+        final day = DateTime.tryParse(name.substring(4, name.length - 4));
+        if (day != null && day.isBefore(cutoff)) {
+          await entity.delete();
+          debugPrint('[AppLogger] pruned $name');
+        }
+      }
+    } catch (e) {
+      debugPrint('[AppLogger] pruneOldLogs failed: $e');
+    }
+  }
+
+  // ─── 内部实现 ────────────────────────────────────────
+
+  static void _log(
+    AppLogLevel level,
+    String tag,
+    String message, [
+    Object? error,
+    StackTrace? stack,
+  ]) {
+    final now = DateTime.now();
+    final line = _format(now, level, tag, message);
+    debugPrint(line);
+    if (error != null) debugPrint('  $error');
+    if (stack != null) debugPrint('  $stack');
+
+    // 落盘守卫:Debug 模式默认不写文件(日志只看控制台),避免无谓磁盘 I/O;
+    // 但测试经 setLogDirectory 显式覆盖目录时仍落盘(否则 logger_test 无法验证文件行为)。
+    // 注:flutter test 默认 kDebugMode=true —— 不写盘也顺带消除了 widget 测试里
+    // _append 的 .timeout(2s) 定时器残留问题(test/widget_test.dart)。
+    if (!kDebugMode || _logDir != null) {
+      // 串行排队写盘(不阻塞调用方)。
+      // 前一条写盘无论成败都不阻断后续日志:否则一旦某条 _append 抛异常把 _pending
+      // 打成 rejected,后续所有日志会被静默跳过(日志"神秘消失"的根因)。
+      _pending = _pending
+          .catchError((_) {})
+          .then((_) => _append(now, line, error, stack));
+    }
+  }
+
+  static String _format(
+    DateTime now,
+    AppLogLevel level,
+    String tag,
+    String message,
+  ) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    String three(int n) => n.toString().padLeft(3, '0');
+    final ts =
+        '${now.year}-${two(now.month)}-${two(now.day)} '
+        '${two(now.hour)}:${two(now.minute)}:${two(now.second)}.${three(now.millisecond)}';
+    final levelTag = level.label.padRight(5);
+    final tagTag = tag.padRight(10);
+    return '$ts [$levelTag] [$tagTag] $message';
+  }
+
+  static Future<void> _append(
+    DateTime now,
+    String line,
+    Object? error,
+    StackTrace? stack,
+  ) async {
+    try {
+      // 超时保护:某次 flush 挂起时不再卡死整条写队列(超时视为写失败)。
+      await _appendInner(now, line, error, stack).timeout(_writeTimeout);
+    } catch (e) {
+      // 写失败/超时:关闭并重置 sink,下一条日志重新打开文件(自愈)。
+      // 日志系统自身绝不向外抛,否则会递归崩溃。
+      await _closeSink();
+      debugPrint('[AppLogger] write failed: $e');
+    }
+  }
+
+  static Future<void> _appendInner(
+    DateTime now,
+    String line,
+    Object? error,
+    StackTrace? stack,
+  ) async {
+    final day = _dayKey(now);
+    if (_sink == null || _sinkDay != day) {
+      await _closeSink();
+      final dir = await _resolveLogDir();
+      await dir.create(recursive: true);
+      final file = File(p.join(dir.path, 'app-$day.log'));
+      // 防御上限:超限截断,避免异常风暴把磁盘写爆。
+      if (await file.exists() && await file.length() > _maxFileBytes) {
+        await file.writeAsString('', flush: true);
+        debugPrint(
+          '[AppLogger] truncated app-$day.log (over ${_maxFileBytes ~/ (1024 * 1024)}MB)',
+        );
+      }
+      _sink = file.openWrite(mode: FileMode.append);
+      _sinkDay = day;
+    }
+    _sink!.writeln(line);
+    if (error != null) _sink!.writeln('  $error');
+    if (stack != null) _sink!.writeln('  $stack');
+    await _sink!.flush();
+  }
+
+  /// 关闭并清空当前 sink(失败忽略),供换天/写失败/dispose 复用。
+  static Future<void> _closeSink() async {
+    final sink = _sink;
+    _sink = null;
+    _sinkDay = null;
+    if (sink != null) {
+      try {
+        await sink.flush();
+        await sink.close();
+      } catch (_) {
+        // 关闭失败忽略。
+      }
+    }
+  }
+
+  static Future<Directory> _resolveLogDir() async {
+    if (_logDir != null) return _logDir!;
+    final appDir = await getApplicationDocumentsDirectory();
+    return Directory(p.join(appDir.path, 'logs'));
+  }
+
+  static String _dayKey(DateTime now) =>
+      '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+}

@@ -3,10 +3,15 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/database/database.dart';
 import '../../core/database/song_sort_order.dart';
 import '../../core/services/service_locator.dart';
+import '../../core/utils/search_util.dart';
+import '../../widgets/animated_collapse.dart';
 import '../../widgets/page_toolbar.dart';
+import '../../widgets/search_empty_state.dart';
 import '../../widgets/song_tile.dart';
+import '../../widgets/toolbar_search_field.dart';
 import '../playlist/song_actions.dart';
 import 'library_view_model.dart';
 
@@ -24,6 +29,8 @@ class _LibraryPageState extends State<LibraryPage> {
   List<String> _musicFolders = [];
   bool _ready = false;
   Timer? _readyTimer;
+  bool _searchActive = false;
+  String _query = '';
 
   @override
   void initState() {
@@ -103,6 +110,29 @@ class _LibraryPageState extends State<LibraryPage> {
     setState(() => _musicFolders = ServiceLocator.settings.musicFolders);
   }
 
+  // ─── Search ─────────────────────────────────────────────
+
+  /// 搜索模式下的过滤结果；查询为空时返回全量歌曲。
+  List<Song> get _filteredSongs {
+    final q = normalizeQuery(_query);
+    if (q.isEmpty) return _viewModel.songs;
+    return _viewModel.songs
+        .where(
+          (s) =>
+              containsIgnoreCase(s.title, q) ||
+              containsIgnoreCase(s.artist, q) ||
+              containsIgnoreCase(s.album, q),
+        )
+        .toList();
+  }
+
+  void _enterSearch() => setState(() => _searchActive = true);
+
+  void _exitSearch() => setState(() {
+    _searchActive = false;
+    _query = '';
+  });
+
   // ─── Build ──────────────────────────────────────────────
 
   @override
@@ -113,19 +143,44 @@ class _LibraryPageState extends State<LibraryPage> {
       return _buildLoadingState(theme);
     }
 
+    final filtered = _filteredSongs;
+
+    // 单一树：搜索模式下通过 AnimatedCollapse 淡出+塌陷隐藏沙箱警告 /
+    // 扫描进度 / 扫描结果 / 文件夹列表，歌曲列表随之平滑上移（平移效果）。
     return Column(
       children: [
         _buildAppBar(),
-        if (ServiceLocator.sandboxRestoreFailures > 0)
-          _buildSandboxWarning(theme),
-        if (_viewModel.isScanning) _buildScanProgress(theme),
-        if (_viewModel.scanResult != null && !_viewModel.isScanning)
-          _buildScanResult(theme),
+        AnimatedCollapse(
+          visible: !_searchActive && ServiceLocator.sandboxRestoreFailures > 0,
+          child: _buildSandboxWarning(theme),
+        ),
+        AnimatedCollapse(
+          visible: !_searchActive && _viewModel.isScanning,
+          child: _buildScanProgress(theme),
+        ),
+        AnimatedCollapse(
+          visible:
+              !_searchActive &&
+              _viewModel.scanResult != null &&
+              !_viewModel.isScanning,
+          child: _buildScanResult(theme),
+        ),
         const Divider(height: 1),
-        if (_musicFolders.isNotEmpty) _buildFolderList(theme),
-        if (_musicFolders.isEmpty && !_viewModel.isScanning)
-          _buildEmptyState(theme),
-        if (_viewModel.songs.isNotEmpty) _buildSongList(theme),
+        AnimatedCollapse(
+          visible: !_searchActive && _musicFolders.isNotEmpty,
+          child: _buildFolderList(theme),
+        ),
+        if (!_searchActive) ...[
+          if (_musicFolders.isEmpty && !_viewModel.isScanning)
+            _buildEmptyState(theme),
+          if (_viewModel.songs.isNotEmpty)
+            _buildSongList(theme, _viewModel.songs),
+        ] else ...[
+          if (filtered.isEmpty)
+            Expanded(child: SearchEmptyState(query: _query))
+          else
+            _buildSongList(theme, filtered),
+        ],
       ],
     );
   }
@@ -226,12 +281,31 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   Widget _buildAppBar() {
+    if (_searchActive) {
+      final count = _filteredSongs.length;
+      return PageToolbar(
+        title: '音乐库',
+        subtitle: '匹配 $count 首',
+        actions: [
+          ToolbarSearchField(
+            hintText: '搜索歌曲',
+            onChanged: (v) => setState(() => _query = v),
+            onClose: _exitSearch,
+          ),
+        ],
+      );
+    }
     return PageToolbar(
       title: '音乐库',
       subtitle: _viewModel.songs.isNotEmpty
           ? '${_viewModel.songs.length} 首'
           : null,
       actions: [
+        IconButton(
+          icon: const Icon(Icons.search),
+          tooltip: '搜索',
+          onPressed: _enterSearch,
+        ),
         if (_viewModel.songs.isNotEmpty)
           PopupMenuButton<SongSortOrder>(
             tooltip: '排序',
@@ -253,6 +327,7 @@ class _LibraryPageState extends State<LibraryPage> {
               icon: const Icon(Icons.refresh),
               tooltip: '重新扫描',
             ),
+          const SizedBox(width: 8),
           FilledButton.icon(
             onPressed: _pickFolder,
             icon: const Icon(Icons.folder_open, size: 18),
@@ -307,7 +382,10 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   Widget _buildScanResult(ThemeData theme) {
-    final result = _viewModel.scanResult!;
+    final result = _viewModel.scanResult;
+    // AnimatedCollapse 的 child 在隐藏时仍会被构建（淡出结束才卸载），而
+    // 可见性条件依赖 scanResult != null，因此此处必须容忍 null 并返回空。
+    if (result == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       child: Row(
@@ -322,7 +400,8 @@ class _LibraryPageState extends State<LibraryPage> {
           const SizedBox(width: 8),
           Text(
             '扫描完成：${result.added > 0 ? '添加 ${result.added} 首' : '无新文件'}'
-            '${result.markedMissing > 0 ? '，${result.markedMissing} 首已移除' : ''}',
+            '${result.markedMissing > 0 ? '，${result.markedMissing} 首已移除' : ''}'
+            '${result.errors > 0 ? '，${result.errors} 处失败' : ''}',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -377,8 +456,7 @@ class _LibraryPageState extends State<LibraryPage> {
     );
   }
 
-  Widget _buildSongList(ThemeData theme) {
-    final songs = _viewModel.songs;
+  Widget _buildSongList(ThemeData theme, List<Song> songs) {
     return Expanded(
       child: Material(
         type: MaterialType.transparency,
@@ -393,7 +471,7 @@ class _LibraryPageState extends State<LibraryPage> {
               song: song,
               isCurrentSong: isCurrentSong,
               isPlaying: isCurrentSong && _viewModel.isPlaying,
-              onTap: () => _viewModel.playSongFromList(index),
+              onTap: () => _viewModel.playSongsFromList(songs, index),
               menuBuilder: (song) => songMenuItems(song),
               onMenuSelected: (song, value) async {
                 await handleSongMenuAction(context, song, value);

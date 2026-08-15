@@ -5,6 +5,7 @@ import '../../core/database/song_sort_order.dart';
 import '../../core/services/library_scanner_service.dart';
 import '../../core/services/player_service.dart';
 import '../../core/services/service_locator.dart';
+import '../../core/utils/logger.dart';
 
 /// Possible states of the library scan.
 enum LibraryScanState {
@@ -57,6 +58,13 @@ class LibraryViewModel extends ChangeNotifier {
   /// Play a single [song].
   Future<void> playSong(Song song) {
     return ServiceLocator.player.playFromSong(song);
+  }
+
+  /// Play songs in [songs] starting at [index].
+  ///
+  /// 用于搜索结果等过滤列表，保证"下一首"队列语义限定在该列表内。
+  Future<void> playSongsFromList(List<Song> songs, int startIndex) {
+    return ServiceLocator.player.playFromList(songs, startIndex: startIndex);
   }
 
   final _scanner = LibraryScannerService();
@@ -184,8 +192,8 @@ class LibraryViewModel extends ChangeNotifier {
   Future<void> _quickSync(List<String> folders) async {
     try {
       await _scanner.scanFolders(folders, markMissing: false);
-    } catch (_) {
-      // Silently handle quick sync errors
+    } catch (e) {
+      AppLogger.warning('Scan', 'Quick sync failed', e);
     }
     await _syncQueueWithLibrary();
   }
