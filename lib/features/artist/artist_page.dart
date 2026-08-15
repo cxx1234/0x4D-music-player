@@ -258,16 +258,27 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
               child: _SectionHeader(title: '专辑 (${_albums.length})'),
             ),
             SliverToBoxAdapter(
-              child: SizedBox(
-                height: 200,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _albums.length,
-                  itemBuilder: (context, index) {
-                    final album = _albums[index];
-                    return _ArtistAlbumCard(album: album);
-                  },
+              child: Padding(
+                // 专辑卡片区域顶部留 5pt，与上方标题栏隔开
+                padding: const EdgeInsets.only(top: 5),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      // 高度 210：容纳封面 150 + 最多两行标题 + 年份行，年份不会被挤掉
+                      height: 210,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: _albums.length,
+                        itemBuilder: (context, index) {
+                          final album = _albums[index];
+                          return _ArtistAlbumCard(album: album);
+                        },
+                      ),
+                    ),
+                    // 横向列表下方的空白区域，分隔专辑卡片与「歌曲」标题
+                    const SizedBox(height: 16),
+                  ],
                 ),
               ),
             ),
@@ -348,42 +359,83 @@ class _ArtistAlbumCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: () {
-        // 跳转正式专辑详情页（DetailTopBar + 分碟 + 播放全部）
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => AlbumDetailPage(album: album)),
-        );
-      },
-      child: Container(
-        width: 150,
-        margin: const EdgeInsets.only(right: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                width: 150,
-                height: 150,
-                child: CachedAlbumArt(
-                  albumArtFilePath: album.albumArtFilePath,
-                  hasEmbeddedArt: album.albumArtFilePath != null,
-                  size: 150,
-                  borderRadius: 8,
-                ),
+    // 卡片自带透明 Material + Clip.hardEdge：InkWell 的墨迹画在最近的 Material
+    // 上，若不包这一层会画到外层 CustomScrollView 的 Material，水波/hover 高亮
+    // 会渗出横向列表边界；圆角 8 与封面一致，高亮被裁剪在卡片内。
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Material(
+        type: MaterialType.transparency,
+        clipBehavior: Clip.hardEdge,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          // 悬停/按下高亮，与其余可交互卡片保持一致
+          hoverColor: theme.colorScheme.onSurface.withValues(alpha: 0.06),
+          onTap: () {
+            // 跳转正式专辑详情页（DetailTopBar + 分碟 + 播放全部）
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => AlbumDetailPage(album: album)),
+            );
+          },
+          // 卡片内部 2pt padding：内容内缩，墨迹仍覆盖整卡，hover 高亮更清晰
+          child: Padding(
+            padding: const EdgeInsets.all(2),
+            child: SizedBox(
+              width: 150,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: SizedBox(
+                      width: 150,
+                      height: 150,
+                      child: CachedAlbumArt(
+                        albumArtFilePath: album.albumArtFilePath,
+                        hasEmbeddedArt: album.albumArtFilePath != null,
+                        size: 150,
+                        borderRadius: 8,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // 文本区弹性填满剩余高度：标题在上、年份沉底（spaceBetween），
+                  // 两行标题 + 年份也放得下；单行标题时中间空白由 spaceBetween 吸收，
+                  // 底部不显空。标题 Flexible 防超长溢出。
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            album.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        // 年份独立文本块：更小一号、颜色更灰；无年份则整块隐藏
+                        if (album.year != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            '(${album.year})',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontSize: 11,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              album.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

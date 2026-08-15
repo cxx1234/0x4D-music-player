@@ -330,7 +330,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
               ),
             ),
           // 序号/拖拽把手与封面间距（翻倍，避免贴住封面）
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
           SizedBox(
             width: 40,
             height: 40,

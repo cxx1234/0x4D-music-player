@@ -327,6 +327,7 @@ class _LibraryPageState extends State<LibraryPage> {
               icon: const Icon(Icons.refresh),
               tooltip: '重新扫描',
             ),
+          const SizedBox(width: 8),
           FilledButton.icon(
             onPressed: _pickFolder,
             icon: const Icon(Icons.folder_open, size: 18),

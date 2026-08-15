@@ -14,6 +14,10 @@ class AppTheme {
         backgroundColor: scheme.surface,
         scrolledUnderElevation: 0,
       ),
+      // 弹出菜单统一大圆角（M3 默认仅 4，偏方像 M2）；明暗两套一致。
+      popupMenuTheme: PopupMenuThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
     );
   }
 
@@ -28,6 +32,10 @@ class AppTheme {
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface,
         scrolledUnderElevation: 0,
+      ),
+      // 弹出菜单统一大圆角（M3 默认仅 4，偏方像 M2）；明暗两套一致。
+      popupMenuTheme: PopupMenuThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }

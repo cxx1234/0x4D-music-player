@@ -151,6 +151,12 @@ class SongRepository {
     }
   }
 
+  /// 若已有专辑的 year 为空且当前歌曲提供了年份，则补写。
+  Future<void> _fillYearIfEmpty(Album album, ScannedSong song) async {
+    if (album.year != null || song.year == null) return;
+    await _db.updateAlbum(AlbumsCompanion(year: Value(song.year)), album.id);
+  }
+
   // ─── File paths (for sync) ─────────────────────────────
 
   /// Returns the set of all available file paths in the database.
@@ -266,6 +272,7 @@ class SongRepository {
       final existing = await _db.getAlbumByNameAndArtist(albumName, artistId);
       if (existing != null) {
         await _fillAlbumArtistIfEmpty(existing, song);
+        await _fillYearIfEmpty(existing, song);
         final artPath = await _ensureAlbumArt(existing, song, albumKey);
         return (existing.id, artPath);
       }
@@ -275,6 +282,7 @@ class SongRepository {
     final byName = await _db.getAlbumByName(albumName);
     if (byName != null && !_isDistinctAlbum(byName, song.albumArtist)) {
       await _fillAlbumArtistIfEmpty(byName, song);
+      await _fillYearIfEmpty(byName, song);
       final artPath = await _ensureAlbumArt(byName, song, albumKey);
       return (byName.id, artPath);
     }
@@ -309,6 +317,7 @@ class SongRepository {
         albumArtist: Value(albumArtist),
         nameSortKey: Value(buildSortKey(albumName)),
         albumArtFilePath: Value(albumArtPath),
+        year: Value(song.year),
       ),
     );
 

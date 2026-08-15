@@ -203,13 +203,15 @@ class SongTile extends StatelessWidget {
                     : theme.colorScheme.onSurfaceVariant,
               ),
             ),
-          if (hasMenu)
+          if (hasMenu) ...[
+            const SizedBox(width: 4),
             PopupMenuButton<String>(
               tooltip: '更多',
               icon: const Icon(Icons.more_vert),
               onSelected: (value) => onMenuSelected?.call(song, value),
               itemBuilder: (context) => menu,
             ),
+          ],
         ],
       ),
       onTap: onTap,
