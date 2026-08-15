@@ -292,7 +292,7 @@ class _LeftPanel extends StatelessWidget {
             contentHeight: constraints.maxHeight,
           );
 
-          // 封面 + 播放信息（与封面同宽、左对齐）居中；进度条横贯父容器全宽。
+          // 封面（与封面同宽、左对齐）居中；信息 / 进度条横贯父容器全宽。
           return Column(
             mainAxisSize: isNarrow ? MainAxisSize.min : MainAxisSize.max,
             mainAxisAlignment: isNarrow
@@ -301,24 +301,11 @@ class _LeftPanel extends StatelessWidget {
             children: [
               SizedBox(
                 width: coverSize,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _AlbumArt(song: song, size: coverSize),
-                    const SizedBox(height: 32),
-                    // 播放信息在专辑下方，宽度与封面一致。
-                    SizedBox(
-                      width: coverSize,
-                      child: _SongInfo(
-                        song: song,
-                        theme: theme,
-                        isNarrow: isNarrow,
-                      ),
-                    ),
-                  ],
-                ),
+                child: _AlbumArt(song: song, size: coverSize),
               ),
+              const SizedBox(height: 32),
+              // 播放信息横贯父容器全宽（与进度条一致，不再绑定封面宽度）。
+              _SongInfo(song: song, theme: theme, isNarrow: isNarrow),
               const SizedBox(height: 20),
               // 进度条横贯父容器全宽（不再与封面同宽）。
               _ProgressBar(viewModel: viewModel, theme: theme),
