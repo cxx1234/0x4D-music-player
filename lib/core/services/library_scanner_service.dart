@@ -171,6 +171,15 @@ class LibraryScannerService {
     // Count newly added (or updated) files for the result summary.
     final addedCount = updateExisting ? filesToParse.length : newFiles.length;
 
+    // 扫描完成（元数据解析已结束）后统一记录：扫描位置、收集到的文件总数、
+    // 以及目录级错误数。无论成功失败都有记录。
+    AppLogger.info(
+      'Scan',
+      'Scan done: ${folderPaths.join(', ')} — '
+          'found ${diskFiles.length} audio file(s), '
+          '${errorDetails.length} error(s)',
+    );
+
     // 批量失败聚合为一条 error 日志,避免逐文件刷屏(单文件失败已在上层
     // 记录 warning)。
     if (errorDetails.isNotEmpty) {
