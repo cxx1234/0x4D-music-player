@@ -20,6 +20,7 @@
 ## 2. 日志约定
 
 * **唯一出口**:`AppLogger`(`lib/core/utils/logger.dart`)。**业务日志禁用 `debugPrint`**,一律走 AppLogger。
+* **落盘策略**:**Debug 默认不落盘**——只走 `debugPrint` 控制台(开发期 VS Code 终端可见),不产生文件 I/O;因此 Debug 下应用内"日志查看页"为空属预期。**Release/Profile 始终落盘**。测试若显式调用 `AppLogger.setLogDirectory(dir)` 覆盖目录,则 Debug 下仍落盘(`test/logger_test.dart` 依赖此行为)。
 * **位置**:`{appDocDir}/logs/app-YYYY-MM-DD.log`(与 `music_library.db` 同根)。
 * **轮转**:按天分文件;启动时 `AppLogger.pruneOldLogs()` 保留 7 天;单文件超 5MB 截断。正常使用总量 KB 级,无需人工清理。
 * **格式**:每行 `yyyy-MM-dd HH:mm:ss.SSS [级别定宽5] [tag定宽10] message`;`error`/`fatal` 追加异常与堆栈(缩进两空格)。

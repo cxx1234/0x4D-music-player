@@ -24,6 +24,12 @@ enum AppLogLevel {
 /// 1. `debugPrint`(开发期控制台,保留原有调试体验);
 /// 2. `{appDocDir}/logs/app-YYYY-MM-DD.log`(按天分文件,启动时清理旧文件)。
 ///
+/// **落盘策略**:
+/// - **Debug 默认不落盘**——只走 `debugPrint` 控制台(开发期在 VS Code 终端可见即可,
+///   避免无谓磁盘 I/O)。若测试显式调用 `setLogDirectory` 覆盖目录,则 debug 下仍落盘。
+/// - **Release/Profile 始终落盘**——正式版用户机器上的日志依赖文件回传诊断。
+/// - 因此 Debug 构建下应用内"日志查看页"(`LogPage`)为空属预期,日志请从控制台查看。
+///
 /// 约定:消息用英文(与堆栈/框架日志统一);tag 用分类名
 /// (App/Startup/Player/Scan/Sandbox/DB/Cache/M3U/Settings/FolderWatch/Zone/Flutter/Platform)。
 ///
@@ -135,12 +141,18 @@ abstract final class AppLogger {
     if (error != null) debugPrint('  $error');
     if (stack != null) debugPrint('  $stack');
 
-    // 串行排队写盘(不阻塞调用方)。
-    // 前一条写盘无论成败都不阻断后续日志:否则一旦某条 _append 抛异常把 _pending
-    // 打成 rejected,后续所有日志会被静默跳过(日志"神秘消失"的根因)。
-    _pending = _pending
-        .catchError((_) {})
-        .then((_) => _append(now, line, error, stack));
+    // 落盘守卫:Debug 模式默认不写文件(日志只看控制台),避免无谓磁盘 I/O;
+    // 但测试经 setLogDirectory 显式覆盖目录时仍落盘(否则 logger_test 无法验证文件行为)。
+    // 注:flutter test 默认 kDebugMode=true —— 不写盘也顺带消除了 widget 测试里
+    // _append 的 .timeout(2s) 定时器残留问题(test/widget_test.dart)。
+    if (!kDebugMode || _logDir != null) {
+      // 串行排队写盘(不阻塞调用方)。
+      // 前一条写盘无论成败都不阻断后续日志:否则一旦某条 _append 抛异常把 _pending
+      // 打成 rejected,后续所有日志会被静默跳过(日志"神秘消失"的根因)。
+      _pending = _pending
+          .catchError((_) {})
+          .then((_) => _append(now, line, error, stack));
+    }
   }
 
   static String _format(
