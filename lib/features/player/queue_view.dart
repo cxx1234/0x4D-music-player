@@ -1,15 +1,60 @@
 import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
+import '../../core/services/player_service.dart';
 import '../../widgets/song_tile.dart';
 import 'player_view_model.dart';
+
+/// 队列底部状态行文案：跟随循环/随机模式变化。
+///
+/// - off + 未随机：顺序播放（滚动到底显示「· 到底了」）
+/// - off + 随机：随机播放（滚动到底显示「· 到底了」）
+/// - all：循环整个列表（可叠加随机）
+/// - one：单曲循环
+///
+/// [atBottom]：列表滚动到底时传 true，追加「· 到底了」（仅不循环模式有意义）。
+String queueFooterText(
+  PlayerRepeatMode repeatMode,
+  bool isShuffled, {
+  bool atBottom = false,
+}) {
+  switch (repeatMode) {
+    case PlayerRepeatMode.one:
+      return '单曲循环播放';
+    case PlayerRepeatMode.all:
+      return isShuffled ? '随机 · 循环列表播放' : '循环列表播放';
+    case PlayerRepeatMode.off:
+      final base = isShuffled ? '随机播放' : '顺序播放';
+      return atBottom ? '$base · 到底了' : base;
+  }
+}
+
+/// 队列底部状态行图标：与文案同步。
+IconData _queueFooterIcon(PlayerRepeatMode repeatMode, bool isShuffled) {
+  switch (repeatMode) {
+    case PlayerRepeatMode.one:
+      return Icons.repeat_one_rounded;
+    case PlayerRepeatMode.all:
+      return Icons.repeat_rounded;
+    case PlayerRepeatMode.off:
+      return isShuffled ? Icons.shuffle_rounded : Icons.playlist_play_rounded;
+  }
+}
 
 /// 当前播放队列视图：清空 / 选择删除 / 手动排序。
 class QueueView extends StatefulWidget {
   final PlayerViewModel viewModel;
   final ThemeData theme;
 
-  const QueueView({super.key, required this.viewModel, required this.theme});
+  /// 窄版内嵌时传 true：「共 N 首」左侧加 margin（宽版右栏为 false，无 margin）。
+  final bool isNarrow;
+
+  const QueueView({
+    super.key,
+    required this.viewModel,
+    required this.theme,
+    this.isNarrow = false,
+  });
 
   @override
   State<QueueView> createState() => _QueueViewState();
@@ -20,6 +65,11 @@ class _QueueViewState extends State<QueueView> {
   bool _reorderMode = false;
   final Set<int> _selectedIndices = {};
   final ScrollController _scrollController = ScrollController();
+
+  // 工具条底部阴影：列表滚离顶部时出现（回顶消失）。
+  bool _toolbarShadowed = false;
+  // 状态行顶部阴影：列表滚离底部时出现（回底消失）。
+  bool _footerShadowed = false;
 
   // 上次已知的当前播放索引；变化时自动滚动到高亮项。
   int? _lastCurrentIndex;
@@ -57,7 +107,7 @@ class _QueueViewState extends State<QueueView> {
   // 不会像“逐行估算高度”那样在大列表下累积误差导致高亮滚动失效。
   static const double _kQueueTileExtent = 72;
 
-  // 滚动到当前播放项并尽量居中显示（先快后慢 easeOutCubic，400ms）。
+  // 滚动到当前播放项并置于视口顶部（先快后慢 easeOutCubic，400ms）。
   void _scrollToCurrent() {
     if (!mounted) return;
     final index = vm.currentIndex;
@@ -65,11 +115,11 @@ class _QueueViewState extends State<QueueView> {
     if (index < 0 || index >= queue.length) return;
     if (!_scrollController.hasClients) return;
 
-    // 偏移 = index * 固定行高，再减去半个视口使目标居中。
-    final target =
-        (index * _kQueueTileExtent -
-                _scrollController.position.viewportDimension / 2)
-            .clamp(0.0, _scrollController.position.maxScrollExtent);
+    // 偏移 = index * 固定行高：当前项贴视口顶部（列表到底时钳制到底部）。
+    final target = (index * _kQueueTileExtent).clamp(
+      0.0,
+      _scrollController.position.maxScrollExtent,
+    );
     _scrollController.animateTo(
       target,
       duration: const Duration(milliseconds: 400),
@@ -84,6 +134,9 @@ class _QueueViewState extends State<QueueView> {
         _selectedIndices.clear();
       }
       _reorderMode = false;
+      // 模式切换后列表重建，阴影状态一并复位。
+      _toolbarShadowed = false;
+      _footerShadowed = false;
     });
   }
 
@@ -94,6 +147,8 @@ class _QueueViewState extends State<QueueView> {
         _deleteMode = false;
         _selectedIndices.clear();
       }
+      _toolbarShadowed = false;
+      _footerShadowed = false;
     });
   }
 
@@ -148,18 +203,75 @@ class _QueueViewState extends State<QueueView> {
 
     return Column(
       children: [
-        _buildToolbar(queue.length),
+        // 工具条：列表滚离顶部时底部出现轻阴影（回顶消失）。
+        AnimatedPhysicalModel(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          shape: BoxShape.rectangle,
+          elevation: _toolbarShadowed ? 2 : 0,
+          color: theme.colorScheme.surface,
+          shadowColor: theme.colorScheme.shadow,
+          child: _buildToolbar(queue.length),
+        ),
         Expanded(
-          child: Material(
-            type: MaterialType.transparency,
-            clipBehavior: Clip.hardEdge,
-            child: _reorderMode
-                ? _buildReorderableList(queue)
-                : _buildList(queue),
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _handleScroll,
+            child: Material(
+              type: MaterialType.transparency,
+              clipBehavior: Clip.hardEdge,
+              child: _reorderMode
+                  ? _buildReorderableList(queue)
+                  : _buildList(queue),
+            ),
           ),
         ),
+        // 状态行：始终钉在底部；列表滚离底部时顶部出现一道向上渐变阴影（回底消失）。
+        if (!_deleteMode && !_reorderMode) ...[
+          AnimatedOpacity(
+            opacity: _footerShadowed ? 1 : 0,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            child: IgnorePointer(
+              child: Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  // 仅向上投影：顶部透明 → 紧贴状态行顶边渐深，无侧向扩散。
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      theme.colorScheme.shadow.withValues(alpha: 0.14),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            color: theme.colorScheme.surface,
+            child: _buildFooter(),
+          ),
+        ],
       ],
     );
+  }
+
+  // 滚动时更新两侧阴影：离开顶部 → 工具条阴影；离开底部 → 状态行阴影。
+  bool _handleScroll(ScrollNotification notification) {
+    final metrics = notification.metrics;
+    final toolbarShadowed = metrics.extentBefore > 0;
+    final footerShadowed = metrics.extentAfter > 0;
+    if (toolbarShadowed != _toolbarShadowed ||
+        footerShadowed != _footerShadowed) {
+      setState(() {
+        _toolbarShadowed = toolbarShadowed;
+        _footerShadowed = footerShadowed;
+      });
+    }
+    return false;
   }
 
   Widget _buildToolbar(int count) {
@@ -167,10 +279,13 @@ class _QueueViewState extends State<QueueView> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Row(
         children: [
-          Text(
-            '共 $count 首',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+          Padding(
+            padding: EdgeInsets.only(left: widget.isNarrow ? 12 : 0),
+            child: Text(
+              '共 $count 首',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           const Spacer(),
@@ -215,6 +330,36 @@ class _QueueViewState extends State<QueueView> {
               onPressed: _toggleReorderMode,
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooter() {
+    final icon = _queueFooterIcon(vm.repeatMode, vm.isShuffled);
+    final text = queueFooterText(
+      vm.repeatMode,
+      vm.isShuffled,
+      // 列表滚动到底（extentAfter == 0）时才显示「· 到底了」。
+      atBottom: !_footerShadowed,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
         ],
       ),
     );
