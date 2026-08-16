@@ -141,6 +141,17 @@ class $SongsTable extends Songs with TableInfo<$SongsTable, Song> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _lastModifiedMsMeta = const VerificationMeta(
+    'lastModifiedMs',
+  );
+  @override
+  late final GeneratedColumn<int> lastModifiedMs = GeneratedColumn<int>(
+    'last_modified_ms',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _mimeTypeMeta = const VerificationMeta(
     'mimeType',
   );
@@ -310,6 +321,7 @@ class $SongsTable extends Songs with TableInfo<$SongsTable, Song> {
     filePath,
     fileName,
     fileSize,
+    lastModifiedMs,
     mimeType,
     year,
     genre,
@@ -413,6 +425,15 @@ class $SongsTable extends Songs with TableInfo<$SongsTable, Song> {
       context.handle(
         _fileSizeMeta,
         fileSize.isAcceptableOrUnknown(data['file_size']!, _fileSizeMeta),
+      );
+    }
+    if (data.containsKey('last_modified_ms')) {
+      context.handle(
+        _lastModifiedMsMeta,
+        lastModifiedMs.isAcceptableOrUnknown(
+          data['last_modified_ms']!,
+          _lastModifiedMsMeta,
+        ),
       );
     }
     if (data.containsKey('mime_type')) {
@@ -576,6 +597,10 @@ class $SongsTable extends Songs with TableInfo<$SongsTable, Song> {
         DriftSqlType.int,
         data['${effectivePrefix}file_size'],
       ),
+      lastModifiedMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_modified_ms'],
+      ),
       mimeType: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}mime_type'],
@@ -654,6 +679,7 @@ class Song extends DataClass implements Insertable<Song> {
   final String filePath;
   final String fileName;
   final int? fileSize;
+  final int? lastModifiedMs;
   final String? mimeType;
   final int? year;
   final String? genre;
@@ -683,6 +709,7 @@ class Song extends DataClass implements Insertable<Song> {
     required this.filePath,
     required this.fileName,
     this.fileSize,
+    this.lastModifiedMs,
     this.mimeType,
     this.year,
     this.genre,
@@ -728,6 +755,9 @@ class Song extends DataClass implements Insertable<Song> {
     map['file_name'] = Variable<String>(fileName);
     if (!nullToAbsent || fileSize != null) {
       map['file_size'] = Variable<int>(fileSize);
+    }
+    if (!nullToAbsent || lastModifiedMs != null) {
+      map['last_modified_ms'] = Variable<int>(lastModifiedMs);
     }
     if (!nullToAbsent || mimeType != null) {
       map['mime_type'] = Variable<String>(mimeType);
@@ -792,6 +822,9 @@ class Song extends DataClass implements Insertable<Song> {
       fileSize: fileSize == null && nullToAbsent
           ? const Value.absent()
           : Value(fileSize),
+      lastModifiedMs: lastModifiedMs == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastModifiedMs),
       mimeType: mimeType == null && nullToAbsent
           ? const Value.absent()
           : Value(mimeType),
@@ -841,6 +874,7 @@ class Song extends DataClass implements Insertable<Song> {
       filePath: serializer.fromJson<String>(json['filePath']),
       fileName: serializer.fromJson<String>(json['fileName']),
       fileSize: serializer.fromJson<int?>(json['fileSize']),
+      lastModifiedMs: serializer.fromJson<int?>(json['lastModifiedMs']),
       mimeType: serializer.fromJson<String?>(json['mimeType']),
       year: serializer.fromJson<int?>(json['year']),
       genre: serializer.fromJson<String?>(json['genre']),
@@ -873,6 +907,7 @@ class Song extends DataClass implements Insertable<Song> {
       'filePath': serializer.toJson<String>(filePath),
       'fileName': serializer.toJson<String>(fileName),
       'fileSize': serializer.toJson<int?>(fileSize),
+      'lastModifiedMs': serializer.toJson<int?>(lastModifiedMs),
       'mimeType': serializer.toJson<String?>(mimeType),
       'year': serializer.toJson<int?>(year),
       'genre': serializer.toJson<String?>(genre),
@@ -903,6 +938,7 @@ class Song extends DataClass implements Insertable<Song> {
     String? filePath,
     String? fileName,
     Value<int?> fileSize = const Value.absent(),
+    Value<int?> lastModifiedMs = const Value.absent(),
     Value<String?> mimeType = const Value.absent(),
     Value<int?> year = const Value.absent(),
     Value<String?> genre = const Value.absent(),
@@ -930,6 +966,9 @@ class Song extends DataClass implements Insertable<Song> {
     filePath: filePath ?? this.filePath,
     fileName: fileName ?? this.fileName,
     fileSize: fileSize.present ? fileSize.value : this.fileSize,
+    lastModifiedMs: lastModifiedMs.present
+        ? lastModifiedMs.value
+        : this.lastModifiedMs,
     mimeType: mimeType.present ? mimeType.value : this.mimeType,
     year: year.present ? year.value : this.year,
     genre: genre.present ? genre.value : this.genre,
@@ -969,6 +1008,9 @@ class Song extends DataClass implements Insertable<Song> {
       filePath: data.filePath.present ? data.filePath.value : this.filePath,
       fileName: data.fileName.present ? data.fileName.value : this.fileName,
       fileSize: data.fileSize.present ? data.fileSize.value : this.fileSize,
+      lastModifiedMs: data.lastModifiedMs.present
+          ? data.lastModifiedMs.value
+          : this.lastModifiedMs,
       mimeType: data.mimeType.present ? data.mimeType.value : this.mimeType,
       year: data.year.present ? data.year.value : this.year,
       genre: data.genre.present ? data.genre.value : this.genre,
@@ -1017,6 +1059,7 @@ class Song extends DataClass implements Insertable<Song> {
           ..write('filePath: $filePath, ')
           ..write('fileName: $fileName, ')
           ..write('fileSize: $fileSize, ')
+          ..write('lastModifiedMs: $lastModifiedMs, ')
           ..write('mimeType: $mimeType, ')
           ..write('year: $year, ')
           ..write('genre: $genre, ')
@@ -1049,6 +1092,7 @@ class Song extends DataClass implements Insertable<Song> {
     filePath,
     fileName,
     fileSize,
+    lastModifiedMs,
     mimeType,
     year,
     genre,
@@ -1080,6 +1124,7 @@ class Song extends DataClass implements Insertable<Song> {
           other.filePath == this.filePath &&
           other.fileName == this.fileName &&
           other.fileSize == this.fileSize &&
+          other.lastModifiedMs == this.lastModifiedMs &&
           other.mimeType == this.mimeType &&
           other.year == this.year &&
           other.genre == this.genre &&
@@ -1109,6 +1154,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
   final Value<String> filePath;
   final Value<String> fileName;
   final Value<int?> fileSize;
+  final Value<int?> lastModifiedMs;
   final Value<String?> mimeType;
   final Value<int?> year;
   final Value<String?> genre;
@@ -1136,6 +1182,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
     this.filePath = const Value.absent(),
     this.fileName = const Value.absent(),
     this.fileSize = const Value.absent(),
+    this.lastModifiedMs = const Value.absent(),
     this.mimeType = const Value.absent(),
     this.year = const Value.absent(),
     this.genre = const Value.absent(),
@@ -1164,6 +1211,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
     required String filePath,
     required String fileName,
     this.fileSize = const Value.absent(),
+    this.lastModifiedMs = const Value.absent(),
     this.mimeType = const Value.absent(),
     this.year = const Value.absent(),
     this.genre = const Value.absent(),
@@ -1195,6 +1243,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
     Expression<String>? filePath,
     Expression<String>? fileName,
     Expression<int>? fileSize,
+    Expression<int>? lastModifiedMs,
     Expression<String>? mimeType,
     Expression<int>? year,
     Expression<String>? genre,
@@ -1223,6 +1272,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
       if (filePath != null) 'file_path': filePath,
       if (fileName != null) 'file_name': fileName,
       if (fileSize != null) 'file_size': fileSize,
+      if (lastModifiedMs != null) 'last_modified_ms': lastModifiedMs,
       if (mimeType != null) 'mime_type': mimeType,
       if (year != null) 'year': year,
       if (genre != null) 'genre': genre,
@@ -1253,6 +1303,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
     Value<String>? filePath,
     Value<String>? fileName,
     Value<int?>? fileSize,
+    Value<int?>? lastModifiedMs,
     Value<String?>? mimeType,
     Value<int?>? year,
     Value<String?>? genre,
@@ -1281,6 +1332,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
       filePath: filePath ?? this.filePath,
       fileName: fileName ?? this.fileName,
       fileSize: fileSize ?? this.fileSize,
+      lastModifiedMs: lastModifiedMs ?? this.lastModifiedMs,
       mimeType: mimeType ?? this.mimeType,
       year: year ?? this.year,
       genre: genre ?? this.genre,
@@ -1336,6 +1388,9 @@ class SongsCompanion extends UpdateCompanion<Song> {
     }
     if (fileSize.present) {
       map['file_size'] = Variable<int>(fileSize.value);
+    }
+    if (lastModifiedMs.present) {
+      map['last_modified_ms'] = Variable<int>(lastModifiedMs.value);
     }
     if (mimeType.present) {
       map['mime_type'] = Variable<String>(mimeType.value);
@@ -1397,6 +1452,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
           ..write('filePath: $filePath, ')
           ..write('fileName: $fileName, ')
           ..write('fileSize: $fileSize, ')
+          ..write('lastModifiedMs: $lastModifiedMs, ')
           ..write('mimeType: $mimeType, ')
           ..write('year: $year, ')
           ..write('genre: $genre, ')
@@ -3039,6 +3095,7 @@ typedef $$SongsTableCreateCompanionBuilder =
       required String filePath,
       required String fileName,
       Value<int?> fileSize,
+      Value<int?> lastModifiedMs,
       Value<String?> mimeType,
       Value<int?> year,
       Value<String?> genre,
@@ -3068,6 +3125,7 @@ typedef $$SongsTableUpdateCompanionBuilder =
       Value<String> filePath,
       Value<String> fileName,
       Value<int?> fileSize,
+      Value<int?> lastModifiedMs,
       Value<String?> mimeType,
       Value<int?> year,
       Value<String?> genre,
@@ -3150,6 +3208,11 @@ class $$SongsTableFilterComposer
 
   ColumnFilters<int> get fileSize => $composableBuilder(
     column: $table.fileSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastModifiedMs => $composableBuilder(
+    column: $table.lastModifiedMs,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3293,6 +3356,11 @@ class $$SongsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get lastModifiedMs => $composableBuilder(
+    column: $table.lastModifiedMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get mimeType => $composableBuilder(
     column: $table.mimeType,
     builder: (column) => ColumnOrderings(column),
@@ -3415,6 +3483,11 @@ class $$SongsTableAnnotationComposer
   GeneratedColumn<int> get fileSize =>
       $composableBuilder(column: $table.fileSize, builder: (column) => column);
 
+  GeneratedColumn<int> get lastModifiedMs => $composableBuilder(
+    column: $table.lastModifiedMs,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get mimeType =>
       $composableBuilder(column: $table.mimeType, builder: (column) => column);
 
@@ -3514,6 +3587,7 @@ class $$SongsTableTableManager
                 Value<String> filePath = const Value.absent(),
                 Value<String> fileName = const Value.absent(),
                 Value<int?> fileSize = const Value.absent(),
+                Value<int?> lastModifiedMs = const Value.absent(),
                 Value<String?> mimeType = const Value.absent(),
                 Value<int?> year = const Value.absent(),
                 Value<String?> genre = const Value.absent(),
@@ -3541,6 +3615,7 @@ class $$SongsTableTableManager
                 filePath: filePath,
                 fileName: fileName,
                 fileSize: fileSize,
+                lastModifiedMs: lastModifiedMs,
                 mimeType: mimeType,
                 year: year,
                 genre: genre,
@@ -3570,6 +3645,7 @@ class $$SongsTableTableManager
                 required String filePath,
                 required String fileName,
                 Value<int?> fileSize = const Value.absent(),
+                Value<int?> lastModifiedMs = const Value.absent(),
                 Value<String?> mimeType = const Value.absent(),
                 Value<int?> year = const Value.absent(),
                 Value<String?> genre = const Value.absent(),
@@ -3597,6 +3673,7 @@ class $$SongsTableTableManager
                 filePath: filePath,
                 fileName: fileName,
                 fileSize: fileSize,
+                lastModifiedMs: lastModifiedMs,
                 mimeType: mimeType,
                 year: year,
                 genre: genre,

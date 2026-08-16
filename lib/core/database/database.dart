@@ -19,7 +19,7 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
   FlutterMusicDatabase(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -43,6 +43,9 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
           await m.addColumn(artists, artists.nameSortKey);
           await m.createTable(playlists);
           await m.createTable(playlistSongs);
+        }
+        if (from <= 4) {
+          await m.addColumn(songs, songs.lastModifiedMs);
         }
       },
     );
@@ -73,8 +76,9 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
 
   Future<int> insertSong(SongsCompanion entry) => into(songs).insert(entry);
 
-  Future<int> insertSongOnConflictReplace(SongsCompanion entry) =>
-      into(songs).insertOnConflictUpdate(entry);
+  Future<int> insertSongOnConflictReplace(SongsCompanion entry) => into(
+    songs,
+  ).insert(entry, onConflict: DoUpdate((_) => entry, target: [songs.filePath]));
 
   Future<int> deleteSong(Song song) => delete(songs).delete(song);
 
@@ -132,6 +136,38 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
     )..where((t) => t.isAvailable.equals(1))).map((s) => s.filePath).get();
   }
 
+  /// 返回已存在歌曲的文件时间戳(file_size + last_modified_ms),按路径索引。
+  ///
+  /// 供扫描"变化检测"使用:只有 mtime 或大小与上次扫描不同才会被重解析。
+  Future<Map<String, ({int? lastModifiedMs, int? fileSize})>>
+  getExistingFileStats() async {
+    final rows = await (select(
+      songs,
+    )..where((t) => t.isAvailable.equals(1))).get();
+    return {
+      for (final s in rows)
+        s.filePath: (lastModifiedMs: s.lastModifiedMs, fileSize: s.fileSize),
+    };
+  }
+
+  /// 返回当前仍被专辑或歌曲引用的所有封面文件路径(用于清理孤儿封面)。
+  Future<Set<String>> getAllAlbumArtPaths() async {
+    final albumRows =
+        await (selectOnly(albums)
+              ..addColumns([albums.albumArtFilePath])
+              ..where(albums.albumArtFilePath.isNotNull()))
+            .get();
+    final songRows =
+        await (selectOnly(songs)
+              ..addColumns([songs.albumArtFilePath])
+              ..where(songs.albumArtFilePath.isNotNull()))
+            .get();
+    return {
+      for (final r in albumRows) r.read(albums.albumArtFilePath)!,
+      for (final r in songRows) r.read(songs.albumArtFilePath)!,
+    };
+  }
+
   Future<List<String>> getFolderFilePaths(String folderPath) async {
     final pattern = '$folderPath%';
     return (select(songs)
@@ -162,17 +198,18 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
       final deleted = await (delete(
         songs,
       )..where((t) => t.filePath.like(pattern))).go();
-      await _cleanupOrphans();
+      await cleanupOrphans();
       return deleted;
     });
   }
 
   /// Removes rows in [playlistSongs] / [albums] / [artists] that no longer
-  /// reference any song in the `songs` table (e.g. after a folder is removed).
+  /// reference any song in the `songs` table (e.g. after a folder is removed,
+  /// or a full scan moved songs to other albums).
   ///
   /// Rows for songs merely marked unavailable (`isAvailable=0`) are kept —
   /// those still exist and may come back on a later scan.
-  Future<void> _cleanupOrphans() async {
+  Future<void> cleanupOrphans() async {
     // 1. Playlist rows pointing at deleted songs.
     final songRows = await (selectOnly(songs)..addColumns([songs.id])).get();
     final songIds = songRows

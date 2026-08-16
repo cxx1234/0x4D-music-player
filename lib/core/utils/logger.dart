@@ -45,6 +45,9 @@ abstract final class AppLogger {
   static IOSink? _sink;
   static String? _sinkDay;
 
+  /// Debug 构建下"日志不落盘"的一次性提示标志,避免反复刷屏。
+  static bool _debugNoDiskHintShown = false;
+
   /// 写文件队列链:保证同一文件被串行追加,避免并发交错。
   static Future<void> _pending = Future.value();
 
@@ -140,6 +143,19 @@ abstract final class AppLogger {
     debugPrint(line);
     if (error != null) debugPrint('  $error');
     if (stack != null) debugPrint('  $stack');
+
+    // Debug 构建下日志不落盘(仅控制台可见)。首次输出日志时提示一次,避免
+    // 开发者误以为日志"丢失"——应用内日志页 / logs 文件为空均属预期。
+    if (kDebugMode && _logDir == null) {
+      if (!_debugNoDiskHintShown) {
+        _debugNoDiskHintShown = true;
+        debugPrint(
+          '[AppLogger] Note: Debug build — logs go to console only, '
+          'not written to disk (LogPage / log files stay empty). '
+          'Use a Release/Profile build for file-based logs.',
+        );
+      }
+    }
 
     // 落盘守卫:Debug 模式默认不写文件(日志只看控制台),避免无谓磁盘 I/O;
     // 但测试经 setLogDirectory 显式覆盖目录时仍落盘(否则 logger_test 无法验证文件行为)。

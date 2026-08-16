@@ -107,6 +107,27 @@ class AlbumArtCacheService {
     return File(path).exists();
   }
 
+  /// 删除 `covers/` 目录中未被 [keepFileNames] 引用的封面文件。
+  ///
+  /// [keepFileNames] 为仍被引用的文件名集合(如 `a1b2c3d4.jpg`)。
+  /// 返回删除的文件数。
+  Future<int> deleteOrphans(Set<String> keepFileNames) async {
+    final dir = await cacheDir;
+    if (!await dir.exists()) return 0;
+    var deleted = 0;
+    await for (final entity in dir.list()) {
+      if (entity is! File) continue;
+      if (keepFileNames.contains(p.basename(entity.path))) continue;
+      try {
+        await entity.delete();
+        deleted++;
+      } catch (e) {
+        AppLogger.warning('Cache', 'Failed to delete orphan art', e);
+      }
+    }
+    return deleted;
+  }
+
   /// Computes a deterministic hash of [path] to use as a stable file name.
   ///
   /// Uses a simple FNV-1a hash over the UTF-8 bytes, which is deterministic

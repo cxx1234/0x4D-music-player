@@ -42,11 +42,13 @@ class MetadataService {
 
     // ── Look for external .lrc lyrics file ────────────────
     final lyricsPath = _findLrcFile(filePath);
+    final stat = await file.stat();
 
     return ScannedSong(
       filePath: filePath,
       fileName: fileName,
-      fileSize: await file.length(),
+      fileSize: stat.size,
+      lastModifiedMs: stat.modified.millisecondsSinceEpoch,
       title: title,
       artist: _nullIfEmpty(metadata.artist),
       albumArtist: _nullIfEmpty(metadata.albumArtist),
@@ -89,11 +91,13 @@ class MetadataService {
         // and attempt to associate a .lrc file.
         final fileName = p.basename(path);
         final lyricsPath = _findLrcFile(path);
+        final fallbackStat = await File(path).stat();
         results.add(
           ScannedSong(
             filePath: path,
             fileName: fileName,
-            fileSize: await File(path).length(),
+            fileSize: fallbackStat.size,
+            lastModifiedMs: fallbackStat.modified.millisecondsSinceEpoch,
             title: p.basenameWithoutExtension(path),
             mimeType: mimeTypeForPath(path) ?? 'audio/unknown',
             lyricsFilePath: lyricsPath,
