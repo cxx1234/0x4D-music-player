@@ -5,12 +5,11 @@ import 'package:flutter/material.dart';
 import '../../core/constants/layout.dart';
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
-import '../../widgets/cached_album_art.dart';
-import '../../widgets/player_controls.dart';
-import '../../widgets/player_progress_bar.dart';
-import '../../widgets/text_link.dart';
+import '../../widgets/player_bar.dart';
+import '../../widgets/song_info_card.dart';
 import '../album/album_page.dart';
 import '../artist/artist_page.dart';
+import '../playlist/song_actions.dart';
 import '../shell/shell_page.dart';
 import 'lyrics_view.dart';
 import 'player_ui_state.dart';
@@ -37,44 +36,20 @@ class PlayerPage extends StatefulWidget {
   State<PlayerPage> createState() => _PlayerPageState();
 }
 
-// 宽模式断点：窗口宽度低于此值时隐藏右栏，进入单栏窄模式。
-const double _kWideBreakpoint = 760;
+// 宽模式断点：窗口宽度低于此值时进入单栏窄模式。
+// 500 ≤ 50% 窗口宽（即窗口 ≥ 1000）时转宽版（用户 2026-08-17 定，先实现看效果）。
+const double _kWideBreakpoint = 1000;
 
-// 宽模式下左栏（封面/信息/控制）最小宽度：与当前固定值一致（420）。
-const double _kMinLeftPanelWidth = 420;
+// 宽模式下信息卡最小宽度（用户 2026-08-17：500~40%）。
+const double _kMinInfoCardWidth = 500;
 
-// 宽模式下左栏最大宽度 = 窗口全宽的 33%。
-const double _kLeftPanelFactor = 0.33;
+// 宽模式下信息卡最大宽度 = 窗口全宽的 40%。
+const double _kInfoCardFactor = 0.40;
 
-// 封面/进度条共用尺寸上限（防止把控制按钮挤出窗口）。
-const double _kMaxCover = 400;
-
-// 封面下方固定内容（信息 + 进度条 + 控制 + 间距）的预留高度，
-// 封面高度受限时自动缩小以保证整组不溢出。
-const double _kFixedContentReserve = 288;
-
-// A 模式下封面最小尺寸：可用高度不足以容纳「固定内容 + 该尺寸封面」时切到 B。
-const double _kAMinCover = 200;
-
-/// 宽模式下左栏宽度：最窄 [_kMinLeftPanelWidth]（与当前固定值一致），
-/// 最宽为窗口全宽的 [_kLeftPanelFactor]。
-double wideLeftPanelWidth(double windowWidth) {
-  return math.max(_kMinLeftPanelWidth, windowWidth * _kLeftPanelFactor);
-}
-
-/// 封面/信息/进度条共用尺寸：受内容宽与可用高共同约束，上限 [_kMaxCover]。
-///
-/// [contentHeight] 为无限（窄模式滚动容器内）时仅按宽度约束；
-/// 高度受限时封面缩小以适应，保证控制按钮始终在窗口内。
-double playerCoverSize({
-  required double contentWidth,
-  required double contentHeight,
-}) {
-  final byHeight = contentHeight.isFinite
-      ? contentHeight - _kFixedContentReserve
-      : double.infinity;
-  final raw = math.min(contentWidth, byHeight);
-  return math.min(math.max(raw, 0.0), _kMaxCover);
+/// 宽模式下信息卡宽度：最窄 [_kMinInfoCardWidth]，最宽为窗口全宽的
+/// [_kInfoCardFactor]。
+double wideInfoCardWidth(double windowWidth) {
+  return math.max(_kMinInfoCardWidth, windowWidth * _kInfoCardFactor);
 }
 
 class _PlayerPageState extends State<PlayerPage> {
@@ -221,9 +196,8 @@ class _PlayerPageState extends State<PlayerPage> {
                 );
               }
 
-              // ── 窄模式：播放器 / 歌词·队列 ─────────────
+              // ── 窄模式：播放器 / 歌词·队列（整体淡入淡出过渡）──
               if (narrow) {
-                // 播放器 ↔ 歌词/队列：整体淡入淡出过渡（方案 A）。
                 return AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
                   switchInCurve: Curves.easeOutCubic,
@@ -231,49 +205,43 @@ class _PlayerPageState extends State<PlayerPage> {
                   child: _narrowTab == NarrowTab.player
                       ? KeyedSubtree(
                           key: const ValueKey('player'),
-                          child: _NarrowPlayer(
-                            viewModel: _viewModel,
-                            song: song,
-                            theme: theme,
-                            onOpenDetail: widget.onOpenDetail,
-                          ),
+                          child: _buildNarrowPlayer(context, theme, song),
                         )
                       : KeyedSubtree(
                           key: const ValueKey('lyricsqueue'),
-                          child: _NarrowLyricsQueue(
-                            viewModel: _viewModel,
-                            song: song,
-                            theme: theme,
-                            tab: _narrowTab,
-                            uiState: widget.uiState,
-                          ),
+                          child: _buildNarrowLyricsQueue(context, theme, song),
                         ),
                 );
               }
 
-              // ── 宽模式：左栏动态宽（最窄 420，最宽 33%）+ 右栏自适应 ──
-              return Row(
+              // ── 宽模式：信息卡（纵排）| 队列/歌词 + 底部全宽播放条 ──
+              return Column(
                 children: [
-                  // ── Left panel: cover + info + controls ──
-                  SizedBox(
-                    width: wideLeftPanelWidth(constraints.maxWidth),
-                    child: _LeftPanel(
-                      viewModel: _viewModel,
-                      song: song,
-                      theme: theme,
-                      isNarrow: false,
-                      onOpenDetail: widget.onOpenDetail,
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(
+                          width: wideInfoCardWidth(constraints.maxWidth),
+                          child: _buildWideInfo(context, theme, song),
+                        ),
+                        Expanded(
+                          child: _RightPanel(
+                            viewModel: _viewModel,
+                            theme: theme,
+                            showQueue: _showQueue,
+                            uiState: widget.uiState,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-
-                  // ── Right panel: lyrics / queue ──────────
-                  Expanded(
-                    child: _RightPanel(
-                      viewModel: _viewModel,
-                      theme: theme,
-                      showQueue: _showQueue,
-                      uiState: widget.uiState,
-                    ),
+                  PlayerBar(
+                    player: ServiceLocator.player,
+                    theme: theme,
+                    position: _viewModel.position,
+                    duration: _viewModel.duration,
+                    onSeek: _viewModel.seek,
                   ),
                 ],
               );
@@ -283,118 +251,175 @@ class _PlayerPageState extends State<PlayerPage> {
       },
     );
   }
-}
 
-// ─── Left panel ──────────────────────────────────────────────
+  // ─── 信息模块构建 / 详情跳转 / 收藏 ─────────────────────
 
-class _LeftPanel extends StatelessWidget {
-  final PlayerViewModel viewModel;
-  final Song song;
-  final ThemeData theme;
-  final bool isNarrow;
+  /// 宽模式信息卡：高度足够 → 宽版纵排；高度不足（放不下封面）→ 窄版横排。
+  Widget _buildWideInfo(BuildContext context, ThemeData theme, Song song) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cardWidth = constraints.maxWidth;
+        // 估算宽版纵排封面（与 SongInfoCard 内部一致：max(宽×0.8, 400)，
+        // 宽取 padding 后的实际内容宽）。
+        final coverSize = math.max((cardWidth - 80) * 0.8, 400);
+        // 宽版纵排总高 ≈ 封面 + 文本区（间距28+title32+4+歌手24+4+meta16）
+        // + 上下 padding 48。
+        final wideNeeds = coverSize + 156;
+        final useWide = constraints.maxHeight >= wideNeeds;
 
-  /// 点歌手/专辑：用详情页替换播放器路由并切到对应 shell tab。
-  final void Function(Widget page, NavigationItem tab) onOpenDetail;
+        final card = useWide
+            ? _buildSongInfoCard(
+                context,
+                theme,
+                song,
+                isNarrow: false,
+                compact: false,
+              )
+            : _buildSongInfoCard(
+                context,
+                theme,
+                song,
+                isNarrow: true,
+                compact: false,
+              );
 
-  const _LeftPanel({
-    required this.viewModel,
-    required this.song,
-    required this.theme,
-    required this.isNarrow,
-    required this.onOpenDetail,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final contentWidth = constraints.maxWidth;
-
-          // 封面尺寸：由内容宽与可用高共同决定（上限 _kMaxCover），
-          // 下方信息/进度/控制为固定高度，高度受限时封面自动缩小。
-          final coverSize = playerCoverSize(
-            contentWidth: contentWidth,
-            contentHeight: constraints.maxHeight,
-          );
-
-          // 封面（与封面同宽、左对齐）居中；信息 / 进度条横贯父容器全宽。
-          return Column(
-            mainAxisSize: isNarrow ? MainAxisSize.min : MainAxisSize.max,
-            mainAxisAlignment: isNarrow
-                ? MainAxisAlignment.start
-                : MainAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: coverSize,
-                child: _AlbumArt(song: song, size: coverSize),
+        // 高度不足切窄版横排；两种形态都保留滚动兜底（极端矮窗）。
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 40,
+                  vertical: 24,
+                ),
+                child: card,
               ),
-              const SizedBox(height: 32),
-              // 播放信息横贯父容器全宽（与进度条一致，不再绑定封面宽度）。
-              _SongInfo(
-                song: song,
-                theme: theme,
-                isNarrow: isNarrow,
-                onOpenDetail: onOpenDetail,
-              ),
-              const SizedBox(height: 20),
-              // 进度条横贯父容器全宽（不再与封面同宽）。
-              PlayerProgressBar(
-                position: viewModel.position,
-                duration: viewModel.duration,
-                onSeek: viewModel.seek,
-                theme: theme,
-              ),
-              const SizedBox(height: 16),
-              PlayerControls(player: ServiceLocator.player, theme: theme),
-            ],
-          );
-        },
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
-}
 
-// ─── Album art ───────────────────────────────────────────────
-
-class _AlbumArt extends StatelessWidget {
-  final Song song;
-  final double size;
-
-  const _AlbumArt({required this.song, required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    return CachedAlbumArt(
-      albumArtFilePath: song.albumArtFilePath,
-      hasEmbeddedArt: song.hasEmbeddedArt == 1,
-      size: size,
-      borderRadius: 12,
+  /// 窄模式播放器：信息卡（高度够 → 竖版封面在上，不够 → 横版封面在左；
+  /// 矮窗可滚动）+ 底部播放条。
+  Widget _buildNarrowPlayer(BuildContext context, ThemeData theme, Song song) {
+    return Column(
+      children: [
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final cardWidth = constraints.maxWidth;
+              // 估算竖版封面（与 SongInfoCard 纵排一致：max(宽×0.8, 380)，
+              // 宽取 padding 后的实际内容宽）+ 文本区 + padding。
+              final coverSize = math.max((cardWidth - 64) * 0.8, 280);
+              final verticalNeeds = coverSize + 156;
+              // 高度足够 → 竖版；不足 → 横版。
+              final useVertical = constraints.maxHeight >= verticalNeeds;
+              return SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 24,
+                      ),
+                      child: _InfoReveal(
+                        child: _buildSongInfoCard(
+                          context,
+                          theme,
+                          song,
+                          isNarrow: !useVertical,
+                          compact: false,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        PlayerBar(
+          player: ServiceLocator.player,
+          theme: theme,
+          position: _viewModel.position,
+          duration: _viewModel.duration,
+          onSeek: _viewModel.seek,
+          compact: true,
+        ),
+      ],
     );
   }
-}
 
-// ─── Song info ───────────────────────────────────────────────
+  /// 窄模式歌词/队列：内容块 + 迷你信息条 + 底部播放条。
+  Widget _buildNarrowLyricsQueue(
+    BuildContext context,
+    ThemeData theme,
+    Song song,
+  ) {
+    return Column(
+      children: [
+        Expanded(
+          child: _NarrowLyricsQueue(
+            viewModel: _viewModel,
+            theme: theme,
+            tab: _narrowTab,
+            uiState: widget.uiState,
+          ),
+        ),
+        _InfoReveal(
+          child: _buildSongInfoCard(
+            context,
+            theme,
+            song,
+            isNarrow: true,
+            compact: true,
+          ),
+        ),
+        PlayerBar(
+          player: ServiceLocator.player,
+          theme: theme,
+          position: _viewModel.position,
+          duration: _viewModel.duration,
+          onSeek: _viewModel.seek,
+          compact: true,
+        ),
+      ],
+    );
+  }
 
-class _SongInfo extends StatelessWidget {
-  final Song song;
-  final ThemeData theme;
-  final bool isNarrow;
+  /// 共享 SongInfoCard 构建（like/more/详情回调由页面注入）。
+  Widget _buildSongInfoCard(
+    BuildContext context,
+    ThemeData theme,
+    Song song, {
+    required bool isNarrow,
+    required bool compact,
+  }) {
+    return SongInfoCard(
+      song: song,
+      theme: theme,
+      isNarrow: isNarrow,
+      compact: compact,
+      onLike: _toggleLike,
+      onOpenArtist: () => _openArtist(context, song),
+      onOpenAlbum: () => _openAlbum(context, song),
+      menuBuilder: songMenuItems,
+      onMenuSelected: (s, v) => handleSongMenuAction(context, s, v),
+    );
+  }
 
-  /// 点歌手/专辑：用详情页替换播放器路由并切到对应 shell tab。
-  final void Function(Widget page, NavigationItem tab) onOpenDetail;
-
-  const _SongInfo({
-    required this.song,
-    required this.theme,
-    required this.isNarrow,
-    required this.onOpenDetail,
-  });
+  /// 收藏切换（引擎 + 队列刷新，UI 经 notify 自动更新）。
+  void _toggleLike() {
+    ServiceLocator.player.toggleFavoriteForCurrent();
+  }
 
   // 跳歌手详情：优先按 FK 取，其次按名字回退（兜底老数据）。
   // 打开即关掉播放器（详情页替换其路由）并让 Shell 切到「歌手」tab。
-  Future<void> _openArtist(BuildContext context) async {
+  Future<void> _openArtist(BuildContext context, Song song) async {
     final db = ServiceLocator.database;
     final Artist? artist = song.artistId != null
         ? await db.getArtistById(song.artistId!)
@@ -403,12 +428,14 @@ class _SongInfo extends StatelessWidget {
         artist ??
         (song.artist != null ? await db.getArtistByName(song.artist!) : null);
     if (resolved == null || !context.mounted) return;
-    onOpenDetail(ArtistDetailPage(artist: resolved), NavigationItem.artists);
+    widget.onOpenDetail(
+      ArtistDetailPage(artist: resolved),
+      NavigationItem.artists,
+    );
   }
 
   // 跳专辑详情：优先按 FK 取，其次按名字回退（兜底老数据）。
-  // 打开即关掉播放器（详情页替换其路由）并让 Shell 切到「专辑」tab。
-  Future<void> _openAlbum(BuildContext context) async {
+  Future<void> _openAlbum(BuildContext context, Song song) async {
     final db = ServiceLocator.database;
     final Album? byId = song.albumId != null
         ? await db.getAlbumById(song.albumId!)
@@ -424,186 +451,9 @@ class _SongInfo extends StatelessWidget {
                   : await db.getAlbumByName(song.album!)
             : null);
     if (resolved == null || !context.mounted) return;
-    onOpenDetail(AlbumDetailPage(album: resolved), NavigationItem.albums);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final artist = song.artist?.trim() ?? '';
-    final album = song.album?.trim() ?? '';
-
-    // 窄模式（单栏）上下两行都居中；宽模式靠左。
-    final textAlign = isNarrow ? TextAlign.center : TextAlign.start;
-    final subtitleStyle = theme.textTheme.bodyLarge?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
-    );
-
-    return Column(
-      crossAxisAlignment: isNarrow
-          ? CrossAxisAlignment.center
-          : CrossAxisAlignment.start,
-      children: [
-        Text(
-          song.title,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: textAlign,
-        ),
-        if (artist.isNotEmpty || album.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Row(
-            mainAxisAlignment: isNarrow
-                ? MainAxisAlignment.center
-                : MainAxisAlignment.start,
-            children: [
-              if (artist.isNotEmpty)
-                Flexible(
-                  fit: FlexFit.loose,
-                  child: TextLink(
-                    text: artist,
-                    style: subtitleStyle,
-                    onTap: () => _openArtist(context),
-                  ),
-                ),
-              if (artist.isNotEmpty && album.isNotEmpty)
-                Text(' · ', style: subtitleStyle),
-              if (album.isNotEmpty)
-                Flexible(
-                  fit: FlexFit.loose,
-                  child: TextLink(
-                    text: album,
-                    style: subtitleStyle,
-                    onTap: () => _openAlbum(context),
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-// ─── 窄版播放器：按高度切 A（纵向居中）/ B（两栏小播放器）─────
-
-class _NarrowPlayer extends StatelessWidget {
-  final PlayerViewModel viewModel;
-  final Song song;
-  final ThemeData theme;
-
-  /// 点歌手/专辑：用详情页替换播放器路由并切到对应 shell tab。
-  final void Function(Widget page, NavigationItem tab) onOpenDetail;
-
-  const _NarrowPlayer({
-    required this.viewModel,
-    required this.song,
-    required this.theme,
-    required this.onOpenDetail,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // 高度够容纳「固定内容 + 至少 _kAMinCover 的封面」→ A（纵向居中）；
-        // 否则 → B（左右两栏，占用高度更小）。
-        final useA =
-            constraints.maxHeight >= _kFixedContentReserve + _kAMinCover;
-        if (useA) {
-          return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
-              child: _LeftPanel(
-                viewModel: viewModel,
-                song: song,
-                theme: theme,
-                isNarrow: true,
-                onOpenDetail: onOpenDetail,
-              ),
-            ),
-          );
-        }
-        return _NarrowPlayerB(
-          viewModel: viewModel,
-          song: song,
-          theme: theme,
-          onOpenDetail: onOpenDetail,
-        );
-      },
-    );
-  }
-}
-
-// ─── B 界面：左右两栏（左封面 / 右信息+进度+控制，等宽，控制左对齐）──
-
-class _NarrowPlayerB extends StatelessWidget {
-  final PlayerViewModel viewModel;
-  final Song song;
-  final ThemeData theme;
-
-  /// 点歌手/专辑：用详情页替换播放器路由并切到对应 shell tab。
-  final void Function(Widget page, NavigationItem tab) onOpenDetail;
-
-  const _NarrowPlayerB({
-    required this.viewModel,
-    required this.song,
-    required this.theme,
-    required this.onOpenDetail,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      // 左右 24、上 16、下 32（底部留白略宽，避免贴窗口底边）。
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-      child: Row(
-        children: [
-          // ── 左：封面（按左半区域尺寸，等宽）──
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, left) {
-                final size = math.min(left.maxWidth, left.maxHeight);
-                return Center(
-                  child: _AlbumArt(song: song, size: size),
-                );
-              },
-            ),
-          ),
-          const SizedBox(width: 24),
-          // ── 右：信息 + 进度 + 控制（左对齐）──
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _SongInfo(
-                  song: song,
-                  theme: theme,
-                  isNarrow: false,
-                  onOpenDetail: onOpenDetail,
-                ),
-                const SizedBox(height: 16),
-                PlayerProgressBar(
-                  position: viewModel.position,
-                  duration: viewModel.duration,
-                  onSeek: viewModel.seek,
-                  theme: theme,
-                ),
-                const SizedBox(height: 12),
-                PlayerControls(
-                  player: ServiceLocator.player,
-                  theme: theme,
-                  compact: true,
-                  alignment: MainAxisAlignment.start,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+    widget.onOpenDetail(
+      AlbumDetailPage(album: resolved),
+      NavigationItem.albums,
     );
   }
 }
@@ -641,7 +491,6 @@ class _FadeSlideTransition extends StatelessWidget {
 
 class _NarrowLyricsQueue extends StatefulWidget {
   final PlayerViewModel viewModel;
-  final Song song;
   final ThemeData theme;
 
   /// 当前标签（lyrics 或 queue）。
@@ -652,7 +501,6 @@ class _NarrowLyricsQueue extends StatefulWidget {
 
   const _NarrowLyricsQueue({
     required this.viewModel,
-    required this.song,
     required this.theme,
     required this.tab,
     required this.uiState,
@@ -677,142 +525,56 @@ class _NarrowLyricsQueueState extends State<_NarrowLyricsQueue> {
   @override
   Widget build(BuildContext context) {
     final isQueue = widget.tab == NarrowTab.queue;
-    return Column(
-      children: [
-        // ── 内容块（歌词 ↔ 队列：淡入 + 朝标签方向滑动）──
-        Expanded(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) => _FadeSlideTransition(
-              direction: _direction,
-              animation: animation,
-              child: child,
+    // 内容块：歌词 ↔ 队列（淡入 + 朝标签方向滑动）。
+    // 迷你信息条与底部播放条由页面在下方叠加。
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) => _FadeSlideTransition(
+        direction: _direction,
+        animation: animation,
+        child: child,
+      ),
+      child: isQueue
+          ? KeyedSubtree(
+              key: const ValueKey('queue'),
+              child: QueueView(
+                viewModel: widget.viewModel,
+                theme: widget.theme,
+                isNarrow: true,
+                uiState: widget.uiState,
+              ),
+            )
+          : KeyedSubtree(
+              key: const ValueKey('lyrics'),
+              child: LyricsView(theme: widget.theme),
             ),
-            child: isQueue
-                ? KeyedSubtree(
-                    key: const ValueKey('queue'),
-                    child: QueueView(
-                      viewModel: widget.viewModel,
-                      theme: widget.theme,
-                      isNarrow: true,
-                      uiState: widget.uiState,
-                    ),
-                  )
-                : KeyedSubtree(
-                    key: const ValueKey('lyrics'),
-                    child: LyricsView(theme: widget.theme),
-                  ),
-          ),
-        ),
-        // ── 迷你播放器：挂载时缩放浮现（进入歌词/队列），切换 tab 时不动 ──
-        TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.85, end: 1.0),
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
-          builder: (context, t, child) {
-            return Transform.scale(
-              scale: t,
-              alignment: Alignment.bottomCenter,
-              child: child,
-            );
-          },
-          child: _MiniPlayer(
-            viewModel: widget.viewModel,
-            song: widget.song,
-            theme: widget.theme,
-          ),
-        ),
-      ],
     );
   }
 }
 
-// ─── 底部迷你播放器（窄版歌词/队列模式下常驻）────────────────
+// ─── 信息块浮现动画（切换播放器↔歌词/队列时，info 模块缩放淡入）──
 
-class _MiniPlayer extends StatelessWidget {
-  final PlayerViewModel viewModel;
-  final Song song;
-  final ThemeData theme;
+class _InfoReveal extends StatelessWidget {
+  final Widget child;
 
-  const _MiniPlayer({
-    required this.viewModel,
-    required this.song,
-    required this.theme,
-  });
+  const _InfoReveal({required this.child});
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = [
-      if (song.artist != null && song.artist!.isNotEmpty) song.artist!,
-      if (song.album != null && song.album!.isNotEmpty) song.album!,
-    ].join(' · ');
-
-    return Material(
-      // 与主界面底部栏（NowPlayingBar）一致：surfaceContainerLow 与页面背景区分。
-      color: theme.colorScheme.surfaceContainerLow,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ── 小封面 + 歌名 / 歌手·专辑 ──
-            Row(
-              children: [
-                CachedAlbumArt(
-                  albumArtFilePath: song.albumArtFilePath,
-                  hasEmbeddedArt: song.hasEmbeddedArt == 1,
-                  size: 48,
-                  borderRadius: 6,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        song.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (subtitle.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // ── 进度条（正常宽度）──
-            PlayerProgressBar(
-              position: viewModel.position,
-              duration: viewModel.duration,
-              onSeek: viewModel.seek,
-              theme: theme,
-            ),
-            const SizedBox(height: 4),
-            // ── 控制按钮（compact 缩小、居中）──
-            PlayerControls(
-              player: ServiceLocator.player,
-              theme: theme,
-              compact: true,
-            ),
-          ],
-        ),
-      ),
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.9, end: 1.0),
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+      builder: (context, t, child) {
+        return Transform.scale(
+          scale: t,
+          alignment: Alignment.center,
+          child: child,
+        );
+      },
+      child: child,
     );
   }
 }

@@ -1,49 +1,60 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:flutter_music/core/database/database.dart';
 import 'package:flutter_music/features/player/player_page.dart';
+import 'package:flutter_music/widgets/song_info_card.dart';
 
 void main() {
-  group('wideLeftPanelWidth', () {
-    test('断点处（760）取最小宽 420，与当前一致', () {
-      expect(wideLeftPanelWidth(760), 420);
+  group('wideInfoCardWidth', () {
+    test('断点处（1000）取最小宽 500', () {
+      expect(wideInfoCardWidth(1000), 500);
     });
 
-    test('宽度低于断点仍取最小宽 420（防御）', () {
-      expect(wideLeftPanelWidth(500), 420);
+    test('宽度低于断点仍取最小宽 500（防御）', () {
+      expect(wideInfoCardWidth(500), 500);
     });
 
-    test('1030 处 33%（≈340）未超过最小宽 → 420', () {
-      expect(wideLeftPanelWidth(1030), 420);
+    test('1280 处取 40% = 512', () {
+      expect(wideInfoCardWidth(1280), closeTo(512, 0.001));
     });
 
-    test('1280 处取 33% ≈ 422.4', () {
-      expect(wideLeftPanelWidth(1280), closeTo(422.4, 0.001));
+    test('1500 处取 40% = 600', () {
+      expect(wideInfoCardWidth(1500), closeTo(600, 0.001));
     });
 
-    test('1920 处取 33% = 633.6', () {
-      expect(wideLeftPanelWidth(1920), closeTo(633.6, 0.001));
+    test('1920 处取 40% = 768', () {
+      expect(wideInfoCardWidth(1920), closeTo(768, 0.001));
     });
   });
 
-  group('playerCoverSize', () {
-    test('高度充足时受宽度与上限约束', () {
-      expect(playerCoverSize(contentWidth: 800, contentHeight: 700), 400);
-      expect(playerCoverSize(contentWidth: 340, contentHeight: 700), 340);
+  group('fileTypeOf', () {
+    Song song(String fileName) => Song(
+      id: 1,
+      title: 'x',
+      filePath: '/a/$fileName',
+      fileName: fileName,
+      hasEmbeddedArt: 0,
+      hasEmbeddedLyrics: 0,
+      dateAdded: DateTime(2020),
+      playCount: 0,
+      isFavorite: 0,
+      isAvailable: 1,
+    );
+
+    test('mp3 扩展名 → MP3', () {
+      expect(fileTypeOf(song('song.mp3')), 'MP3');
     });
 
-    test('高度受限时封面缩小以保证控件在窗口内', () {
-      expect(playerCoverSize(contentWidth: 800, contentHeight: 488), 200);
+    test('flac 扩展名 → FLAC', () {
+      expect(fileTypeOf(song('song.flac')), 'FLAC');
     });
 
-    test('高度无限（窄模式滚动容器）时仅按宽度约束', () {
-      expect(
-        playerCoverSize(contentWidth: 800, contentHeight: double.infinity),
-        400,
-      );
-      expect(
-        playerCoverSize(contentWidth: 380, contentHeight: double.infinity),
-        380,
-      );
+    test('无扩展名返回空串', () {
+      expect(fileTypeOf(song('song')), '');
+    });
+
+    test('点号结尾返回空串', () {
+      expect(fileTypeOf(song('song.')), '');
     });
   });
 }

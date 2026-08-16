@@ -67,6 +67,15 @@ class PlayQueue extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 按 id 替换队列中的歌曲对象（如刷新收藏状态）；不重建音频序列。
+  void replaceSong(Song song) {
+    final idx = _queue.indexWhere((s) => s.id == song.id);
+    if (idx < 0) return;
+    _queue[idx] = song;
+    _save();
+    notifyListeners();
+  }
+
   /// Append [songs] to the tail of the queue.
   void append(List<Song> songs) {
     if (songs.isEmpty) return;

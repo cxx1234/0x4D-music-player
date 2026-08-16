@@ -40,11 +40,15 @@ class AppSettings {
   /// 启动恢复队列后是否应用上次播放位置（续播）。
   final bool resumePlaybackPosition;
 
+  /// 播放音量（0.0~1.0）。
+  final double volume;
+
   const AppSettings({
     this.musicFolders = const [],
     this.themeMode = 'system',
     this.songSortOrder = 'title',
     this.resumePlaybackPosition = true,
+    this.volume = 1.0,
   });
 
   /// The raw folder paths (convenience getter).
@@ -55,6 +59,7 @@ class AppSettings {
     'themeMode': themeMode,
     'songSortOrder': songSortOrder,
     'resumePlaybackPosition': resumePlaybackPosition,
+    'volume': volume,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -78,6 +83,7 @@ class AppSettings {
       themeMode: json['themeMode'] as String? ?? 'system',
       songSortOrder: json['songSortOrder'] as String? ?? 'title',
       resumePlaybackPosition: json['resumePlaybackPosition'] as bool? ?? true,
+      volume: (json['volume'] as num?)?.toDouble() ?? 1.0,
     );
   }
 
@@ -86,6 +92,7 @@ class AppSettings {
     String? themeMode,
     String? songSortOrder,
     bool? resumePlaybackPosition,
+    double? volume,
   }) {
     return AppSettings(
       musicFolders: musicFolders ?? this.musicFolders,
@@ -93,6 +100,7 @@ class AppSettings {
       songSortOrder: songSortOrder ?? this.songSortOrder,
       resumePlaybackPosition:
           resumePlaybackPosition ?? this.resumePlaybackPosition,
+      volume: volume ?? this.volume,
     );
   }
 
@@ -138,6 +146,15 @@ class SettingsService {
   /// 持久化续播设置。
   Future<void> setResumePlaybackPosition(bool value) async {
     _settings = _settings.copyWith(resumePlaybackPosition: value);
+    await _save();
+  }
+
+  /// 播放音量（0.0~1.0）。
+  double get volume => _settings.volume;
+
+  /// 持久化音量设置。
+  Future<void> setVolume(double value) async {
+    _settings = _settings.copyWith(volume: value.clamp(0.0, 1.0).toDouble());
     await _save();
   }
 

@@ -230,21 +230,27 @@ class _NowPlayingBarVisibilityObserver extends NavigatorObserver {
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    // 只响应真正的页面路由：PopupMenu/Dialog/BottomSheet 等弹层路由
+    // 不是 PageRoute，忽略以免（如弹出歌曲菜单时）误触发底栏显隐。
+    if (route is! PageRoute) return;
     showBar.value = !_isPlayer(route);
   }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route is! PageRoute) return;
     showBar.value = previousRoute == null || !_isPlayer(previousRoute);
   }
 
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route is! PageRoute) return;
     showBar.value = previousRoute == null || !_isPlayer(previousRoute);
   }
 
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
-    showBar.value = newRoute == null || !_isPlayer(newRoute);
+    if (newRoute is! PageRoute) return;
+    showBar.value = !_isPlayer(newRoute);
   }
 }

@@ -6,6 +6,7 @@ import 'package:just_audio/just_audio.dart';
 import '../database/database.dart';
 import '../utils/logger.dart';
 import 'play_queue.dart';
+import 'service_locator.dart';
 
 /// Available repeat modes for the player.
 enum PlayerRepeatMode {
@@ -33,6 +34,9 @@ class PlayerService extends ChangeNotifier {
 
   PlayerRepeatMode _repeatMode = PlayerRepeatMode.off;
   bool _isShuffled = false;
+
+  /// 播放音量（0.0~1.0）。
+  double _volume = 1.0;
 
   /// 待应用的启动续播位置（构造时从 [PlayQueue] 读取，首次加载序列时消费）。
   Duration? _resumePosition;
@@ -87,8 +91,12 @@ class PlayerService extends ChangeNotifier {
   /// 周期对账 watchdog：兜住引擎与 [PlayQueue] 的索引分叉。
   Timer? _reconcileTimer;
 
-  PlayerService({PlayQueue? playQueue, bool resumePlaybackPosition = true})
-    : _playQueue = playQueue ?? PlayQueue() {
+  PlayerService({
+    PlayQueue? playQueue,
+    bool resumePlaybackPosition = true,
+    double volume = 1.0,
+  }) : _playQueue = playQueue ?? PlayQueue() {
+    _volume = volume;
     // Forward PlayQueue changes to this service's listeners（经 _onQueueChanged
     // 汇聚，顺带维护按歌曲去重的 currentSongNotifier）。
     _playQueue.addListener(_onQueueChanged);
@@ -117,6 +125,8 @@ class PlayerService extends ChangeNotifier {
       (_) => _reconcile(),
     );
     _playingSub = _player.playingStream.listen(_onPlayingChanged);
+    // 应用持久化的音量（引擎默认 1.0，幂等）。
+    unawaited(_player.setVolume(_volume));
   }
 
   /// PlayQueue 变化的统一入口：转发给本 service 的监听者，并维护按歌曲 id
@@ -280,6 +290,16 @@ class PlayerService extends ChangeNotifier {
 
   /// Whether shuffle is enabled.
   bool get isShuffled => _isShuffled;
+
+  /// 当前音量（0.0~1.0）。
+  double get volume => _volume;
+
+  /// 设置音量并应用到引擎（0.0~1.0）。
+  Future<void> setVolume(double value) async {
+    _volume = value.clamp(0.0, 1.0);
+    await _player.setVolume(_volume);
+    notifyListeners();
+  }
 
   /// 消费并清除最近的播放错误消息(返回 null 表示没有待提示的错误)。
   String? takePlaybackError() {
@@ -496,6 +516,17 @@ class PlayerService extends ChangeNotifier {
   }
 
   Future<void> seek(Duration position) => _player.seek(position);
+
+  /// 切换当前歌曲收藏，并刷新队列中的歌曲对象（UI 经 notify 自动更新）。
+  Future<void> toggleFavoriteForCurrent() async {
+    final song = _playQueue.currentSong;
+    if (song == null) return;
+    await ServiceLocator.songRepo.toggleFavorite(song.id);
+    final updated = await ServiceLocator.songRepo.getSongById(song.id);
+    if (updated != null) {
+      _playQueue.replaceSong(updated);
+    }
+  }
 
   // ─── Mode switching ────────────────────────────────────
 

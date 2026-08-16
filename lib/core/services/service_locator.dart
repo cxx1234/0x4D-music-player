@@ -157,6 +157,7 @@ class ServiceLocator {
     _player = PlayerService(
       playQueue: _playQueue!,
       resumePlaybackPosition: _settings!.settings.resumePlaybackPosition,
+      volume: _settings!.settings.volume,
     );
     _sandbox = SandboxService();
 
