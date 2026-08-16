@@ -186,6 +186,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           ),
           PopupMenuButton<String>(
             tooltip: '更多',
+            // 默认 iconTheme.color 是固定纯黑/纯白（M2 遗留），显式指定跟随主题。
+            iconColor: theme.colorScheme.onSurfaceVariant,
             onSelected: (value) {
               if (value == 'rename') _rename();
               if (value == 'delete') _delete();

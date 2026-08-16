@@ -310,6 +310,8 @@ class _LibraryPageState extends State<LibraryPage> {
           PopupMenuButton<SongSortOrder>(
             tooltip: '排序',
             icon: const Icon(Icons.sort),
+            // 默认 iconTheme.color 是固定纯黑/纯白（M2 遗留），显式指定跟随主题。
+            iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
             onSelected: _viewModel.setSortOrder,
             itemBuilder: (context) => [
               for (final order in SongSortOrder.values)

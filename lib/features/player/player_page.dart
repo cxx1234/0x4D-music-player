@@ -7,10 +7,13 @@ import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../widgets/cached_album_art.dart';
 import '../../widgets/player_controls.dart';
+import '../../widgets/player_progress_bar.dart';
 import '../../widgets/text_link.dart';
 import '../album/album_page.dart';
 import '../artist/artist_page.dart';
+import '../shell/shell_page.dart';
 import 'lyrics_view.dart';
+import 'player_ui_state.dart';
 import 'player_view_model.dart';
 import 'queue_view.dart';
 
@@ -18,7 +21,17 @@ class PlayerPage extends StatefulWidget {
   /// 全屏播放页的路由名（用于全局底栏在播放页打开时隐藏）。
   static const String routeName = '/player';
 
-  const PlayerPage({super.key});
+  /// 跨会话保留的播放器界面状态（App 持有，pop 不销毁）。
+  final PlayerUiState uiState;
+
+  /// 点歌手/专辑：用详情页替换播放器路由并切到对应 shell tab。
+  final void Function(Widget page, NavigationItem tab) onOpenDetail;
+
+  const PlayerPage({
+    super.key,
+    required this.uiState,
+    required this.onOpenDetail,
+  });
 
   @override
   State<PlayerPage> createState() => _PlayerPageState();
@@ -64,17 +77,14 @@ double playerCoverSize({
   return math.min(math.max(raw, 0.0), _kMaxCover);
 }
 
-// 窄模式下的可切换标签：播放器 / 歌词 / 播放队列。
-enum _NarrowTab { player, lyrics, queue }
-
 class _PlayerPageState extends State<PlayerPage> {
   final _viewModel = PlayerViewModel();
 
-  // 宽模式下右栏显示队列(true)还是歌词(false)。
-  bool _showQueue = true;
+  // 宽模式下右栏显示队列(true)还是歌词(false)（外置于 uiState，重开保留）。
+  bool get _showQueue => widget.uiState.showQueue;
 
-  // 窄模式当前标签（默认播放器）。
-  _NarrowTab _narrowTab = _NarrowTab.player;
+  // 窄模式当前标签（默认播放器；外置于 uiState，重开保留）。
+  NarrowTab get _narrowTab => widget.uiState.narrowTab;
 
   @override
   void initState() {
@@ -89,6 +99,88 @@ class _PlayerPageState extends State<PlayerPage> {
     super.dispose();
   }
 
+  /// 顶部栏：红绿灯预留区 + 下方 56 控件区（播放器/歌词/播放列表切换）。
+  PreferredSize _buildAppBar(ThemeData theme, bool narrow) {
+    return PreferredSize(
+      // 总高 = 顶部红绿灯预留（macOS 45）+ 下方 56 控件区；
+      // 控件固定在下方区域内，不再随 AppBar 整体垂直居中。
+      preferredSize: Size.fromHeight(
+        kToolbarHeight + layoutConfig.playerTopBarTopReserve,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 顶部红绿灯预留区（macOS 45，其余 0）。
+          SizedBox(height: layoutConfig.playerTopBarTopReserve),
+          AppBar(
+            toolbarHeight: kToolbarHeight,
+            leading: IconButton(
+              icon: const Icon(Icons.keyboard_arrow_down),
+              tooltip: '收起',
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.music_note_rounded),
+                const SizedBox(width: 8),
+                // 字号与 DetailTopBar 标题一致（titleMedium）。
+                Text('正在播放', style: theme.textTheme.titleMedium),
+              ],
+            ),
+            centerTitle: false,
+            actions: [
+              if (narrow) ...[
+                // 窄模式：切换歌词/播放队列（选中高亮 + 图标换关闭，再点退出）
+                _AppBarTab(
+                  icon: Icons.lyrics_rounded,
+                  label: '歌词',
+                  selected: _narrowTab == NarrowTab.lyrics,
+                  closeWhenSelected: true,
+                  onTap: () => setState(() {
+                    final cur = widget.uiState.narrowTab;
+                    widget.uiState.narrowTab = cur == NarrowTab.lyrics
+                        ? NarrowTab.player
+                        : NarrowTab.lyrics;
+                  }),
+                ),
+                _AppBarTab(
+                  icon: Icons.queue_music_rounded,
+                  label: '播放列表',
+                  iconSize: 24,
+                  selected: _narrowTab == NarrowTab.queue,
+                  closeWhenSelected: true,
+                  onTap: () => setState(() {
+                    final cur = widget.uiState.narrowTab;
+                    widget.uiState.narrowTab = cur == NarrowTab.queue
+                        ? NarrowTab.player
+                        : NarrowTab.queue;
+                  }),
+                ),
+              ] else ...[
+                // 宽模式：切换右栏内容（选中高亮 + 显示文字）
+                _AppBarTab(
+                  icon: Icons.lyrics_rounded,
+                  label: '歌词',
+                  selected: !_showQueue,
+                  onTap: () => setState(() => widget.uiState.showQueue = false),
+                ),
+                _AppBarTab(
+                  icon: Icons.queue_music_rounded,
+                  label: '播放列表',
+                  iconSize: 24,
+                  selected: _showQueue,
+                  onTap: () => setState(() => widget.uiState.showQueue = true),
+                ),
+              ],
+              const SizedBox(width: 8),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -98,80 +190,7 @@ class _PlayerPageState extends State<PlayerPage> {
         final narrow = constraints.maxWidth < _kWideBreakpoint;
 
         return Scaffold(
-          appBar: PreferredSize(
-            // 总高 = 顶部红绿灯预留（macOS 45）+ 下方 56 控件区；
-            // 控件固定在下方区域内，不再随 AppBar 整体垂直居中。
-            preferredSize: Size.fromHeight(
-              kToolbarHeight + layoutConfig.playerTopBarTopReserve,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 顶部红绿灯预留区（macOS 45，其余 0）。
-                SizedBox(height: layoutConfig.playerTopBarTopReserve),
-                AppBar(
-                  toolbarHeight: kToolbarHeight,
-                  leading: IconButton(
-                    icon: const Icon(Icons.keyboard_arrow_down),
-                    tooltip: '收起',
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                  title: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.music_note_rounded),
-                      const SizedBox(width: 8),
-                      // 字号与 DetailTopBar 标题一致（titleMedium）。
-                      Text('正在播放', style: theme.textTheme.titleMedium),
-                    ],
-                  ),
-                  centerTitle: false,
-                  actions: [
-                    if (narrow) ...[
-                      // 窄模式：切换歌词/播放队列（选中高亮 + 图标换关闭，再点退出）
-                      _NarrowModeTab(
-                        icon: Icons.lyrics_rounded,
-                        label: '歌词',
-                        selected: _narrowTab == _NarrowTab.lyrics,
-                        onTap: () => setState(() {
-                          _narrowTab = _narrowTab == _NarrowTab.lyrics
-                              ? _NarrowTab.player
-                              : _NarrowTab.lyrics;
-                        }),
-                      ),
-                      _NarrowModeTab(
-                        icon: Icons.queue_music_rounded,
-                        label: '播放列表',
-                        iconSize: 24,
-                        selected: _narrowTab == _NarrowTab.queue,
-                        onTap: () => setState(() {
-                          _narrowTab = _narrowTab == _NarrowTab.queue
-                              ? _NarrowTab.player
-                              : _NarrowTab.queue;
-                        }),
-                      ),
-                    ] else ...[
-                      // 宽模式：切换右栏内容（选中高亮 + 显示文字）
-                      _AppBarTab(
-                        icon: Icons.lyrics_rounded,
-                        label: '歌词',
-                        selected: !_showQueue,
-                        onTap: () => setState(() => _showQueue = false),
-                      ),
-                      _AppBarTab(
-                        icon: Icons.queue_music_rounded,
-                        label: '播放列表',
-                        iconSize: 24,
-                        selected: _showQueue,
-                        onTap: () => setState(() => _showQueue = true),
-                      ),
-                    ],
-                    const SizedBox(width: 8),
-                  ],
-                ),
-              ],
-            ),
-          ),
+          appBar: _buildAppBar(theme, narrow),
           body: ListenableBuilder(
             listenable: _viewModel,
             builder: (context, _) {
@@ -209,13 +228,14 @@ class _PlayerPageState extends State<PlayerPage> {
                   duration: const Duration(milliseconds: 300),
                   switchInCurve: Curves.easeOutCubic,
                   switchOutCurve: Curves.easeInCubic,
-                  child: _narrowTab == _NarrowTab.player
+                  child: _narrowTab == NarrowTab.player
                       ? KeyedSubtree(
                           key: const ValueKey('player'),
                           child: _NarrowPlayer(
                             viewModel: _viewModel,
                             song: song,
                             theme: theme,
+                            onOpenDetail: widget.onOpenDetail,
                           ),
                         )
                       : KeyedSubtree(
@@ -225,6 +245,7 @@ class _PlayerPageState extends State<PlayerPage> {
                             song: song,
                             theme: theme,
                             tab: _narrowTab,
+                            uiState: widget.uiState,
                           ),
                         ),
                 );
@@ -241,6 +262,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       song: song,
                       theme: theme,
                       isNarrow: false,
+                      onOpenDetail: widget.onOpenDetail,
                     ),
                   ),
 
@@ -250,6 +272,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       viewModel: _viewModel,
                       theme: theme,
                       showQueue: _showQueue,
+                      uiState: widget.uiState,
                     ),
                   ),
                 ],
@@ -270,11 +293,15 @@ class _LeftPanel extends StatelessWidget {
   final ThemeData theme;
   final bool isNarrow;
 
+  /// 点歌手/专辑：用详情页替换播放器路由并切到对应 shell tab。
+  final void Function(Widget page, NavigationItem tab) onOpenDetail;
+
   const _LeftPanel({
     required this.viewModel,
     required this.song,
     required this.theme,
     required this.isNarrow,
+    required this.onOpenDetail,
   });
 
   @override
@@ -305,10 +332,20 @@ class _LeftPanel extends StatelessWidget {
               ),
               const SizedBox(height: 32),
               // 播放信息横贯父容器全宽（与进度条一致，不再绑定封面宽度）。
-              _SongInfo(song: song, theme: theme, isNarrow: isNarrow),
+              _SongInfo(
+                song: song,
+                theme: theme,
+                isNarrow: isNarrow,
+                onOpenDetail: onOpenDetail,
+              ),
               const SizedBox(height: 20),
               // 进度条横贯父容器全宽（不再与封面同宽）。
-              _ProgressBar(viewModel: viewModel, theme: theme),
+              PlayerProgressBar(
+                position: viewModel.position,
+                duration: viewModel.duration,
+                onSeek: viewModel.seek,
+                theme: theme,
+              ),
               const SizedBox(height: 16),
               PlayerControls(player: ServiceLocator.player, theme: theme),
             ],
@@ -345,13 +382,18 @@ class _SongInfo extends StatelessWidget {
   final ThemeData theme;
   final bool isNarrow;
 
+  /// 点歌手/专辑：用详情页替换播放器路由并切到对应 shell tab。
+  final void Function(Widget page, NavigationItem tab) onOpenDetail;
+
   const _SongInfo({
     required this.song,
     required this.theme,
     required this.isNarrow,
+    required this.onOpenDetail,
   });
 
   // 跳歌手详情：优先按 FK 取，其次按名字回退（兜底老数据）。
+  // 打开即关掉播放器（详情页替换其路由）并让 Shell 切到「歌手」tab。
   Future<void> _openArtist(BuildContext context) async {
     final db = ServiceLocator.database;
     final Artist? artist = song.artistId != null
@@ -361,12 +403,11 @@ class _SongInfo extends StatelessWidget {
         artist ??
         (song.artist != null ? await db.getArtistByName(song.artist!) : null);
     if (resolved == null || !context.mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ArtistDetailPage(artist: resolved)),
-    );
+    onOpenDetail(ArtistDetailPage(artist: resolved), NavigationItem.artists);
   }
 
   // 跳专辑详情：优先按 FK 取，其次按名字回退（兜底老数据）。
+  // 打开即关掉播放器（详情页替换其路由）并让 Shell 切到「专辑」tab。
   Future<void> _openAlbum(BuildContext context) async {
     final db = ServiceLocator.database;
     final Album? byId = song.albumId != null
@@ -383,9 +424,7 @@ class _SongInfo extends StatelessWidget {
                   : await db.getAlbumByName(song.album!)
             : null);
     if (resolved == null || !context.mounted) return;
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => AlbumDetailPage(album: resolved)));
+    onOpenDetail(AlbumDetailPage(album: resolved), NavigationItem.albums);
   }
 
   @override
@@ -448,58 +487,6 @@ class _SongInfo extends StatelessWidget {
   }
 }
 
-// ─── Progress bar ────────────────────────────────────────────
-
-class _ProgressBar extends StatelessWidget {
-  final PlayerViewModel viewModel;
-  final ThemeData theme;
-
-  const _ProgressBar({required this.viewModel, required this.theme});
-
-  String _format(Duration d) {
-    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$minutes:$seconds';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final pos = viewModel.position;
-    final dur = viewModel.duration;
-    final max = dur.inMilliseconds > 0 ? dur : const Duration(seconds: 1);
-
-    return Column(
-      children: [
-        SliderTheme(
-          data: SliderThemeData(
-            trackHeight: 4,
-            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-            overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-          ),
-          child: Slider(
-            value: pos.inMilliseconds.toDouble().clamp(
-              0,
-              max.inMilliseconds.toDouble(),
-            ),
-            max: max.inMilliseconds.toDouble(),
-            onChanged: (v) => viewModel.seek(Duration(milliseconds: v.toInt())),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(_format(pos), style: theme.textTheme.bodySmall),
-              Text(_format(dur), style: theme.textTheme.bodySmall),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 // ─── 窄版播放器：按高度切 A（纵向居中）/ B（两栏小播放器）─────
 
 class _NarrowPlayer extends StatelessWidget {
@@ -507,10 +494,14 @@ class _NarrowPlayer extends StatelessWidget {
   final Song song;
   final ThemeData theme;
 
+  /// 点歌手/专辑：用详情页替换播放器路由并切到对应 shell tab。
+  final void Function(Widget page, NavigationItem tab) onOpenDetail;
+
   const _NarrowPlayer({
     required this.viewModel,
     required this.song,
     required this.theme,
+    required this.onOpenDetail,
   });
 
   @override
@@ -530,11 +521,17 @@ class _NarrowPlayer extends StatelessWidget {
                 song: song,
                 theme: theme,
                 isNarrow: true,
+                onOpenDetail: onOpenDetail,
               ),
             ),
           );
         }
-        return _NarrowPlayerB(viewModel: viewModel, song: song, theme: theme);
+        return _NarrowPlayerB(
+          viewModel: viewModel,
+          song: song,
+          theme: theme,
+          onOpenDetail: onOpenDetail,
+        );
       },
     );
   }
@@ -547,10 +544,14 @@ class _NarrowPlayerB extends StatelessWidget {
   final Song song;
   final ThemeData theme;
 
+  /// 点歌手/专辑：用详情页替换播放器路由并切到对应 shell tab。
+  final void Function(Widget page, NavigationItem tab) onOpenDetail;
+
   const _NarrowPlayerB({
     required this.viewModel,
     required this.song,
     required this.theme,
+    required this.onOpenDetail,
   });
 
   @override
@@ -578,9 +579,19 @@ class _NarrowPlayerB extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _SongInfo(song: song, theme: theme, isNarrow: false),
+                _SongInfo(
+                  song: song,
+                  theme: theme,
+                  isNarrow: false,
+                  onOpenDetail: onOpenDetail,
+                ),
                 const SizedBox(height: 16),
-                _ProgressBar(viewModel: viewModel, theme: theme),
+                PlayerProgressBar(
+                  position: viewModel.position,
+                  duration: viewModel.duration,
+                  onSeek: viewModel.seek,
+                  theme: theme,
+                ),
                 const SizedBox(height: 12),
                 PlayerControls(
                   player: ServiceLocator.player,
@@ -597,6 +608,35 @@ class _NarrowPlayerB extends StatelessWidget {
   }
 }
 
+// ─── 共享切换过渡：歌词 ↔ 播放列表（淡入 + 朝标签方向轻滑）────
+
+class _FadeSlideTransition extends StatelessWidget {
+  /// 滑动方向：+1 向右（切到播放列表），-1 向左（切到歌词）。
+  final int direction;
+  final Animation<double> animation;
+  final Widget child;
+
+  const _FadeSlideTransition({
+    required this.direction,
+    required this.animation,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: Offset(direction * 0.12, 0),
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      ),
+    );
+  }
+}
+
 // ─── 窄版歌词/队列模式：内容块 + 迷你播放器，切换时同步滑动 ──
 
 class _NarrowLyricsQueue extends StatefulWidget {
@@ -605,13 +645,17 @@ class _NarrowLyricsQueue extends StatefulWidget {
   final ThemeData theme;
 
   /// 当前标签（lyrics 或 queue）。
-  final _NarrowTab tab;
+  final NarrowTab tab;
+
+  /// 跨会话播放器界面状态（转交给 QueueView 恢复滚动）。
+  final PlayerUiState uiState;
 
   const _NarrowLyricsQueue({
     required this.viewModel,
     required this.song,
     required this.theme,
     required this.tab,
+    required this.uiState,
   });
 
   @override
@@ -626,13 +670,13 @@ class _NarrowLyricsQueueState extends State<_NarrowLyricsQueue> {
   void didUpdateWidget(_NarrowLyricsQueue oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.tab != oldWidget.tab) {
-      _direction = widget.tab == _NarrowTab.queue ? 1 : -1;
+      _direction = widget.tab == NarrowTab.queue ? 1 : -1;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isQueue = widget.tab == _NarrowTab.queue;
+    final isQueue = widget.tab == NarrowTab.queue;
     return Column(
       children: [
         // ── 内容块（歌词 ↔ 队列：淡入 + 朝标签方向滑动）──
@@ -641,18 +685,11 @@ class _NarrowLyricsQueueState extends State<_NarrowLyricsQueue> {
             duration: const Duration(milliseconds: 250),
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) {
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: Offset(_direction * 0.12, 0),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
-                ),
-              );
-            },
+            transitionBuilder: (child, animation) => _FadeSlideTransition(
+              direction: _direction,
+              animation: animation,
+              child: child,
+            ),
             child: isQueue
                 ? KeyedSubtree(
                     key: const ValueKey('queue'),
@@ -660,6 +697,7 @@ class _NarrowLyricsQueueState extends State<_NarrowLyricsQueue> {
                       viewModel: widget.viewModel,
                       theme: widget.theme,
                       isNarrow: true,
+                      uiState: widget.uiState,
                     ),
                   )
                 : KeyedSubtree(
@@ -712,7 +750,8 @@ class _MiniPlayer extends StatelessWidget {
     ].join(' · ');
 
     return Material(
-      color: theme.colorScheme.surface,
+      // 与主界面底部栏（NowPlayingBar）一致：surfaceContainerLow 与页面背景区分。
+      color: theme.colorScheme.surfaceContainerLow,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
         child: Column(
@@ -758,7 +797,12 @@ class _MiniPlayer extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             // ── 进度条（正常宽度）──
-            _ProgressBar(viewModel: viewModel, theme: theme),
+            PlayerProgressBar(
+              position: viewModel.position,
+              duration: viewModel.duration,
+              onSeek: viewModel.seek,
+              theme: theme,
+            ),
             const SizedBox(height: 4),
             // ── 控制按钮（compact 缩小、居中）──
             PlayerControls(
@@ -780,10 +824,14 @@ class _RightPanel extends StatefulWidget {
   final ThemeData theme;
   final bool showQueue;
 
+  /// 跨会话播放器界面状态（转交给 QueueView 恢复滚动）。
+  final PlayerUiState uiState;
+
   const _RightPanel({
     required this.viewModel,
     required this.theme,
     required this.showQueue,
+    required this.uiState,
   });
 
   @override
@@ -813,24 +861,18 @@ class _RightPanelState extends State<_RightPanel> {
             duration: const Duration(milliseconds: 250),
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) {
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: Offset(_direction * 0.12, 0),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
-                ),
-              );
-            },
+            transitionBuilder: (child, animation) => _FadeSlideTransition(
+              direction: _direction,
+              animation: animation,
+              child: child,
+            ),
             child: widget.showQueue
                 ? KeyedSubtree(
                     key: const ValueKey('queue'),
                     child: QueueView(
                       viewModel: widget.viewModel,
                       theme: widget.theme,
+                      uiState: widget.uiState,
                     ),
                   )
                 : KeyedSubtree(
@@ -844,9 +886,9 @@ class _RightPanelState extends State<_RightPanel> {
   }
 }
 
-// ─── AppBar tab（窄模式：切换歌词/播放队列，选中高亮+关闭图标）─
+// ─── AppBar tab（切换歌词/播放列表/右栏内容，选中高亮+文字）────
 
-class _NarrowModeTab extends StatelessWidget {
+class _AppBarTab extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool selected;
@@ -855,19 +897,23 @@ class _NarrowModeTab extends StatelessWidget {
   /// 图标尺寸（播放列表因字形偏小用 22，其余 20）；不影响墨迹/命中区。
   final double iconSize;
 
-  const _NarrowModeTab({
+  /// 选中时把图标换成「关闭」、tooltip 变「关闭」（窄模式标签用，再点退出）。
+  final bool closeWhenSelected;
+
+  const _AppBarTab({
     required this.icon,
     required this.label,
     required this.selected,
     required this.onTap,
     this.iconSize = 20,
+    this.closeWhenSelected = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // 与宽模式类似：未选中=仅图标+tooltip；选中=高亮 + 图标换「关闭」+ 文本（再点退出）。
-    final displayIcon = selected ? Icons.close : icon;
+    // 未选中=仅图标+tooltip；选中=高亮 + 图标换「关闭」（可选）+ 文本（再点退出）。
+    final displayIcon = closeWhenSelected && selected ? Icons.close : icon;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Material(
@@ -879,7 +925,7 @@ class _NarrowModeTab extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           onTap: onTap,
           child: Tooltip(
-            message: selected ? '关闭' : label,
+            message: closeWhenSelected && selected ? '关闭' : label,
             child: SizedBox(
               // 固定墨迹高度（不随图标尺寸变化）。
               height: 36,
@@ -907,73 +953,6 @@ class _NarrowModeTab extends StatelessWidget {
                     ],
                   ],
                 ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── AppBar tab（宽模式：切换右栏内容）──────────────────────
-
-class _AppBarTab extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  /// 图标尺寸（播放列表因字形偏小用 22，其余 20）；不影响墨迹/命中区。
-  final double iconSize;
-
-  const _AppBarTab({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.iconSize = 20,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Material(
-        color: selected
-            ? theme.colorScheme.primaryContainer
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: onTap,
-          child: SizedBox(
-            // 固定墨迹高度（不随图标尺寸变化）。
-            height: 36,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    icon,
-                    size: iconSize,
-                    color: selected
-                        ? theme.colorScheme.onPrimaryContainer
-                        : theme.colorScheme.onSurfaceVariant,
-                  ),
-                  if (selected) ...[
-                    const SizedBox(width: 6),
-                    Text(
-                      label,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: theme.colorScheme.onPrimaryContainer,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ],
               ),
             ),
           ),

@@ -20,10 +20,28 @@ enum NavigationItem {
   const NavigationItem(this.label, this.icon);
 }
 
+/// 允许外部（App/播放页）切换 Shell tab 的控制器。
+///
+/// Shell 自身点击也写回 [tab] 保持双向同步；ValueNotifier 同值不 notify，无循环。
+class ShellController {
+  final ValueNotifier<NavigationItem> tab = ValueNotifier(
+    NavigationItem.library,
+  );
+
+  void dispose() => tab.dispose();
+}
+
 class ShellPage extends StatefulWidget {
   final bool isInitialized;
 
-  const ShellPage({super.key, this.isInitialized = false});
+  /// Shell tab 外部控制（双向同步）。
+  final ShellController controller;
+
+  const ShellPage({
+    super.key,
+    this.isInitialized = false,
+    required this.controller,
+  });
 
   @override
   State<ShellPage> createState() => _ShellPageState();
@@ -35,6 +53,30 @@ class _ShellPageState extends State<ShellPage> {
   /// 已访问过的 tab：惰性保活——首次选中才构建页面，之后切换不销毁重建
   /// （State / 滚动位置 / 搜索状态保留）。
   final Set<NavigationItem> _visited = {NavigationItem.library};
+
+  @override
+  void initState() {
+    super.initState();
+    // 以控制器当前值为准（兜住 Shell 重建后控制器可能已非初始 tab 的失步）。
+    _selected = widget.controller.tab.value;
+    widget.controller.tab.addListener(_onExternalTab);
+  }
+
+  /// 外部（App/播放页）请求切 tab。
+  void _onExternalTab() {
+    final requested = widget.controller.tab.value;
+    if (requested == _selected) return;
+    setState(() {
+      _selected = requested;
+      _visited.add(requested);
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.controller.tab.removeListener(_onExternalTab);
+    super.dispose();
+  }
 
   /// 返回 [item] 对应的页面；未访问过的 tab 用空占位（惰性构建）。
   ///
@@ -79,6 +121,8 @@ class _ShellPageState extends State<ShellPage> {
                     _selected = item;
                     _visited.add(item);
                   });
+                  // 双向同步：外部（App/播放页）也能读到当前 tab。
+                  widget.controller.tab.value = item;
                 },
                 labelType: NavigationRailLabelType.selected,
                 leading: Padding(

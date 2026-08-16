@@ -11,6 +11,7 @@ import '../core/services/player_service.dart';
 import '../core/services/service_locator.dart';
 import '../core/utils/logger.dart';
 import '../features/player/player_page.dart';
+import '../features/player/player_ui_state.dart';
 import '../features/shell/now_playing_bar.dart';
 import '../features/shell/shell_page.dart';
 
@@ -26,6 +27,12 @@ class _AppState extends State<App> {
   Object? _startupError;
   final _navKey = GlobalKey<NavigatorState>();
   final _showBar = ValueNotifier<bool>(true);
+
+  /// 播放器跨会话界面状态（重开保留标签/队列滚动位置）。
+  final _playerUiState = PlayerUiState();
+
+  /// Shell tab 外部控制（播放页跳歌手/专辑时切 tab）。
+  final _shellController = ShellController();
 
   /// 与原生层（MainFlutterWindow.swift）通信的通道。
   static const _windowChannel = MethodChannel('flutter_music/window');
@@ -72,6 +79,7 @@ class _AppState extends State<App> {
   @override
   void dispose() {
     _showBar.dispose();
+    _shellController.dispose();
     super.dispose();
   }
 
@@ -96,7 +104,23 @@ class _AppState extends State<App> {
       ServiceLocator.player.resyncFromAudio();
     }
     _navKey.currentState!.push(
-      AppRouter.bottomUpRoute(const PlayerPage(), name: PlayerPage.routeName),
+      AppRouter.bottomUpRoute(
+        PlayerPage(
+          uiState: _playerUiState,
+          onOpenDetail: _openDetailFromPlayer,
+        ),
+        name: PlayerPage.routeName,
+      ),
+    );
+  }
+
+  /// 从播放页点歌手/专辑：推入详情页并清掉 shell 之上的所有路由
+  /// （播放器 + 之前可能残留的详情页），返回落到主页并让 Shell 切到对应 tab。
+  void _openDetailFromPlayer(Widget page, NavigationItem tab) {
+    _shellController.tab.value = tab;
+    _navKey.currentState!.pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => page),
+      (route) => route.isFirst,
     );
   }
 
@@ -109,7 +133,10 @@ class _AppState extends State<App> {
       themeMode: ThemeMode.system,
       home: _startupError != null
           ? StartupErrorPage(error: _startupError!, onRetry: _retry)
-          : ShellPage(isInitialized: _initialized),
+          : ShellPage(
+              isInitialized: _initialized,
+              controller: _shellController,
+            ),
       onGenerateRoute: AppRouter.generateRoute,
       navigatorKey: _navKey,
       navigatorObservers: [_NowPlayingBarVisibilityObserver(_showBar)],

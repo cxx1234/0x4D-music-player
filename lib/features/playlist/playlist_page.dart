@@ -393,6 +393,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
               ),
               PopupMenuButton<String>(
                 tooltip: '更多',
+                // 默认 iconTheme.color 是固定纯黑/纯白（M2 遗留），显式指定跟随主题。
+                iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
                 onSelected: (value) {
                   if (value == 'import') _importM3u();
                 },

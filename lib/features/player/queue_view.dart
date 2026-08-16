@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/database/database.dart';
 import '../../core/services/player_service.dart';
 import '../../widgets/song_tile.dart';
+import 'player_ui_state.dart';
 import 'player_view_model.dart';
 
 /// 队列底部状态行文案：跟随循环/随机模式变化。
@@ -41,6 +42,20 @@ IconData _queueFooterIcon(PlayerRepeatMode repeatMode, bool isShuffled) {
   }
 }
 
+/// 判断固定行高列表的第 [index] 项是否落在可见区间 [pixels, pixels+viewportDimension) 内。
+///
+/// 部分可见也算可见；只有完全在视口外才返回 false（用于「定位」按钮显隐）。
+bool isQueueItemInView({
+  required int index,
+  required double itemExtent,
+  required double pixels,
+  required double viewportDimension,
+}) {
+  final top = index * itemExtent;
+  final bottom = top + itemExtent;
+  return bottom > pixels && top < pixels + viewportDimension;
+}
+
 /// 当前播放队列视图：清空 / 选择删除 / 手动排序。
 class QueueView extends StatefulWidget {
   final PlayerViewModel viewModel;
@@ -49,11 +64,15 @@ class QueueView extends StatefulWidget {
   /// 窄版内嵌时传 true：「共 N 首」左侧加 margin（宽版右栏为 false，无 margin）。
   final bool isNarrow;
 
+  /// 跨会话播放器界面状态：滚动位置/当前歌在此读写，重开不重滚。
+  final PlayerUiState uiState;
+
   const QueueView({
     super.key,
     required this.viewModel,
     required this.theme,
     this.isNarrow = false,
+    required this.uiState,
   });
 
   @override
@@ -64,12 +83,15 @@ class _QueueViewState extends State<QueueView> {
   bool _deleteMode = false;
   bool _reorderMode = false;
   final Set<int> _selectedIndices = {};
-  final ScrollController _scrollController = ScrollController();
+  late final ScrollController _scrollController;
 
-  // 工具条底部阴影：列表滚离顶部时出现（回顶消失）。
-  bool _toolbarShadowed = false;
-  // 状态行顶部阴影：列表滚离底部时出现（回底消失）。
-  bool _footerShadowed = false;
+  // 顶部边缘淡出：列表滚离顶部时淡入（回顶消失）。
+  bool _topFaded = false;
+  // 底部边缘淡出：列表滚离底部时淡入（回底消失）。
+  bool _bottomFaded = false;
+
+  // 「定位」按钮：当前高亮项不在视口内时显示。
+  bool _showLocate = false;
 
   // 上次已知的当前播放索引；变化时自动滚动到高亮项。
   int? _lastCurrentIndex;
@@ -80,9 +102,22 @@ class _QueueViewState extends State<QueueView> {
   @override
   void initState() {
     super.initState();
+    // 用上次会话保存的偏移初始化（重开同歌 → 恢复位置，不重滚）。
+    _scrollController = ScrollController(
+      initialScrollOffset: widget.uiState.queueScrollOffset,
+    );
     _lastCurrentIndex = vm.currentIndex;
-    // 首次打开队列即定位到当前播放项（高亮可见）。
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrent());
+    // 重开判断：当前歌与上次会话相同 → 恢复滚动位置；不同（离开期间切歌）→ 跟随当前歌。
+    final follow = vm.currentSong?.id != widget.uiState.lastCurrentSongId;
+    widget.uiState.lastCurrentSongId = vm.currentSong?.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (follow) {
+        _scrollToCurrent();
+      } else {
+        // 恢复位置后按偏移重算边缘淡出（避免遮罩残留）。
+        _refreshFadeState();
+      }
+    });
   }
 
   @override
@@ -90,6 +125,7 @@ class _QueueViewState extends State<QueueView> {
     super.didUpdateWidget(oldWidget);
     if (_lastCurrentIndex != vm.currentIndex) {
       _lastCurrentIndex = vm.currentIndex;
+      widget.uiState.lastCurrentSongId = vm.currentSong?.id;
       // 当前播放项变化后自动滚动到高亮位置（删除/拖拽模式下不打扰用户）。
       if (!_deleteMode && !_reorderMode) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrent());
@@ -99,6 +135,8 @@ class _QueueViewState extends State<QueueView> {
 
   @override
   void dispose() {
+    // 滚动偏移已由 _handleScroll 实时写回 uiState（dispose 时 Scrollable 已
+    // detach、读不到 offset，不能在此时保存）。
     _scrollController.dispose();
     super.dispose();
   }
@@ -107,7 +145,10 @@ class _QueueViewState extends State<QueueView> {
   // 不会像“逐行估算高度”那样在大列表下累积误差导致高亮滚动失效。
   static const double _kQueueTileExtent = 72;
 
-  // 滚动到当前播放项并置于视口顶部（先快后慢 easeOutCubic，400ms）。
+  // 当前项距视口顶部的预留：避开顶部边缘淡出遮罩（约 32 高）。
+  static const double _kCurrentTopInset = 30;
+
+  // 滚动到当前播放项并置于视口顶部下方（先快后慢 easeOutCubic，400ms）。
   void _scrollToCurrent() {
     if (!mounted) return;
     final index = vm.currentIndex;
@@ -115,8 +156,9 @@ class _QueueViewState extends State<QueueView> {
     if (index < 0 || index >= queue.length) return;
     if (!_scrollController.hasClients) return;
 
-    // 偏移 = index * 固定行高：当前项贴视口顶部（列表到底时钳制到底部）。
-    final target = (index * _kQueueTileExtent).clamp(
+    // 偏移 = index * 固定行高 - 顶部预留：当前项贴到视口顶部下方 30pt
+    // （列表到底时钳制到底部）。
+    final target = (index * _kQueueTileExtent - _kCurrentTopInset).clamp(
       0.0,
       _scrollController.position.maxScrollExtent,
     );
@@ -134,10 +176,12 @@ class _QueueViewState extends State<QueueView> {
         _selectedIndices.clear();
       }
       _reorderMode = false;
-      // 模式切换后列表重建，阴影状态一并复位。
-      _toolbarShadowed = false;
-      _footerShadowed = false;
+      // 模式切换后列表重建，边缘淡出状态一并复位。
+      _topFaded = false;
+      _bottomFaded = false;
     });
+    // 下一帧列表重建完成后，按当前滚动位置重新计算边缘淡出。
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshFadeState());
   }
 
   void _toggleReorderMode() {
@@ -147,9 +191,29 @@ class _QueueViewState extends State<QueueView> {
         _deleteMode = false;
         _selectedIndices.clear();
       }
-      _toolbarShadowed = false;
-      _footerShadowed = false;
+      _topFaded = false;
+      _bottomFaded = false;
     });
+    // 下一帧列表重建完成后，按当前滚动位置重新计算边缘淡出。
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshFadeState());
+  }
+
+  // 按当前滚动位置重新计算边缘淡出与定位按钮（模式切换/恢复后调用）。
+  void _refreshFadeState() {
+    if (!mounted || !_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final topFaded = position.extentBefore > 0;
+    final bottomFaded = position.extentAfter > 0;
+    final showLocate = !_isCurrentInView(position);
+    if (topFaded != _topFaded ||
+        bottomFaded != _bottomFaded ||
+        showLocate != _showLocate) {
+      setState(() {
+        _topFaded = topFaded;
+        _bottomFaded = bottomFaded;
+        _showLocate = showLocate;
+      });
+    }
   }
 
   Future<void> _confirmClear() async {
@@ -203,75 +267,112 @@ class _QueueViewState extends State<QueueView> {
 
     return Column(
       children: [
-        // 工具条：列表滚离顶部时底部出现轻阴影（回顶消失）。
-        AnimatedPhysicalModel(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-          shape: BoxShape.rectangle,
-          elevation: _toolbarShadowed ? 2 : 0,
+        // 工具条：仅提供表面色背景，不再有滚动阴影。
+        Material(
           color: theme.colorScheme.surface,
-          shadowColor: theme.colorScheme.shadow,
           child: _buildToolbar(queue.length),
         ),
         Expanded(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: _handleScroll,
-            child: Material(
-              type: MaterialType.transparency,
-              clipBehavior: Clip.hardEdge,
-              child: _reorderMode
-                  ? _buildReorderableList(queue)
-                  : _buildList(queue),
-            ),
-          ),
-        ),
-        // 状态行：始终钉在底部；列表滚离底部时顶部出现一道向上渐变阴影（回底消失）。
-        if (!_deleteMode && !_reorderMode) ...[
-          AnimatedOpacity(
-            opacity: _footerShadowed ? 1 : 0,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            child: IgnorePointer(
-              child: Container(
-                height: 8,
-                decoration: BoxDecoration(
-                  // 仅向上投影：顶部透明 → 紧贴状态行顶边渐深，无侧向扩散。
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.transparent,
-                      theme.colorScheme.shadow.withValues(alpha: 0.14),
-                    ],
+          // 列表 + 顶部/底部边缘淡出遮罩（随滚动淡入/淡出）。
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _handleScroll,
+                  child: Material(
+                    type: MaterialType.transparency,
+                    clipBehavior: Clip.hardEdge,
+                    child: _reorderMode
+                        ? _buildReorderableList(queue)
+                        : _buildList(queue),
                   ),
                 ),
               ),
-            ),
+              // 顶部边缘淡出：滚离顶部时淡入（回顶消失）。
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _buildFadeMask(visible: _topFaded, atTop: true),
+              ),
+              // 底部边缘淡出：滚离底部时淡入（回底消失）。
+              // 删除/排序模式下无状态行，隐藏底部遮罩避免盖住末尾内容。
+              if (!_deleteMode && !_reorderMode)
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: _buildFadeMask(visible: _bottomFaded, atTop: false),
+                ),
+            ],
           ),
+        ),
+        // 状态行：始终钉在底部。
+        if (!_deleteMode && !_reorderMode)
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
             color: theme.colorScheme.surface,
             child: _buildFooter(),
           ),
-        ],
       ],
     );
   }
 
-  // 滚动时更新两侧阴影：离开顶部 → 工具条阴影；离开底部 → 状态行阴影。
+  // 当前高亮项是否在视口内（部分可见也算）——完全不可见时显示「定位」。
+  bool _isCurrentInView(ScrollMetrics metrics) {
+    final index = vm.currentIndex;
+    if (index < 0 || index >= vm.queue.length) return true;
+    return isQueueItemInView(
+      index: index,
+      itemExtent: _kQueueTileExtent,
+      pixels: metrics.pixels,
+      viewportDimension: metrics.viewportDimension,
+    );
+  }
+
+  // 滚动时实时保存偏移（供重开恢复）并更新两侧边缘淡出、定位按钮显隐。
   bool _handleScroll(ScrollNotification notification) {
     final metrics = notification.metrics;
-    final toolbarShadowed = metrics.extentBefore > 0;
-    final footerShadowed = metrics.extentAfter > 0;
-    if (toolbarShadowed != _toolbarShadowed ||
-        footerShadowed != _footerShadowed) {
+    // 持续写回：与 dispose 时机解耦（dispose 时 Scrollable 已 detach，读不到 offset）。
+    widget.uiState.queueScrollOffset = metrics.pixels;
+    final topFaded = metrics.extentBefore > 0;
+    final bottomFaded = metrics.extentAfter > 0;
+    final showLocate = !_isCurrentInView(metrics);
+    if (topFaded != _topFaded ||
+        bottomFaded != _bottomFaded ||
+        showLocate != _showLocate) {
       setState(() {
-        _toolbarShadowed = toolbarShadowed;
-        _footerShadowed = footerShadowed;
+        _topFaded = topFaded;
+        _bottomFaded = bottomFaded;
+        _showLocate = showLocate;
       });
     }
     return false;
+  }
+
+  // 列表边缘淡出遮罩：表面色 → 透明，随滚动淡入淡出（柔和盖住内容边缘）。
+  Widget _buildFadeMask({required bool visible, required bool atTop}) {
+    return AnimatedOpacity(
+      opacity: visible ? 1 : 0,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOut,
+      child: IgnorePointer(
+        child: Container(
+          height: 32,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: atTop ? Alignment.topCenter : Alignment.bottomCenter,
+              end: atTop ? Alignment.bottomCenter : Alignment.topCenter,
+              colors: [
+                theme.colorScheme.surface,
+                theme.colorScheme.surface.withValues(alpha: 0),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildToolbar(int count) {
@@ -289,6 +390,12 @@ class _QueueViewState extends State<QueueView> {
             ),
           ),
           const Spacer(),
+          if (_showLocate)
+            IconButton(
+              icon: const Icon(Icons.my_location_rounded, size: 20),
+              tooltip: '定位到当前播放',
+              onPressed: _scrollToCurrent,
+            ),
           if (_deleteMode) ...[
             IconButton(
               icon: const Icon(Icons.close, size: 20),
@@ -341,7 +448,7 @@ class _QueueViewState extends State<QueueView> {
       vm.repeatMode,
       vm.isShuffled,
       // 列表滚动到底（extentAfter == 0）时才显示「· 到底了」。
-      atBottom: !_footerShadowed,
+      atBottom: !_bottomFaded,
     );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),

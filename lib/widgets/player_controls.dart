@@ -35,11 +35,11 @@ class PlayerControls extends StatelessWidget {
         ),
         SizedBox(width: compact ? 6 : 8),
 
-        // Previous
+        // Previous（图标尺寸固定不随 compact 缩小——切歌按钮保持不变）
         _ControlButton(
           icon: Icons.skip_previous_rounded,
           isActive: false,
-          iconSize: compact ? 24 : 32,
+          iconSize: 32,
           tooltip: '上一首',
           onPressed: player.previous,
         ),
@@ -59,11 +59,11 @@ class PlayerControls extends StatelessWidget {
         ),
         SizedBox(width: compact ? 6 : 8),
 
-        // Next
+        // Next（图标尺寸固定不随 compact 缩小——切歌按钮保持不变）
         _ControlButton(
           icon: Icons.skip_next_rounded,
           isActive: false,
-          iconSize: compact ? 24 : 32,
+          iconSize: 32,
           tooltip: '下一首',
           onPressed: player.next,
         ),
