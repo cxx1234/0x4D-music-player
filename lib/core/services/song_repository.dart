@@ -70,6 +70,10 @@ class SongRepository {
   Stream<List<Song>> watchSongsByArtist(int artistId) =>
       _db.watchSongsByArtist(artistId);
 
+  /// 每个歌手的歌曲/专辑统计（浏览页计数用，避免加载全量歌曲）。
+  Future<Map<int, ({int songCount, int albumCount})>> getArtistStats() =>
+      _db.getArtistStats();
+
   // ─── Playlist queries ──────────────────────────────────
 
   Future<List<Playlist>> getAllPlaylists() => _db.getAllPlaylists();

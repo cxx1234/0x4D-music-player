@@ -23,7 +23,11 @@ String _albumSubtitle(Album album) {
 }
 
 class AlbumsPage extends StatefulWidget {
-  const AlbumsPage({super.key});
+  /// 是否为当前选中的 tab；从非激活切回激活时重新加载数据（保活下的
+  /// 跨页数据新鲜度：扫描/删文件夹等变更后切回本页能看到最新数据）。
+  final bool active;
+
+  const AlbumsPage({super.key, this.active = true});
 
   @override
   State<AlbumsPage> createState() => _AlbumsPageState();
@@ -39,6 +43,14 @@ class _AlbumsPageState extends State<AlbumsPage> {
     super.initState();
     _viewModel.addListener(_onChanged);
     _viewModel.load();
+  }
+
+  @override
+  void didUpdateWidget(AlbumsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) {
+      _viewModel.load();
+    }
   }
 
   @override
@@ -262,7 +274,7 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
     if (_loading) return const Center(child: CircularProgressIndicator());
 
     return ListenableBuilder(
-      listenable: player,
+      listenable: player.currentSongNotifier,
       builder: (context, _) {
         return Column(
           children: [

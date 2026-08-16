@@ -465,6 +465,27 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
     return {for (final r in rows) r.read<int>('pid'): r.read<int>('c')};
   }
 
+  /// 每个歌手的可用歌曲数与专辑数（聚合查询）。
+  ///
+  /// 供歌手浏览页计数用，避免在内存里持有全量歌曲/专辑副本。
+  Future<Map<int, ({int songCount, int albumCount})>> getArtistStats() async {
+    final rows = await customSelect(
+      'SELECT artist_id AS aid, '
+      'COUNT(*) AS song_count, '
+      'COUNT(DISTINCT album_id) AS album_count '
+      'FROM songs '
+      'WHERE is_available = 1 AND artist_id IS NOT NULL '
+      'GROUP BY artist_id',
+    ).get();
+    return {
+      for (final r in rows)
+        r.read<int>('aid'): (
+          songCount: r.read<int>('song_count'),
+          albumCount: r.read<int>('album_count'),
+        ),
+    };
+  }
+
   // ─── Sort key backfill ─────────────────────────────────
 
   Future<List<Song>> getSongsWithNullSortKey() =>

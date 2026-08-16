@@ -200,7 +200,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
         ],
       ),
       body: ListenableBuilder(
-        listenable: player,
+        listenable: player.currentSongNotifier,
         builder: (context, _) {
           return Column(
             children: [

@@ -58,6 +58,22 @@ class PlayerService extends ChangeNotifier {
   /// 触发。直到引擎回到 ready（用户点播放等操作会触发）才解除。
   bool _handlingQueueEnd = false;
 
+  // ─── 轻量去重通知器 ────────────────────────────────────
+  //
+  // 只关心"当前播放高亮"的 UI（音乐库、专辑/播放列表/歌手详情等）应订阅
+  // 这些而不是整个 service——后者随 positionStream 每 ~200ms 触发一次，
+  // 订阅它会让页面跟着高频重建（保活后 offstage 页也在重建，开销更明显）。
+
+  /// 当前歌曲变化通知器（按歌曲 id 去重，仅在切歌时触发）。
+  late final ValueNotifier<Song?> currentSongNotifier = ValueNotifier<Song?>(
+    _playQueue.currentSong,
+  );
+
+  /// 播放/暂停状态翻转通知器（playing 变化时触发）。
+  late final ValueNotifier<bool> playingNotifier = ValueNotifier<bool>(
+    _player.playing,
+  );
+
   // ─── Stream subscriptions ──────────────────────────────
 
   /// 权威事件源：切歌 / seek / 播完等每次引擎变化都会触发。
@@ -65,13 +81,17 @@ class PlayerService extends ChangeNotifier {
   StreamSubscription? _positionSub;
   StreamSubscription? _durationSub;
 
+  /// playing 翻转监听（维护 [playingNotifier]）。
+  StreamSubscription<bool>? _playingSub;
+
   /// 周期对账 watchdog：兜住引擎与 [PlayQueue] 的索引分叉。
   Timer? _reconcileTimer;
 
   PlayerService({PlayQueue? playQueue, bool resumePlaybackPosition = true})
     : _playQueue = playQueue ?? PlayQueue() {
-    // Forward PlayQueue changes to this service's listeners
-    _playQueue.addListener(notifyListeners);
+    // Forward PlayQueue changes to this service's listeners（经 _onQueueChanged
+    // 汇聚，顺带维护按歌曲去重的 currentSongNotifier）。
+    _playQueue.addListener(_onQueueChanged);
 
     // Restore persisted playback-mode settings (repeat / shuffle).
     _repeatMode = PlayerRepeatMode.values.firstWhere(
@@ -96,6 +116,27 @@ class PlayerService extends ChangeNotifier {
       const Duration(seconds: 1),
       (_) => _reconcile(),
     );
+    _playingSub = _player.playingStream.listen(_onPlayingChanged);
+  }
+
+  /// PlayQueue 变化的统一入口：转发给本 service 的监听者，并维护按歌曲 id
+  /// 去重的 [currentSongNotifier]。
+  ///
+  /// 所有索引变更（playFromList / 引擎切歌 _onPlaybackEvent / reconcile /
+  /// 增删移动 / 清空）都经 _playQueue 变更触发，这里一个汇聚点即全覆盖。
+  void _onQueueChanged() {
+    final song = _playQueue.currentSong;
+    if (song?.id != currentSongNotifier.value?.id) {
+      currentSongNotifier.value = song;
+    }
+    notifyListeners();
+  }
+
+  /// playing 翻转时同步 [playingNotifier]（playingStream 自带 distinct）。
+  void _onPlayingChanged(bool playing) {
+    if (playing != playingNotifier.value) {
+      playingNotifier.value = playing;
+    }
   }
 
   // ─── Engine ↔ app state reconciliation ─────────────────
@@ -707,8 +748,13 @@ class PlayerService extends ChangeNotifier {
     _playbackEventSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
+    _playingSub?.cancel();
     _reconcileTimer?.cancel();
     _player.dispose();
+    // 通知器最后释放：cancel 订阅后 _onQueueChanged/_onPlayingChanged 不会再
+    // 被触发，避免在已 dispose 的 ValueNotifier 上写入。
+    currentSongNotifier.dispose();
+    playingNotifier.dispose();
     super.dispose();
   }
 }

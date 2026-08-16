@@ -1,36 +1,28 @@
 import 'package:drift/drift.dart' hide Column;
-import 'package:flutter/foundation.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
+import '../../core/viewmodels/page_view_model.dart';
 
 /// ViewModel for the Playlists browse page.
-class PlaylistsViewModel extends ChangeNotifier {
+class PlaylistsViewModel extends PageViewModel {
   List<Playlist> _playlists = [];
   Map<int, int> _songCounts = {};
   int _favoriteCount = 0;
-  bool _loading = true;
 
   List<Playlist> get playlists => _playlists;
   int get favoriteCount => _favoriteCount;
-  bool get loading => _loading;
 
   /// 某个播放列表的可用歌曲数。
   int songCountFor(Playlist playlist) => _songCounts[playlist.id] ?? 0;
 
   /// 加载播放列表列表与"我的收藏"数量。
-  Future<void> load() async {
-    _loading = true;
-    notifyListeners();
-
-    try {
+  Future<void> load() {
+    return runLoad(() async {
       _playlists = await ServiceLocator.songRepo.getAllPlaylists();
       _songCounts = await ServiceLocator.songRepo.getPlaylistSongCounts();
       _favoriteCount = await ServiceLocator.songRepo.getFavoriteCount();
-    } finally {
-      _loading = false;
-      notifyListeners();
-    }
+    }, hasData: _playlists.isNotEmpty);
   }
 
   /// 新建播放列表，返回新 id。

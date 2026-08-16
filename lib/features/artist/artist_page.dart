@@ -16,7 +16,11 @@ import '../playlist/song_actions.dart';
 import 'artist_view_model.dart';
 
 class ArtistsPage extends StatefulWidget {
-  const ArtistsPage({super.key});
+  /// 是否为当前选中的 tab；从非激活切回激活时重新加载数据（保活下的
+  /// 跨页数据新鲜度：扫描/删文件夹等变更后切回本页能看到最新数据）。
+  final bool active;
+
+  const ArtistsPage({super.key, this.active = true});
 
   @override
   State<ArtistsPage> createState() => _ArtistsPageState();
@@ -32,6 +36,14 @@ class _ArtistsPageState extends State<ArtistsPage> {
     super.initState();
     _viewModel.addListener(_onChanged);
     _viewModel.load();
+  }
+
+  @override
+  void didUpdateWidget(ArtistsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) {
+      _viewModel.load();
+    }
   }
 
   @override
@@ -139,8 +151,9 @@ class _ArtistsPageState extends State<ArtistsPage> {
         itemCount: artists.length,
         itemBuilder: (context, index) {
           final artist = artists[index];
-          final albumCount = _viewModel.albumsForArtist(artist).length;
-          final songCount = _viewModel.songsForArtist(artist).length;
+          final stats = _viewModel.statsFor(artist);
+          final albumCount = stats.albumCount;
+          final songCount = stats.songCount;
           return ListItemTile(
             leading: CircleAvatar(
               // 44 直径，与 SongTile 默认封面同宽，保证标题位置一致
@@ -183,7 +196,12 @@ class ArtistDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: DetailTopBar(title: artist.name),
-      body: _ArtistDetailContent(artist: artist),
+      // 监听"当前歌曲"去重通知器：切歌时实时刷新行内 isCurrent 高亮，与其他
+      // 详情页（专辑/播放列表/我的收藏）的 ListenableBuilder 用法保持一致。
+      body: ListenableBuilder(
+        listenable: ServiceLocator.player.currentSongNotifier,
+        builder: (context, _) => _ArtistDetailContent(artist: artist),
+      ),
     );
   }
 }

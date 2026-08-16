@@ -17,7 +17,11 @@ import 'playlist_io.dart';
 import 'playlist_view_model.dart';
 
 class PlaylistPage extends StatefulWidget {
-  const PlaylistPage({super.key});
+  /// 是否为当前选中的 tab；从非激活切回激活时重新加载数据（保活下的
+  /// 跨页数据新鲜度：扫描/删文件夹等变更后切回本页能看到最新数据）。
+  final bool active;
+
+  const PlaylistPage({super.key, this.active = true});
 
   @override
   State<PlaylistPage> createState() => _PlaylistPageState();
@@ -33,6 +37,14 @@ class _PlaylistPageState extends State<PlaylistPage> {
     super.initState();
     _viewModel.addListener(_onChanged);
     _viewModel.load();
+  }
+
+  @override
+  void didUpdateWidget(PlaylistPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) {
+      _viewModel.load();
+    }
   }
 
   @override
