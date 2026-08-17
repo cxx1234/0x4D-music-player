@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -105,12 +107,12 @@ class _PlaylistPageState extends State<PlaylistPage> {
   }
 
   Future<void> _importM3u() async {
-    final result = await FilePicker.pickFiles(
+    final files = await FilePicker.pickFiles(
       dialogTitle: '导入播放列表',
       type: FileType.custom,
       allowedExtensions: const ['m3u', 'm3u8'],
     );
-    final filePath = result?.files.single.path;
+    final filePath = files.isEmpty ? null : files.single.path;
     if (filePath == null || !mounted) return;
 
     final M3uImportResult imported;
@@ -272,18 +274,29 @@ class _PlaylistPageState extends State<PlaylistPage> {
 
   /// 导出播放列表为 M3U 文件。
   Future<void> _export(Playlist playlist) async {
-    final path = await FilePicker.saveFile(
+    final ({Uint8List bytes, int count}) content;
+    try {
+      content = await buildPlaylistM3u8(playlist.id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('导出失败：无法生成播放列表内容')));
+      return;
+    }
+
+    final uri = await FilePicker.saveFile(
       dialogTitle: '导出播放列表',
       fileName: '${playlist.name}.m3u8',
+      bytes: content.bytes,
       type: FileType.custom,
       allowedExtensions: const ['m3u8', 'm3u'],
     );
-    if (path == null || !mounted) return;
-    final count = await exportPlaylistToFile(playlist.id, path);
-    if (!mounted) return;
+    if (uri == null || !mounted) return;
+    // saveFile 已把 bytes 写入所选位置，uri 非空即成功。
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text('已导出 $count 首歌曲')));
+    ).showSnackBar(SnackBar(content: Text('已导出 ${content.count} 首歌曲')));
   }
 
   /// 长按卡片弹出统一菜单（与右下角三点按钮一致），锚定在卡片位置。

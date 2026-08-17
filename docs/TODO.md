@@ -23,7 +23,7 @@
 
 ## 其他已登记待办
 
-- **just_audio 0.10 迁移收尾**（2026-08-11）：`player_service.dart` 仍有 4 处 `ConcatenatingAudioSource` 弃用警告，改用 0.10 新 playlist API；`_rebuildSequence` 兜底逻辑保留。
+- ✅ **just_audio 0.10 迁移收尾**（2026-08-11 → 2026-08-13 完成）：`player_service.dart` 已改用 0.10 新 playlist API（`setAudioSources` / `addAudioSources` / `removeAudioSourceAt` / `insertAudioSources` / `moveAudioSource`），4 处 `ConcatenatingAudioSource` 弃用警告清零；`_rebuildSequence` 兜底逻辑保留。`dart analyze` 干净、`flutter test` 27/27 通过。
 - **歌词全屏页红绿灯避让**（2026-08-04/05）：`LyricsPage` 的 M3 AppBar≈56 会与 macOS 红绿灯重叠，窄窗歌词展示方案待讨论。
 - **日志查看页接入导航**（2026-08-11）：`LogPage` / `LogDetailPage` 已实现未接入，设置页 TODO。
 - **播放页左栏 10px 溢出**（2026-08-10）：`player_page.dart` 顶部区域变矮后 `_LeftPanel` 有 10px 溢出，待修。

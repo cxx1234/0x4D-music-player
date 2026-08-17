@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.1.0+23
+version: 0.1.0+35
 
 environment:
   sdk: ^3.12.2
@@ -34,7 +34,7 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  file_picker: ^11.0.2
+  file_picker: ^12.0.0
   drift: ^2.26.0
   sqlite3: ^3.3.4
   path_provider: ^2.1.0
@@ -49,7 +49,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   drift_dev: ^2.26.0
-  build_runner: ^2.4.0
+  build_runner: ^2.16.0
 
 # metadata_god 1.1.0 的内置原生库是用 flutter_rust_bridge 2.11.1 codegen 编译的，
 # 但 ^2.11.1 会解析到最新的 2.12.x，导致运行时版本不匹配。
@@ -58,7 +58,7 @@ dependency_overrides:
   flutter_rust_bridge: 2.11.1
   flutter_lints: ^6.0.0
   drift_dev: ^2.26.0
-  build_runner: ^2.15.0
+  build_runner: ^2.16.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

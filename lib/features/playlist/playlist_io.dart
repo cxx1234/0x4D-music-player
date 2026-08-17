@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 
@@ -19,6 +20,16 @@ class M3uImportResult {
 
   /// 未匹配到库中歌曲的条目数。
   int get skipped => total - songs.length;
+}
+
+/// 构建播放列表的 UTF-8 M3U8 字节内容（供 `file_picker` 的 `saveFile` 写入），
+/// 返回 (字节内容, 歌曲数)。
+///
+/// 仅包含当前可用的歌曲（与播放列表现行语义一致）。
+Future<({Uint8List bytes, int count})> buildPlaylistM3u8(int playlistId) async {
+  final songs = await ServiceLocator.songRepo.getSongsInPlaylist(playlistId);
+  final bytes = Uint8List.fromList(utf8.encode(buildM3u8(songs)));
+  return (bytes: bytes, count: songs.length);
 }
 
 /// 把播放列表导出为 UTF-8 M3U8 写入 [filePath]，返回导出的歌曲数。
