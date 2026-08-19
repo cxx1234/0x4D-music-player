@@ -116,6 +116,13 @@ class ServiceLocator {
     _sandboxRestoreFailures = 0;
   }
 
+  /// 落盘所有待写的持久化（如队列防抖窗口内的变更）。
+  ///
+  /// 供 App 生命周期挂起/退出前调用，避免防抖窗口内的数据丢失。
+  static Future<void> flushPendingWrites() async {
+    await _playQueue?.flushPendingSave();
+  }
+
   /// 幂等初始化：整个 isolate 生命周期内只执行一次。
   ///
   /// 即使被重复调用（例如某些情况下 initState 再次触发），也返回同一份

@@ -195,6 +195,17 @@ class LibraryViewModel extends PageViewModel {
     safeNotify();
   }
 
+  /// 清除扫描结果横幅（扫描完成后 N 秒自动收起时调用）。
+  ///
+  /// 页面全部保活后 VM 常驻，结果横幅不再随"切换 tab 重建页面"被清掉，
+  /// 需要 UI 主动清除，否则会一直挂在页面上。
+  void clearScanResult() {
+    if (_scanResult == null) return;
+    _scanResult = null;
+    _scanState = LibraryScanState.idle;
+    safeNotify();
+  }
+
   Future<void> _quickSync(List<String> folders) async {
     try {
       await _scanner.scanFolders(folders, markMissing: false);

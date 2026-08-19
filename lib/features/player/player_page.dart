@@ -255,8 +255,6 @@ class _PlayerPageState extends State<PlayerPage> {
                   PlayerBar(
                     player: ServiceLocator.player,
                     theme: theme,
-                    position: _viewModel.position,
-                    duration: _viewModel.duration,
                     onSeek: _viewModel.seek,
                   ),
                 ],
@@ -361,8 +359,6 @@ class _PlayerPageState extends State<PlayerPage> {
         PlayerBar(
           player: ServiceLocator.player,
           theme: theme,
-          position: _viewModel.position,
-          duration: _viewModel.duration,
           onSeek: _viewModel.seek,
           compact: true,
         ),
@@ -400,8 +396,6 @@ class _PlayerPageState extends State<PlayerPage> {
         PlayerBar(
           player: ServiceLocator.player,
           theme: theme,
-          position: _viewModel.position,
-          duration: _viewModel.duration,
           onSeek: _viewModel.seek,
           compact: true,
         ),

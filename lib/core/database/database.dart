@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -19,13 +20,14 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
   FlutterMusicDatabase(super.e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
         await m.createAll();
+        await _createIndexes();
       },
       onUpgrade: (Migrator m, int from, int to) async {
         if (from == 1) {
@@ -47,14 +49,61 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
         if (from <= 4) {
           await m.addColumn(songs, songs.lastModifiedMs);
         }
+        if (from <= 5) {
+          await _createIndexes();
+        }
       },
+    );
+  }
+
+  /// 建查询索引（onCreate 新装 + 老库升级共用）。
+  ///
+  /// 大库下 WHERE/JOIN/GROUP BY/ORDER BY 常用列都加索引，避免全表扫；
+  /// `IF NOT EXISTS` 幂等，迁移失败重试不冲突。
+  Future<void> _createIndexes() async {
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_songs_avail_sort '
+      'ON songs(is_available, title_sort_key)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_songs_album_id ON songs(album_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_songs_artist_id ON songs(artist_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_songs_fav_avail '
+      'ON songs(is_favorite, is_available)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_plsongs_playlist '
+      'ON playlist_songs(playlist_id, position)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_plsongs_song ON playlist_songs(song_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_albums_artist ON albums(artist_id)',
     );
   }
 
   static Future<FlutterMusicDatabase> create() async {
     final dir = await getApplicationDocumentsDirectory();
     final dbFile = File(p.join(dir.path, 'music_library.db'));
-    return FlutterMusicDatabase(NativeDatabase(dbFile, logStatements: true));
+    return FlutterMusicDatabase(
+      NativeDatabase(
+        dbFile,
+        // SQL 日志只在 debug 打印，release/profile 不逐条输出。
+        logStatements: kDebugMode,
+        // setup 回调收到的是 sqlite3 包的原始 Database（FFI 层），用 execute。
+        setup: (db) {
+          // WAL：读写互不阻塞（扫描批量写/后台 5s 位置落盘 vs 列表查询）。
+          db.execute('PRAGMA journal_mode = WAL');
+          // 并发写冲突时排队等待而非立即抛 SQLITE_BUSY。
+          db.execute('PRAGMA busy_timeout = 5000');
+        },
+      ),
+    );
   }
 
   // ─── CRUD ───────────────────────────────────────────────
@@ -101,6 +150,21 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
   Future<Song?> getSongByFilePath(String filePath) => (select(
     songs,
   )..where((t) => t.filePath.equals(filePath))).getSingleOrNull();
+
+  /// 按 filePath 批量查询（restoreQueue 用，替代逐首单行 SELECT 的 N+1）。
+  ///
+  /// 返回顺序与 [filePaths] 一致，仅保留存在且可用的歌曲。
+  Future<List<Song>> getSongsByFilePaths(List<String> filePaths) async {
+    if (filePaths.isEmpty) return const [];
+    final rows = await (select(
+      songs,
+    )..where((t) => t.filePath.isIn(filePaths))).get();
+    final byPath = {for (final s in rows) s.filePath: s};
+    return [
+      for (final fp in filePaths)
+        if (byPath[fp]?.isAvailable == 1) byPath[fp]!,
+    ];
+  }
 
   Future<int> getSongCount() async {
     final result = await customSelect('SELECT COUNT(*) FROM songs').getSingle();

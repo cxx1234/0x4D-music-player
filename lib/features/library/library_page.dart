@@ -29,6 +29,10 @@ class _LibraryPageState extends State<LibraryPage> {
   List<String> _musicFolders = [];
   bool _ready = false;
   Timer? _readyTimer;
+
+  /// 扫描结果横幅自动收起计时器（保活后 VM 常驻，横幅不再随切 tab 消失）。
+  Timer? _scanResultDismissTimer;
+  static const _scanResultDismissDelay = Duration(seconds: 4);
   bool _searchActive = false;
   String _query = '';
 
@@ -43,6 +47,7 @@ class _LibraryPageState extends State<LibraryPage> {
   @override
   void dispose() {
     _readyTimer?.cancel();
+    _scanResultDismissTimer?.cancel();
     _viewModel.removeListener(_onViewModelChanged);
     _viewModel.dispose();
     super.dispose();
@@ -75,6 +80,25 @@ class _LibraryPageState extends State<LibraryPage> {
 
   void _onViewModelChanged() {
     if (mounted) setState(() {});
+    _scheduleScanResultDismissIfNeeded();
+  }
+
+  /// 扫描结果横幅出现 N 秒后自动收起。
+  ///
+  /// 页面全部保活后 VM 常驻，结果横幅不再随切换 tab 被清掉，必须主动定时
+  /// 清除，否则会一直挂在页面上（用户反馈"结果 tip 不会消失"）。
+  void _scheduleScanResultDismissIfNeeded() {
+    final result = _viewModel.scanResult;
+    if (result == null || _viewModel.isScanning) {
+      _scanResultDismissTimer?.cancel();
+      _scanResultDismissTimer = null;
+      return;
+    }
+    // 同一次结果只排一次计时（进度/播放器等 notify 不重置倒计时）。
+    if (_scanResultDismissTimer != null) return;
+    _scanResultDismissTimer = Timer(_scanResultDismissDelay, () {
+      if (mounted) _viewModel.clearScanResult();
+    });
   }
 
   void _loadFolders() {

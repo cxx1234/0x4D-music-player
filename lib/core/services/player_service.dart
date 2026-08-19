@@ -78,6 +78,17 @@ class PlayerService extends ChangeNotifier {
     _player.playing,
   );
 
+  /// 供 UI 订阅的合并通知器：切歌 / 播放态翻转 / 队列结构变化。
+  ///
+  /// 播放进度（positionStream 每 ~200ms）**不**在此列——需要随进度刷新的
+  /// UI（如播放进度条）应单独订阅本 service 或 [positionStream]，
+  /// 避免整页随进度连带重建。
+  late final Listenable uiListenable = Listenable.merge([
+    currentSongNotifier,
+    playingNotifier,
+    _playQueue,
+  ]);
+
   // ─── Stream subscriptions ──────────────────────────────
 
   /// 权威事件源：切歌 / seek / 播完等每次引擎变化都会触发。

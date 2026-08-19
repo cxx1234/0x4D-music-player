@@ -11,8 +11,6 @@ import 'player_progress_bar.dart';
 class PlayerBar extends StatelessWidget {
   final PlayerService player;
   final ThemeData theme;
-  final Duration position;
-  final Duration duration;
   final ValueChanged<Duration> onSeek;
   final bool compact;
 
@@ -20,8 +18,6 @@ class PlayerBar extends StatelessWidget {
     super.key,
     required this.player,
     required this.theme,
-    required this.position,
-    required this.duration,
     required this.onSeek,
     this.compact = false,
   });
@@ -37,11 +33,16 @@ class PlayerBar extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             // ── 进度条（全宽）──
-            PlayerProgressBar(
-              position: position,
-              duration: duration,
-              onSeek: onSeek,
-              theme: theme,
+            // 进度需随 positionStream（~200ms）刷新：这里局部订阅本 service，
+            // 只让进度条子树随进度重建，避免父级整页连带重建。
+            ListenableBuilder(
+              listenable: player,
+              builder: (context, _) => PlayerProgressBar(
+                position: player.position,
+                duration: player.duration,
+                onSeek: onSeek,
+                theme: theme,
+              ),
             ),
             const SizedBox(height: 4),
             // ── 控制按钮（整条正中心）+ 音量滑块（最右）──
@@ -102,68 +103,64 @@ class _VolumeSliderState extends State<_VolumeSlider> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: player,
-      builder: (context, _) {
-        final volume = _dragValue ?? player.volume;
-        return Stack(
-          clipBehavior: Clip.none,
+    // 音量只在用户拖动/启动恢复时变化，不随播放进度刷新，
+    // 无需订阅整个 service（否则播放中每 ~200ms 重建滑块）。
+    final volume = _dragValue ?? player.volume;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  _iconFor(volume),
-                  size: 20,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 4),
-                SliderTheme(
-                  data: SliderThemeData(
-                    // 与进度条一致：小圆点 + 细轨道。
-                    trackHeight: 4,
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 6,
-                    ),
-                    overlayShape: const RoundSliderOverlayShape(
-                      overlayRadius: 14,
-                    ),
-                  ),
-                  child: SizedBox(
-                    width: 120,
-                    child: Slider(
-                      value: volume,
-                      onChangeStart: (v) => setState(() => _dragValue = v),
-                      onChanged: (v) {
-                        setState(() => _dragValue = v);
-                        // 应用到引擎 + 持久化到 settings（拖动即时生效）。
-                        player.setVolume(v);
-                        ServiceLocator.settings.setVolume(v);
-                      },
-                      onChangeEnd: (_) => setState(() => _dragValue = null),
-                    ),
-                  ),
-                ),
-              ],
+            Icon(
+              _iconFor(volume),
+              size: 20,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-            if (_dragValue != null)
-              // 提示贴音量条上方（文本高 ~16 + 间距 ~3），水平居中。
-              Positioned(
-                top: -10,
-                left: 0,
-                right: -26,
-                child: IgnorePointer(
-                  child: Center(
-                    child: Text(
-                      '${(_dragValue! * 100).round()}%',
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ),
+            const SizedBox(width: 4),
+            SliderTheme(
+              data: SliderThemeData(
+                // 与进度条一致：小圆点 + 细轨道。
+                trackHeight: 4,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+              ),
+              child: SizedBox(
+                width: 120,
+                child: Slider(
+                  value: volume,
+                  onChangeStart: (v) => setState(() => _dragValue = v),
+                  onChanged: (v) {
+                    setState(() => _dragValue = v);
+                    // 拖动中只实时应用到引擎，不写盘（避免每格重写 settings.json）。
+                    player.setVolume(v);
+                  },
+                  onChangeEnd: (v) {
+                    setState(() => _dragValue = null);
+                    // 拖动结束才落盘一次。
+                    ServiceLocator.settings.setVolume(v);
+                  },
                 ),
               ),
+            ),
           ],
-        );
-      },
+        ),
+        if (_dragValue != null)
+          // 提示贴音量条上方（文本高 ~16 + 间距 ~3），水平居中。
+          Positioned(
+            top: -10,
+            left: 0,
+            right: -26,
+            child: IgnorePointer(
+              child: Center(
+                child: Text(
+                  '${(_dragValue! * 100).round()}%',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

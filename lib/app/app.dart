@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,7 +24,7 @@ class App extends StatefulWidget {
   State<App> createState() => _AppState();
 }
 
-class _AppState extends State<App> {
+class _AppState extends State<App> with WidgetsBindingObserver {
   bool _initialized = false;
   Object? _startupError;
   final _navKey = GlobalKey<NavigatorState>();
@@ -40,6 +42,7 @@ class _AppState extends State<App> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // 首帧后将顶部高度参数同步给原生层（红绿灯定位用）。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncTopBarHeightToNative();
@@ -78,9 +81,23 @@ class _AppState extends State<App> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _showBar.dispose();
     _shellController.dispose();
     super.dispose();
+  }
+
+  /// 应用生命周期挂起/退出前把待写的持久化落盘（防抖窗口内的队列变更）。
+  ///
+  /// macOS 关窗驻留后台不退出，正常运行的防抖定时器会照常触发；这里是
+  /// 对强制退出/系统休眠等场景的兜底。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      unawaited(ServiceLocator.flushPendingWrites());
+    }
   }
 
   /// 将左侧边栏顶部预留高度（layoutConfig.sidebarTopInset）传给原生层，用于红绿灯定位。
