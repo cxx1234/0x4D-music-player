@@ -1,0 +1,96 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:flutter_music/core/utils/bilingual_lrc.dart';
+
+void main() {
+  group('splitBilingualLine（单行「原文 翻译」拆分）', () {
+    test('基本「日文 中文」同行 → 拆出原文与翻译', () {
+      final r = splitBilingualLine('あの日1度だけと誓い合った秘め事は 那天我们唯一一次立下誓言所隐藏的秘密');
+      expect(r.main, 'あの日1度だけと誓い合った秘め事は');
+      expect(r.translation, '那天我们唯一一次立下誓言所隐藏的秘密');
+    });
+
+    test('原文内部有空格（「」后）不误切', () {
+      final r = splitBilingualLine('「それでも構わない」 そう呟いた戯言は 「即便如此也无所谓」这般轻声呢喃的戏言');
+      expect(r.main, '「それでも構わない」 そう呟いた戯言は');
+      expect(r.translation, '「即便如此也无所谓」这般轻声呢喃的戏言');
+    });
+
+    test('原文以汉字结尾（事/程）不误切', () {
+      final r = splitBilingualLine('私の罪は愛を願ってしまった事 我的罪孽是渴求了爱情');
+      expect(r.main, '私の罪は愛を願ってしまった事');
+      expect(r.translation, '我的罪孽是渴求了爱情');
+
+      final r2 = splitBilingualLine('二度と笑えぬ程 直到再也无法展露笑容');
+      expect(r2.main, '二度と笑えぬ程');
+      expect(r2.translation, '直到再也无法展露笑容');
+    });
+
+    test('原文含连续汉字（幾億/残酷）因带假名后缀不被误切', () {
+      final r = splitBilingualLine('幾億の中にアナタがいると信じて良いですか 可以相信在亿万星辰中有你存在吗');
+      expect(r.main, '幾億の中にアナタがいると信じて良いですか');
+      expect(r.translation, '可以相信在亿万星辰中有你存在吗');
+
+      final r2 = splitBilingualLine('現実と言う 残酷なストーリー 现实这名为残酷的故事剧本');
+      expect(r2.main, '現実と言う 残酷なストーリー');
+      expect(r2.translation, '现实这名为残酷的故事剧本');
+    });
+
+    test('纯日文行（无翻译）→ translation 为空', () {
+      final r = splitBilingualLine('ただのテスト行です');
+      expect(r.main, 'ただのテスト行です');
+      expect(r.translation, '');
+    });
+
+    test('纯中文歌词行（无原文）不误拆为翻译', () {
+      final r = splitBilingualLine('我的爱情故事是一首老歌');
+      expect(r.main, '我的爱情故事是一首老歌');
+      expect(r.translation, '');
+    });
+
+    test('英文混排：原文含英文、翻译含英文', () {
+      final r = splitBilingualLine('空にきえるLove Songs 消逝在天空中的Love Songs');
+      expect(r.main, '空にきえるLove Songs');
+      expect(r.translation, '消逝在天空中的Love Songs');
+    });
+  });
+
+  group('splitBilingualLrc（整首拆分）', () {
+    test('标签保留、原文/翻译各成一条时间轴', () {
+      const lrc = '''
+[ti:Even if..]
+[ar:花たん]
+[00:13.45]あの日1度だけと誓い合った秘め事は 那天我们唯一一次立下誓言所隐藏的秘密
+[00:21.00]私を無くした 让我失去了自我
+[00:24.23]「それでも構わない」 そう呟いた戯言は 「即便如此也无所谓」这般轻声呢喃的戏言
+''';
+      final r = splitBilingualLrc(lrc);
+      // 标签保留在主歌词。
+      expect(r.mainLyric, contains('[ti:Even if..]'));
+      expect(r.mainLyric, contains('[ar:花たん]'));
+      // 主歌词只有原文，不含翻译。
+      expect(r.mainLyric, contains('[00:13.45]あの日1度だけと誓い合った秘め事は'));
+      expect(r.mainLyric, isNot(contains('那天')));
+      // 翻译各成一条时间轴，时间戳与原文一致。
+      expect(r.translationLyric, contains('[00:13.45]那天我们唯一一次立下誓言所隐藏的秘密'));
+      expect(r.translationLyric, contains('[00:21.00]让我失去了自我'));
+      expect(r.translationLyric, contains('[00:24.23]「即便如此也无所谓」这般轻声呢喃的戏言'));
+      expect(r.translationLyric, isNot(contains('私を無くした')));
+    });
+
+    test('无翻译的整首 → translationLyric 为空', () {
+      const lrc = '[00:10.00]ただのテスト行\n[00:20.00]さらにテスト';
+      final r = splitBilingualLrc(lrc);
+      expect(r.mainLyric, contains('[00:10.00]ただのテスト行'));
+      expect(r.translationLyric, isEmpty);
+    });
+
+    test('中文歌词整首（无翻译）→ 全部保留为主歌词', () {
+      const lrc = '[00:10.00]我的爱情故事\n[00:20.00]是一首老歌';
+      final r = splitBilingualLrc(lrc);
+      expect(r.mainLyric, contains('[00:10.00]我的爱情故事'));
+      expect(r.mainLyric, contains('[00:20.00]是一首老歌'));
+      expect(r.translationLyric, isEmpty);
+    });
+  });
+}

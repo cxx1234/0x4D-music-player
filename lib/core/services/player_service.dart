@@ -268,6 +268,12 @@ class PlayerService extends ChangeNotifier {
     return _playQueue.position;
   }
 
+  /// 播放进度流（约每 200ms 一帧，供歌词等高频跟随订阅）。
+  ///
+  /// 与 [currentSongNotifier]/[playingNotifier] 同理：只关心进度的订阅方应
+  /// 订阅此流而不是整个 service，避免随进度高频重建（broadcast 流，可多订阅）。
+  Stream<Duration> get positionStream => _player.positionStream;
+
   /// Duration of the current song, or [Duration.zero] if unknown.
   ///
   /// 序列未加载时（播完跳回第一首、启动续播）不能用引擎的 duration（可能
@@ -762,11 +768,19 @@ class PlayerService extends ChangeNotifier {
   Future<void> _rebuildSequence({Duration? initialPosition}) async {
     final songs = _playQueue.songs;
     if (songs.isEmpty) return;
+    // 未显式指定初始位置时，若还有待应用的续播位置（恢复队列的首次加载），
+    // 用之并清空——续播不再只在 play() 消费，任何首次加载都对齐到续播点，
+    // 避免 positionStream 发 0 把歌词/进度拉回开头。
+    var pos = initialPosition;
+    if (pos == null && _resumePosition != null) {
+      pos = _resumePosition;
+      _resumePosition = null;
+    }
     final sources = songs.map((s) => AudioSource.file(s.filePath)).toList();
     await _player.setAudioSources(
       sources,
       initialIndex: _playQueue.currentIndex.clamp(0, songs.length - 1),
-      initialPosition: initialPosition ?? _player.position,
+      initialPosition: pos ?? _player.position,
     );
     // 序列成功交给引擎后才标记已加载：加载过程中的中间事件
     // （如 currentIndex=0）不能被当作权威，避免播放页闪烁成第一首。

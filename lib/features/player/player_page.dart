@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_lyric/flutter_lyric.dart';
 
 import '../../core/constants/layout.dart';
 import '../../core/database/database.dart';
@@ -12,6 +13,7 @@ import '../artist/artist_page.dart';
 import '../playlist/song_actions.dart';
 import '../shell/shell_page.dart';
 import 'lyrics_view.dart';
+import 'lyrics_view_model.dart';
 import 'player_ui_state.dart';
 import 'player_view_model.dart';
 import 'queue_view.dart';
@@ -54,6 +56,8 @@ double wideInfoCardWidth(double windowWidth) {
 
 class _PlayerPageState extends State<PlayerPage> {
   final _viewModel = PlayerViewModel();
+  // 歌词视图模型：驱动 flutter_lyric 控制器（读 .lrc + 进度跟随）。
+  final _lyrics = LyricsViewModel(ServiceLocator.player);
 
   // 宽模式下右栏显示队列(true)还是歌词(false)（外置于 uiState，重开保留）。
   bool get _showQueue => widget.uiState.showQueue;
@@ -64,14 +68,24 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void initState() {
     super.initState();
+    // 点击歌词行 → 跳转播放位置。
+    _lyrics.controller.setOnTapLineCallback((duration) {
+      ServiceLocator.player.seek(duration);
+    });
     // 打开播放页即对账：把状态对齐到引擎真实值（兜住卡死/热重载失同步）。
     WidgetsBinding.instance.addPostFrameCallback((_) => _viewModel.resync());
   }
 
   @override
   void dispose() {
+    _lyrics.dispose();
     _viewModel.dispose();
     super.dispose();
+  }
+
+  /// 歌词翻译显示开关（LyricsView 已更新 uiState，这里触发重新加载）。
+  void _toggleTranslation() {
+    _lyrics.setShowTranslation(widget.uiState.showTranslation);
   }
 
   /// 顶部栏：红绿灯预留区 + 下方 56 控件区（播放器/歌词/播放列表切换）。
@@ -231,6 +245,8 @@ class _PlayerPageState extends State<PlayerPage> {
                             theme: theme,
                             showQueue: _showQueue,
                             uiState: widget.uiState,
+                            lyricsController: _lyrics.controller,
+                            onToggleTranslation: _toggleTranslation,
                           ),
                         ),
                       ],
@@ -368,6 +384,8 @@ class _PlayerPageState extends State<PlayerPage> {
             theme: theme,
             tab: _narrowTab,
             uiState: widget.uiState,
+            lyricsController: _lyrics.controller,
+            onToggleTranslation: _toggleTranslation,
           ),
         ),
         _InfoReveal(
@@ -499,11 +517,19 @@ class _NarrowLyricsQueue extends StatefulWidget {
   /// 跨会话播放器界面状态（转交给 QueueView 恢复滚动）。
   final PlayerUiState uiState;
 
+  /// 歌词控制器（页面级共享，宽/窄两处同一实例）。
+  final LyricController lyricsController;
+
+  /// 翻译显示开关变化回调（页面级，触发歌词重载）。
+  final VoidCallback? onToggleTranslation;
+
   const _NarrowLyricsQueue({
     required this.viewModel,
     required this.theme,
     required this.tab,
     required this.uiState,
+    required this.lyricsController,
+    this.onToggleTranslation,
   });
 
   @override
@@ -548,7 +574,13 @@ class _NarrowLyricsQueueState extends State<_NarrowLyricsQueue> {
             )
           : KeyedSubtree(
               key: const ValueKey('lyrics'),
-              child: LyricsView(theme: widget.theme),
+              child: LyricsView(
+                controller: widget.lyricsController,
+                theme: widget.theme,
+                uiState: widget.uiState,
+                isNarrow: true,
+                onToggleTranslation: widget.onToggleTranslation,
+              ),
             ),
     );
   }
@@ -589,11 +621,19 @@ class _RightPanel extends StatefulWidget {
   /// 跨会话播放器界面状态（转交给 QueueView 恢复滚动）。
   final PlayerUiState uiState;
 
+  /// 歌词控制器（页面级共享，宽/窄两处同一实例）。
+  final LyricController lyricsController;
+
+  /// 翻译显示开关变化回调（页面级，触发歌词重载）。
+  final VoidCallback? onToggleTranslation;
+
   const _RightPanel({
     required this.viewModel,
     required this.theme,
     required this.showQueue,
     required this.uiState,
+    required this.lyricsController,
+    this.onToggleTranslation,
   });
 
   @override
@@ -639,7 +679,12 @@ class _RightPanelState extends State<_RightPanel> {
                   )
                 : KeyedSubtree(
                     key: const ValueKey('lyrics'),
-                    child: LyricsView(theme: widget.theme),
+                    child: LyricsView(
+                      controller: widget.lyricsController,
+                      theme: widget.theme,
+                      uiState: widget.uiState,
+                      onToggleTranslation: widget.onToggleTranslation,
+                    ),
                   ),
           ),
         ),

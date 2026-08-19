@@ -28,5 +28,8 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- Disable Impeller for Intel Macs -->
+	<key>FLTEnableImpeller</key>
+	<false/>
 </dict>
 </plist>
