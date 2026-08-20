@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_music/core/database/database.dart';
-import 'package:flutter_music/features/player/player_page.dart';
-import 'package:flutter_music/widgets/song_info_card.dart';
+import 'package:txvziwm/core/database/database.dart';
+import 'package:txvziwm/features/player/player_page.dart';
+import 'package:txvziwm/widgets/song_info_card.dart';
 
 void main() {
   group('wideInfoCardWidth', () {

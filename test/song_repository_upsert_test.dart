@@ -1,9 +1,9 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_music/core/database/database.dart';
-import 'package:flutter_music/core/services/song_repository.dart';
-import 'package:flutter_music/models/scanned_song.dart';
+import 'package:txvziwm/core/database/database.dart';
+import 'package:txvziwm/core/services/song_repository.dart';
+import 'package:txvziwm/models/scanned_song.dart';
 
 /// 回归测试：`insertOrUpdateFromScan` 必须能对"已存在路径"的歌曲执行更新
 /// （upsert），而不是因 file_path 唯一约束冲突回滚整个事务。
@@ -12,11 +12,11 @@ import 'package:flutter_music/models/scanned_song.dart';
 /// 而歌曲插入不提供自增 `id`，导致重扫已存在歌曲时触发 file_path 唯一约束
 /// 错误 → 事务回滚 → 数据库从不更新（改标签/重扫无效的根因）。
 void main() {
-  late FlutterMusicDatabase db;
+  late AppDatabase db;
   late SongRepository repo;
 
   setUp(() {
-    db = FlutterMusicDatabase(NativeDatabase.memory());
+    db = AppDatabase(NativeDatabase.memory());
     repo = SongRepository(database: db);
   });
 

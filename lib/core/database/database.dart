@@ -16,8 +16,8 @@ import 'tables/songs.dart';
 part 'database.g.dart';
 
 @DriftDatabase(tables: [Songs, Albums, Artists, Playlists, PlaylistSongs])
-class FlutterMusicDatabase extends _$FlutterMusicDatabase {
-  FlutterMusicDatabase(super.e);
+class AppDatabase extends _$AppDatabase {
+  AppDatabase(super.e);
 
   @override
   int get schemaVersion => 6;
@@ -87,10 +87,10 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
     );
   }
 
-  static Future<FlutterMusicDatabase> create() async {
+  static Future<AppDatabase> create() async {
     final dir = await getApplicationDocumentsDirectory();
     final dbFile = File(p.join(dir.path, 'music_library.db'));
-    return FlutterMusicDatabase(
+    return AppDatabase(
       NativeDatabase(
         dbFile,
         // SQL 日志只在 debug 打印，release/profile 不逐条输出。

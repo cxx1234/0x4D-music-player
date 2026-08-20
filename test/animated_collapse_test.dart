@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_music/widgets/animated_collapse.dart';
+import 'package:txvziwm/widgets/animated_collapse.dart';
 
 void main() {
-  testWidgets('visible=false 且 child 变为 SizedBox.shrink 后应塌陷到 0',
-      (tester) async {
+  testWidgets('visible=false 且 child 变为 SizedBox.shrink 后应塌陷到 0', (
+    tester,
+  ) async {
     // 初始：visible=true，child 有高度
     await tester.pumpWidget(
       Material(
@@ -28,10 +29,7 @@ void main() {
       Material(
         child: Column(
           children: [
-            const AnimatedCollapse(
-              visible: false,
-              child: SizedBox.shrink(),
-            ),
+            const AnimatedCollapse(visible: false, child: SizedBox.shrink()),
           ],
         ),
       ),

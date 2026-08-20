@@ -1,4 +1,4 @@
-import 'package:flutter_music/features/settings/log_page.dart';
+import 'package:txvziwm/features/settings/log_page.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

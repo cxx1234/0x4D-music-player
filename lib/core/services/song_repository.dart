@@ -13,17 +13,17 @@ import 'service_locator.dart';
 
 /// Repository for song data access.
 ///
-/// Wraps [FlutterMusicDatabase] and provides higher-level operations
+/// Wraps [AppDatabase] and provides higher-level operations
 /// like batch upsert, file-state sync, and folder-scoped queries.
 class SongRepository {
-  final FlutterMusicDatabase? _database;
-  FlutterMusicDatabase get _db => _database ?? ServiceLocator.database;
+  final AppDatabase? _database;
+  AppDatabase get _db => _database ?? ServiceLocator.database;
   final _artCache = AlbumArtCacheService();
 
   /// [database] is optional and used for testing; defaults to the app-wide
   /// [ServiceLocator.database].
   // ignore: prefer_initializing_formals (公开参数名 database，字段私有 _database)
-  SongRepository({FlutterMusicDatabase? database}) : _database = database;
+  SongRepository({AppDatabase? database}) : _database = database;
 
   // ─── Song queries ──────────────────────────────────────
 

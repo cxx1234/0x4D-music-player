@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_music/widgets/cached_album_art.dart';
+import 'package:txvziwm/widgets/cached_album_art.dart';
 
 void main() {
   group('albumArtDecodeWidth', () {

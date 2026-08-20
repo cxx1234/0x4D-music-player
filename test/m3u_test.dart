@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_music/core/database/database.dart';
-import 'package:flutter_music/core/utils/m3u.dart';
+import 'package:txvziwm/core/database/database.dart';
+import 'package:txvziwm/core/utils/m3u.dart';
 
 Song _song(String title, String filePath, {int? durationMs}) => Song(
   id: 1,

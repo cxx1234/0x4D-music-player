@@ -5,20 +5,20 @@ import MediaPlayer
 /// Native macOS counterpart of `lib/core/audio/macos_media_controls.dart`.
 ///
 /// Bridges:
-/// - MethodChannel `flutter_music/media_controls` (Dart → Native):
+/// - MethodChannel `com.jerryc.txvziwm/media_controls` (Dart → Native):
 ///   `setup` / `updateNowPlaying` / `clearNowPlaying`
-/// - EventChannel `flutter_music/media_controls_events` (Native → Dart):
+/// - EventChannel `com.jerryc.txvziwm/media_controls_events` (Native → Dart):
 ///   `play` / `pause` / `toggle` / `next` / `previous` / `seek`
 public class MediaControlsPlugin: NSObject, FlutterPlugin {
   private var eventSink: FlutterEventSink?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(
-      name: "flutter_music/media_controls",
+      name: "com.jerryc.txvziwm/media_controls",
       binaryMessenger: registrar.messenger
     )
     let eventChannel = FlutterEventChannel(
-      name: "flutter_music/media_controls_events",
+      name: "com.jerryc.txvziwm/media_controls_events",
       binaryMessenger: registrar.messenger
     )
     let instance = MediaControlsPlugin()

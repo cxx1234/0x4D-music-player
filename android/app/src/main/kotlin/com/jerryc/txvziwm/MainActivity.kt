@@ -1,4 +1,4 @@
-package com.jerryc.flutter_music
+package com.jerryc.txvziwm
 
 import io.flutter.embedding.android.FlutterActivity
 

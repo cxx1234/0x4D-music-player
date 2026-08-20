@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_music/core/services/play_queue.dart';
+import 'package:txvziwm/core/services/play_queue.dart';
 
 /// PlayQueue 写盘防抖/串行链测试。
 ///

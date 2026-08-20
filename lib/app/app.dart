@@ -37,7 +37,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   final _shellController = ShellController();
 
   /// 与原生层（MainFlutterWindow.swift）通信的通道。
-  static const _windowChannel = MethodChannel('flutter_music/window');
+  static const _windowChannel = MethodChannel('com.jerryc.txvziwm/window');
 
   @override
   void initState() {
@@ -157,7 +157,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeModeListenable,
       builder: (context, themeMode, _) => MaterialApp(
-        title: 'Flutter Music',
+        title: '0x4D',
         theme: AppTheme.light,
         darkTheme: AppTheme.dark,
         themeMode: themeMode,

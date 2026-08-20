@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_music/app/startup_error_page.dart';
+import 'package:txvziwm/app/startup_error_page.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

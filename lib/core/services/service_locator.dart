@@ -19,7 +19,7 @@ import 'song_repository.dart';
 class ServiceLocator {
   ServiceLocator._();
 
-  static FlutterMusicDatabase? _database;
+  static AppDatabase? _database;
   static SettingsService? _settings;
   static SongRepository? _songRepo;
   static FolderWatcherService? _folderWatcher;
@@ -31,7 +31,7 @@ class ServiceLocator {
   /// 启动时恢复沙箱权限失败的文件夹数量（0 = 全部成功）。
   static int _sandboxRestoreFailures = 0;
 
-  static FlutterMusicDatabase get database {
+  static AppDatabase get database {
     if (_database == null) {
       throw StateError(
         'Database not initialized. Call ServiceLocator.initialize() first.',
@@ -154,7 +154,7 @@ class ServiceLocator {
     }
     _settings = SettingsService();
     await _settings!.initialize();
-    _database = await FlutterMusicDatabase.create();
+    _database = await AppDatabase.create();
     _songRepo = SongRepository();
     // 迁移后为 NULL 的 sort_key 回填拼音/日文排序键（一次性）。
     await _songRepo!.backfillSortKeys();

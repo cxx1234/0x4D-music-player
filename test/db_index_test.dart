@@ -1,13 +1,13 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_music/core/database/database.dart';
+import 'package:txvziwm/core/database/database.dart';
 
 void main() {
-  late FlutterMusicDatabase db;
+  late AppDatabase db;
 
   setUp(() {
-    db = FlutterMusicDatabase(NativeDatabase.memory());
+    db = AppDatabase(NativeDatabase.memory());
   });
 
   tearDown(() => db.close());

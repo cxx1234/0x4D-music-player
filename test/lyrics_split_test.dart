@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_music/core/utils/bilingual_lrc.dart';
+import 'package:txvziwm/core/utils/bilingual_lrc.dart';
 
 void main() {
   group('splitBilingualLine（单行「原文 翻译」拆分）', () {

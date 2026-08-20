@@ -1,9 +1,9 @@
-# Flutter Music
+# 0x4D Music Player
 
 A local music player built with **Flutter**.
 
 <p align="center">
-  <img src="screenshots/Flutter_Music_V0_1_5.png" alt="Flutter Music" width="720">
+  <img src="screenshots/Flutter_Music_V0_2.png" alt="0x4D Music Player" width="720">
 </p>
 
 ## Features

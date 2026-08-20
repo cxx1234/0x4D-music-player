@@ -23,7 +23,7 @@
 - 旧的**全局顶栏（TopBar）已于 2026-08-04 移除**，改为「页面避让」方案：
   - 左侧 NavigationRail 顶部预留 `layoutConfig.sidebarTopInset`（macOS=52）给红绿灯；
   - 右侧内容区各页使用统一高度的 `PageToolbar`（`lib/widgets/page_toolbar.dart`）。
-- 传原生：Flutter 启动仍会通过 **MethodChannel `flutter_music/window`**（方法 `setTopBarHeight`）
+- 传原生：Flutter 启动仍会通过 **MethodChannel `com.jerryc.txvziwm/window`**（方法 `setTopBarHeight`）
   发送 `layoutConfig.sidebarTopInset`（52），但**红绿灯已由 unified 工具栏原生定位，Swift 端为 no-op**。
   **仅 macOS 会调用**（其他平台无 handler，避免 MissingPluginException 噪音）。
 - **数值微调**：Windows 版调试时改 `_default`（或新增 Windows 专属配置）即可，无需动 UI 代码。

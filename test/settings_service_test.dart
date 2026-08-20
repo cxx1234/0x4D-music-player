@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_music/core/models/lyric_text_size.dart';
-import 'package:flutter_music/core/services/album_art_cache_service.dart';
-import 'package:flutter_music/core/services/settings_service.dart';
+import 'package:txvziwm/core/models/lyric_text_size.dart';
+import 'package:txvziwm/core/services/album_art_cache_service.dart';
+import 'package:txvziwm/core/services/settings_service.dart';
 
 void main() {
   // path_provider 的 MethodChannel 依赖 binding；不初始化会在普通 test 里

@@ -226,7 +226,7 @@ class PlayQueue extends ChangeNotifier {
   ///
   /// Call once at startup. Uses [db] to resolve `filePath`s back into full
   /// [Song] objects. Songs whose files are no longer available are skipped.
-  Future<void> restoreQueue(FlutterMusicDatabase db) async {
+  Future<void> restoreQueue(AppDatabase db) async {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final file = File(p.join(dir.path, _queueFileName));

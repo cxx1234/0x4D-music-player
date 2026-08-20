@@ -69,7 +69,7 @@ class AboutPage extends StatelessWidget {
             const SizedBox(height: 16),
             Center(
               child: Text(
-                'Flutter Music',
+                '0x4D Music Player',
                 style: theme.textTheme.headlineSmall,
               ),
             ),

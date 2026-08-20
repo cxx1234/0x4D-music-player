@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_music/core/services/settings_service.dart';
+import 'package:txvziwm/core/services/settings_service.dart';
 
 void main() {
   group('AppSettings.volume', () {
