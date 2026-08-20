@@ -5,10 +5,10 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = flutter_music
+PRODUCT_NAME = 0x4D
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.jerryc.flutterMusic
+PRODUCT_BUNDLE_IDENTIFIER = com.jerryc.txvziwm
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 Jerry Chen. All rights reserved.

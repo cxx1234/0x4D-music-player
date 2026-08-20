@@ -1,36 +1,323 @@
 import 'package:flutter/material.dart';
 
+import '../../core/services/album_art_cache_service.dart';
+import '../../core/services/service_locator.dart';
 import '../../widgets/page_toolbar.dart';
+import 'about_page.dart';
+import 'log_page.dart';
 
-/// 设置页。
-///
-/// TODO(日志)：在此页接入「日志查看」入口 —— 在 PageToolbar 下方的设置
-/// 列表中添加一个「日志」列表项，点击跳转：
-/// `Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LogPage()));`
-/// （页面实现见 `lib/features/settings/log_page.dart`，当前尚未接入导航。）
-class SettingsPage extends StatelessWidget {
+/// 设置页：分组卡片（播放设置 / 外观 / 通用）。
+class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+  State<SettingsPage> createState() => _SettingsPageState();
+}
 
+class _SettingsPageState extends State<SettingsPage> {
+  /// 续播开关（启动时从设置读取，默认开）。
+  bool _resumePlayback = true;
+
+  /// 主题模式（启动时从设置读取，默认跟随系统）。
+  ThemeMode _themeMode = ThemeMode.system;
+
+  /// 封面缓存大小（字节）；null = 尚未加载成功。
+  int? _cacheSizeBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    // 设置页是 Shell 惰性保活 tab，首次选中才构建；此时 ServiceLocator 通常
+    // 已就绪，但仍加守卫兜底（用户可能初始化完成前就切到设置）。
+    if (ServiceLocator.isReady) {
+      _resumePlayback = ServiceLocator.settings.resumePlaybackPosition;
+      _themeMode = ServiceLocator.settings.themeMode;
+    }
+    _loadCacheSize();
+  }
+
+  Future<void> _loadCacheSize() async {
+    final size = await AlbumArtCacheService().cacheSizeBytes();
+    if (!mounted) return;
+    setState(() => _cacheSizeBytes = size);
+  }
+
+  /// 清理缓存：功能未实现。先弹确认框（占位文案），确认后提示占位。
+  Future<void> _clearCache() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('清理缓存'),
+        content: const Text('还没做 -ω-;'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('清理'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('还没做 -ω-;')));
+  }
+
+  /// 字节数 → 人类可读（B/KB/MB）。
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  /// 选项副标题样式：比 bodySmall 再小一档、偏灰（与 SongTile 副标题一致）。
+  TextStyle _subtitleStyle(ThemeData theme) => theme.textTheme.bodySmall!
+      .copyWith(fontSize: 11, color: theme.colorScheme.onSurfaceVariant);
+
+  /// 选项行的标题+副标题组合块（两行整体垂直居中，与 SongTile 一致）。
+  Widget _buildOptionText(ThemeData theme, String title, String subtitle) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: theme.textTheme.titleMedium),
+        Text(subtitle, style: _subtitleStyle(theme)),
+      ],
+    );
+  }
+
+  /// 主题行 leading 图标：跟随当前主题亮度 —— 深色显示月亮、浅色显示太阳。
+  IconData _themeIndicatorIcon(ThemeData theme) =>
+      theme.brightness == Brightness.dark ? Icons.dark_mode : Icons.light_mode;
+
+  /// 主题模式 → 展示文案。
+  String _themeModeLabel(ThemeMode mode) => switch (mode) {
+    ThemeMode.system => '跟随系统',
+    ThemeMode.light => '浅色',
+    ThemeMode.dark => '深色',
+  };
+
+  /// 主题模式 → 图标（分段按钮窄版用）。
+  IconData _themeModeIcon(ThemeMode mode) => switch (mode) {
+    ThemeMode.system => Icons.brightness_auto,
+    ThemeMode.light => Icons.light_mode_outlined,
+    ThemeMode.dark => Icons.dark_mode_outlined,
+  };
+
+  /// 切换续播开关（UI 状态 + 写盘）。
+  void _setResumePlayback(bool value) {
+    setState(() => _resumePlayback = value);
+    ServiceLocator.settings.setResumePlaybackPosition(value);
+  }
+
+  /// 44×26 紧凑开关：M3 Switch 默认 52×32，非等比缩放（视觉+命中区同步）。
+  Widget _buildCompactSwitch() {
+    const targetW = 44.0, targetH = 26.0;
+    const defaultW = 52.0, defaultH = 32.0;
+    return SizedBox(
+      width: targetW,
+      height: targetH,
+      child: Transform(
+        alignment: Alignment.center,
+        transform: Matrix4.diagonal3Values(
+          targetW / defaultW,
+          targetH / defaultH,
+          1,
+        ),
+        child: Switch(
+          value: _resumePlayback,
+          onChanged: (value) => _setResumePlayback(value),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlaybackCard() {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      elevation: 0,
+      color: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        minVerticalPadding: 16,
+        leading: const Icon(Icons.replay_rounded),
+        title: _buildOptionText(theme, '续播上次播放位置', '启动后恢复上次播放进度'),
+        subtitle: null,
+        trailing: _buildCompactSwitch(),
+        onTap: () => _setResumePlayback(!_resumePlayback),
+      ),
+    );
+  }
+
+  Widget _buildAppearanceCard() {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      elevation: 0,
+      color: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        height: 72,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // 宽度不足以容纳文字版三按钮时，收成图标版 + tooltip。
+              final compact = constraints.maxWidth < 550;
+              return Row(
+                children: [
+                  // 跟随当前主题亮度：深色显示月亮、浅色显示太阳。
+                  Icon(_themeIndicatorIcon(theme)),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('主题模式', style: theme.textTheme.titleMedium),
+                        Text('选择应用的明暗外观', style: _subtitleStyle(theme)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  SegmentedButton<ThemeMode>(
+                    showSelectedIcon: false,
+                    segments: [
+                      for (final mode in ThemeMode.values)
+                        if (compact)
+                          ButtonSegment(
+                            value: mode,
+                            icon: Icon(_themeModeIcon(mode)),
+                            tooltip: _themeModeLabel(mode),
+                          )
+                        else
+                          ButtonSegment(
+                            value: mode,
+                            icon: Icon(_themeModeIcon(mode)),
+                            label: Text(_themeModeLabel(mode)),
+                          ),
+                    ],
+                    selected: {_themeMode},
+                    onSelectionChanged: (selection) {
+                      final mode = selection.first;
+                      setState(() => _themeMode = mode);
+                      ServiceLocator.settings.setThemeMode(mode);
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGeneralCard() {
+    final theme = Theme.of(context);
+    final chevronColor = theme.colorScheme.onSurfaceVariant;
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      elevation: 0,
+      color: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          ListTile(
+            minVerticalPadding: 16,
+            leading: const Icon(Icons.receipt_long_outlined),
+            title: _buildOptionText(theme, '日志', '查看应用运行日志'),
+            subtitle: null,
+            trailing: Icon(Icons.chevron_right, color: chevronColor),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const LogPage())),
+          ),
+          ListTile(
+            minVerticalPadding: 16,
+            leading: const Icon(Icons.photo_library_outlined),
+            title: _buildOptionText(theme, '缓存', '封面图片缓存（可安全清理）'),
+            subtitle: null,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _cacheSizeBytes == null
+                      ? '…'
+                      : _formatBytes(_cacheSizeBytes!),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                TextButton.icon(
+                  onPressed: _clearCache,
+                  icon: const Icon(Icons.cleaning_services, size: 18),
+                  label: const Text('清理'),
+                ),
+              ],
+            ),
+          ),
+          ListTile(
+            minVerticalPadding: 16,
+            leading: const Icon(Icons.info_outline),
+            title: _buildOptionText(theme, '关于', '版本 0.1.0+37 · 开源许可'),
+            subtitle: null,
+            trailing: Icon(Icons.chevron_right, color: chevronColor),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const AboutPage())),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      child: Text(
+        title,
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       children: [
         const PageToolbar(title: '设置'),
         const Divider(height: 1),
         Expanded(
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+          // 项目约定：含 ListTile/InkWell 的滚动区必须外包透明 Material +
+          // Clip.hardEdge，防止墨水波纹渗出到标题区。
+          child: Material(
+            type: MaterialType.transparency,
+            clipBehavior: Clip.hardEdge,
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 24),
               children: [
-                Icon(
-                  Icons.settings,
-                  size: 64,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(height: 16),
-                Text('设置', style: theme.textTheme.headlineSmall),
+                _buildSectionHeader('播放设置'),
+                _buildPlaybackCard(),
+                _buildSectionHeader('外观'),
+                _buildAppearanceCard(),
+                _buildSectionHeader('通用'),
+                _buildGeneralCard(),
               ],
             ),
           ),

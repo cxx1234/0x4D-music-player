@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter_music/core/utils/logger.dart';
+import 'package:txvziwm/core/utils/logger.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 

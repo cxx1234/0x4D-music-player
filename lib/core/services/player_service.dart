@@ -6,6 +6,7 @@ import 'package:just_audio/just_audio.dart';
 import '../database/database.dart';
 import '../utils/logger.dart';
 import 'play_queue.dart';
+import 'service_locator.dart';
 
 /// Available repeat modes for the player.
 enum PlayerRepeatMode {
@@ -34,6 +35,14 @@ class PlayerService extends ChangeNotifier {
   PlayerRepeatMode _repeatMode = PlayerRepeatMode.off;
   bool _isShuffled = false;
 
+  /// 播放音量（0.0~1.0）。
+  double _volume = 1.0;
+
+  /// 续播开关：关闭时序列未加载的 position/duration 不回退到上次保存值，
+  /// 避免界面显示上次播放位置（实际会从头播放）。
+  /// 注意：不影响当前播放歌曲信息与总时长（后者仍用 currentSong 兜底）。
+  final bool _resumePlaybackEnabled;
+
   /// 待应用的启动续播位置（构造时从 [PlayQueue] 读取，首次加载序列时消费）。
   Duration? _resumePosition;
 
@@ -50,6 +59,41 @@ class PlayerService extends ChangeNotifier {
   /// 连续播放失败计数。
   int _consecutiveErrors = 0;
 
+  /// 队尾播完（repeat off）收尾标志。
+  ///
+  /// 收尾期间 seek/pause/enqueueFrom 会发出一系列仍带 completed 或旧索引的
+  /// 中间事件（macOS 上 seek 到已缓冲的项后甚至停留在 completed、不再发
+  /// ready），这些都不能当作权威：否则索引会被拉回最后一首、播完分支被反复
+  /// 触发。直到引擎回到 ready（用户点播放等操作会触发）才解除。
+  bool _handlingQueueEnd = false;
+
+  // ─── 轻量去重通知器 ────────────────────────────────────
+  //
+  // 只关心"当前播放高亮"的 UI（音乐库、专辑/播放列表/歌手详情等）应订阅
+  // 这些而不是整个 service——后者随 positionStream 每 ~200ms 触发一次，
+  // 订阅它会让页面跟着高频重建（保活后 offstage 页也在重建，开销更明显）。
+
+  /// 当前歌曲变化通知器（按歌曲 id 去重，仅在切歌时触发）。
+  late final ValueNotifier<Song?> currentSongNotifier = ValueNotifier<Song?>(
+    _playQueue.currentSong,
+  );
+
+  /// 播放/暂停状态翻转通知器（playing 变化时触发）。
+  late final ValueNotifier<bool> playingNotifier = ValueNotifier<bool>(
+    _player.playing,
+  );
+
+  /// 供 UI 订阅的合并通知器：切歌 / 播放态翻转 / 队列结构变化。
+  ///
+  /// 播放进度（positionStream 每 ~200ms）**不**在此列——需要随进度刷新的
+  /// UI（如播放进度条）应单独订阅本 service 或 [positionStream]，
+  /// 避免整页随进度连带重建。
+  late final Listenable uiListenable = Listenable.merge([
+    currentSongNotifier,
+    playingNotifier,
+    _playQueue,
+  ]);
+
   // ─── Stream subscriptions ──────────────────────────────
 
   /// 权威事件源：切歌 / seek / 播完等每次引擎变化都会触发。
@@ -57,13 +101,22 @@ class PlayerService extends ChangeNotifier {
   StreamSubscription? _positionSub;
   StreamSubscription? _durationSub;
 
+  /// playing 翻转监听（维护 [playingNotifier]）。
+  StreamSubscription<bool>? _playingSub;
+
   /// 周期对账 watchdog：兜住引擎与 [PlayQueue] 的索引分叉。
   Timer? _reconcileTimer;
 
-  PlayerService({PlayQueue? playQueue, bool resumePlaybackPosition = true})
-    : _playQueue = playQueue ?? PlayQueue() {
-    // Forward PlayQueue changes to this service's listeners
-    _playQueue.addListener(notifyListeners);
+  PlayerService({
+    PlayQueue? playQueue,
+    bool resumePlaybackPosition = true,
+    double volume = 1.0,
+  }) : _playQueue = playQueue ?? PlayQueue(),
+       _resumePlaybackEnabled = resumePlaybackPosition {
+    _volume = volume;
+    // Forward PlayQueue changes to this service's listeners（经 _onQueueChanged
+    // 汇聚，顺带维护按歌曲去重的 currentSongNotifier）。
+    _playQueue.addListener(_onQueueChanged);
 
     // Restore persisted playback-mode settings (repeat / shuffle).
     _repeatMode = PlayerRepeatMode.values.firstWhere(
@@ -88,6 +141,29 @@ class PlayerService extends ChangeNotifier {
       const Duration(seconds: 1),
       (_) => _reconcile(),
     );
+    _playingSub = _player.playingStream.listen(_onPlayingChanged);
+    // 应用持久化的音量（引擎默认 1.0，幂等）。
+    unawaited(_player.setVolume(_volume));
+  }
+
+  /// PlayQueue 变化的统一入口：转发给本 service 的监听者，并维护按歌曲 id
+  /// 去重的 [currentSongNotifier]。
+  ///
+  /// 所有索引变更（playFromList / 引擎切歌 _onPlaybackEvent / reconcile /
+  /// 增删移动 / 清空）都经 _playQueue 变更触发，这里一个汇聚点即全覆盖。
+  void _onQueueChanged() {
+    final song = _playQueue.currentSong;
+    if (song?.id != currentSongNotifier.value?.id) {
+      currentSongNotifier.value = song;
+    }
+    notifyListeners();
+  }
+
+  /// playing 翻转时同步 [playingNotifier]（playingStream 自带 distinct）。
+  void _onPlayingChanged(bool playing) {
+    if (playing != playingNotifier.value) {
+      playingNotifier.value = playing;
+    }
   }
 
   // ─── Engine ↔ app state reconciliation ─────────────────
@@ -99,6 +175,18 @@ class PlayerService extends ChangeNotifier {
   /// updatePosition、duration 与 processingState——这里是它们对齐的唯一点，
   /// 避免 positionStream 与 sequenceStateStream 跨流不一致。
   void _onPlaybackEvent(PlaybackEvent event) {
+    // 队尾播完收尾中：seek/pause/enqueueFrom 会发出一系列仍带 completed 或
+    // 旧索引的中间事件，这些都不能当作权威（否则索引被拉回最后一首、播完
+    // 分支被反复触发）。只有引擎回到 ready（用户点播放等操作会触发）才解除。
+    if (_handlingQueueEnd) {
+      if (event.processingState != ProcessingState.ready) {
+        notifyListeners();
+        return;
+      }
+      // 引擎已确认回到就绪 → 解除防护，并继续正常处理本事件。
+      _handlingQueueEnd = false;
+    }
+
     final idx = event.currentIndex;
     // 序列未加载时的引擎事件（平台初始化/空闲态广播）currentIndex 无意义，
     // 绝不能覆盖 [PlayQueue] 恢复的索引，也不能把位置清零落盘（见 _reconcile）。
@@ -111,11 +199,21 @@ class PlayerService extends ChangeNotifier {
       // 切歌后立即把新歌的播放位置落盘（此时引擎已同步到新歌）。
       _persistPosition();
     }
-    // 队尾播完（repeat off）：seek 到 0 并暂停，行为与原先一致。
+    // 队尾播完（repeat off）：回到队列第一首但不播放，用户点播放才继续。
+    //
+    // 不能在这里从 completed 状态 seek(index:0)：macOS 上这会让引擎实际
+    // 停在最后一首的末尾，导致之后 play() 从末尾开始、进度被拉到结尾、
+    // 播放/下一首失灵。改为把序列标记为「未加载」并停止引擎（playing=false、
+    // 引擎转 idle），下次 play()/next() 会以第一首为起点干净地重建序列——
+    // 与「启动恢复队列后尚未播放」的懒加载路径一致。
     if (event.processingState == ProcessingState.completed &&
         _repeatMode == PlayerRepeatMode.off) {
-      unawaited(_player.seek(Duration.zero));
-      unawaited(_player.pause());
+      _handlingQueueEnd = true;
+      _playQueue.setCurrentIndex(0);
+      _playQueue.setPlaybackState(Duration.zero, Duration.zero);
+      _sequenceLoaded = false;
+      _resumePosition = Duration.zero;
+      unawaited(_player.stop());
     }
     notifyListeners();
   }
@@ -128,7 +226,8 @@ class PlayerService extends ChangeNotifier {
   void _reconcile() {
     // 序列未加载（如启动恢复的队列尚未播放）时引擎 currentIndex 恒为 0，
     // 绝不能用来覆盖 [PlayQueue] 恢复的索引，否则重启后当前歌会被重置成第一首。
-    if (_playQueue.isEmpty || !_sequenceLoaded) return;
+    // 队尾播完收尾期间引擎索引可能仍停在最后一首，同样不能对齐。
+    if (_playQueue.isEmpty || !_sequenceLoaded || _handlingQueueEnd) return;
     final idx = _player.currentIndex;
     if (idx != null &&
         idx >= 0 &&
@@ -183,16 +282,37 @@ class PlayerService extends ChangeNotifier {
   /// 让播放页进度条直接显示续播点。
   Duration get position {
     if (_sequenceLoaded) return _player.position;
+    // 续播关闭时，未加载序列不回退到上次保存的位置（否则界面会显示
+    // 上次播放位置，即便实际会从头播放）。
+    if (!_resumePlaybackEnabled) return Duration.zero;
     return _playQueue.position;
   }
 
+  /// 播放进度流（约每 200ms 一帧，供歌词等高频跟随订阅）。
+  ///
+  /// 与 [currentSongNotifier]/[playingNotifier] 同理：只关心进度的订阅方应
+  /// 订阅此流而不是整个 service，避免随进度高频重建（broadcast 流，可多订阅）。
+  Stream<Duration> get positionStream => _player.positionStream;
+
   /// Duration of the current song, or [Duration.zero] if unknown.
   ///
-  /// 序列未加载时回退到上次保存的总时长，进度条可显示并可拖动。
+  /// 序列未加载时（播完跳回第一首、启动续播）不能用引擎的 duration（可能
+  /// 残留上一首的值）：优先上次保存的时长（续播显示），其次用当前歌曲在
+  /// 库里扫描到的时长（如播完跳回第一首时保存值已清零）。
   Duration get duration {
-    final d = _player.duration;
-    if (d != null && d > Duration.zero) return d;
-    return _playQueue.duration;
+    if (_sequenceLoaded) {
+      final d = _player.duration;
+      if (d != null && d > Duration.zero) return d;
+    }
+    // 续播关闭时跳过上次保存的时长（避免显示上次歌曲的总长）；
+    // 总时长仍由当前歌曲在库里的扫描时长兜底，不丢失。
+    if (_resumePlaybackEnabled) {
+      final saved = _playQueue.duration;
+      if (saved > Duration.zero) return saved;
+    }
+    final ms = currentSong?.durationMs;
+    if (ms != null && ms > 0) return Duration(milliseconds: ms);
+    return Duration.zero;
   }
 
   /// Current repeat mode.
@@ -200,6 +320,16 @@ class PlayerService extends ChangeNotifier {
 
   /// Whether shuffle is enabled.
   bool get isShuffled => _isShuffled;
+
+  /// 当前音量（0.0~1.0）。
+  double get volume => _volume;
+
+  /// 设置音量并应用到引擎（0.0~1.0）。
+  Future<void> setVolume(double value) async {
+    _volume = value.clamp(0.0, 1.0);
+    await _player.setVolume(_volume);
+    notifyListeners();
+  }
 
   /// 消费并清除最近的播放错误消息(返回 null 表示没有待提示的错误)。
   String? takePlaybackError() {
@@ -416,6 +546,17 @@ class PlayerService extends ChangeNotifier {
   }
 
   Future<void> seek(Duration position) => _player.seek(position);
+
+  /// 切换当前歌曲收藏，并刷新队列中的歌曲对象（UI 经 notify 自动更新）。
+  Future<void> toggleFavoriteForCurrent() async {
+    final song = _playQueue.currentSong;
+    if (song == null) return;
+    await ServiceLocator.songRepo.toggleFavorite(song.id);
+    final updated = await ServiceLocator.songRepo.getSongById(song.id);
+    if (updated != null) {
+      _playQueue.replaceSong(updated);
+    }
+  }
 
   // ─── Mode switching ────────────────────────────────────
 
@@ -651,11 +792,19 @@ class PlayerService extends ChangeNotifier {
   Future<void> _rebuildSequence({Duration? initialPosition}) async {
     final songs = _playQueue.songs;
     if (songs.isEmpty) return;
+    // 未显式指定初始位置时，若还有待应用的续播位置（恢复队列的首次加载），
+    // 用之并清空——续播不再只在 play() 消费，任何首次加载都对齐到续播点，
+    // 避免 positionStream 发 0 把歌词/进度拉回开头。
+    var pos = initialPosition;
+    if (pos == null && _resumePosition != null) {
+      pos = _resumePosition;
+      _resumePosition = null;
+    }
     final sources = songs.map((s) => AudioSource.file(s.filePath)).toList();
     await _player.setAudioSources(
       sources,
       initialIndex: _playQueue.currentIndex.clamp(0, songs.length - 1),
-      initialPosition: initialPosition ?? _player.position,
+      initialPosition: pos ?? _player.position,
     );
     // 序列成功交给引擎后才标记已加载：加载过程中的中间事件
     // （如 currentIndex=0）不能被当作权威，避免播放页闪烁成第一首。
@@ -668,8 +817,13 @@ class PlayerService extends ChangeNotifier {
     _playbackEventSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
+    _playingSub?.cancel();
     _reconcileTimer?.cancel();
     _player.dispose();
+    // 通知器最后释放：cancel 订阅后 _onQueueChanged/_onPlayingChanged 不会再
+    // 被触发，避免在已 dispose 的 ValueNotifier 上写入。
+    currentSongNotifier.dispose();
+    playingNotifier.dispose();
     super.dispose();
   }
 }

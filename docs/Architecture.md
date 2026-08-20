@@ -1,8 +1,8 @@
-# Flutter_Music Architecture
+# 0x4D Architecture
 
 ## Project Vision
 
-Flutter_Music is a modern desktop music player built with Flutter.
+0x4D Music Player is a modern desktop music player built with Flutter.
 
 ### The project focuses on:
 

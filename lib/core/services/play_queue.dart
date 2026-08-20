@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
@@ -26,7 +28,13 @@ class PlayQueue extends ChangeNotifier {
   // ─── Public state ──────────────────────────────────────
 
   /// The full queue, unmodifiable.
-  List<Song> get songs => List.unmodifiable(_queue);
+  ///
+  /// 缓存视图避免每次访问都拷贝整条队列（QueueView 等高频读取点）。
+  /// 用 [UnmodifiableListView] 零拷贝包装，实时反映 _queue 的在位修改；
+  /// `_queue` 引用被整体替换（replace/clear/restoreQueue）时须重建视图。
+  late List<Song> _songsView = UnmodifiableListView(_queue);
+
+  List<Song> get songs => _songsView;
 
   /// Index of the current (or about-to-play) song.
   int get currentIndex => _currentIndex;
@@ -60,9 +68,19 @@ class PlayQueue extends ChangeNotifier {
   /// Replace the entire queue with [songs], resetting to [startIndex].
   void replace(List<Song> songs, int startIndex) {
     _queue = List.from(songs);
+    _songsView = UnmodifiableListView(_queue);
     _currentIndex = startIndex.clamp(0, songs.length - 1);
     _positionMs = 0;
     _durationMs = 0;
+    _save();
+    notifyListeners();
+  }
+
+  /// 按 id 替换队列中的歌曲对象（如刷新收藏状态）；不重建音频序列。
+  void replaceSong(Song song) {
+    final idx = _queue.indexWhere((s) => s.id == song.id);
+    if (idx < 0) return;
+    _queue[idx] = song;
     _save();
     notifyListeners();
   }
@@ -120,6 +138,7 @@ class PlayQueue extends ChangeNotifier {
   /// Empty the queue.
   void clear() {
     _queue = [];
+    _songsView = UnmodifiableListView(_queue);
     _currentIndex = 0;
     _positionMs = 0;
     _durationMs = 0;
@@ -194,11 +213,20 @@ class PlayQueue extends ChangeNotifier {
 
   static const _queueFileName = 'play_queue.json';
 
+  /// 写盘防抖间隔：合并短时间内的连续变更。
+  static const _kSaveDebounce = Duration(milliseconds: 500);
+
+  Timer? _saveDebounceTimer;
+  bool _savePending = false;
+
+  /// 串行写链：多次写盘按序执行，避免并发 writeAsString 乱序覆盖。
+  Future<void> _saveChain = Future.value();
+
   /// Load the queue previously saved to disk.
   ///
   /// Call once at startup. Uses [db] to resolve `filePath`s back into full
   /// [Song] objects. Songs whose files are no longer available are skipped.
-  Future<void> restoreQueue(FlutterMusicDatabase db) async {
+  Future<void> restoreQueue(AppDatabase db) async {
     try {
       final dir = await getApplicationDocumentsDirectory();
       final file = File(p.join(dir.path, _queueFileName));
@@ -208,14 +236,13 @@ class PlayQueue extends ChangeNotifier {
           jsonDecode(await file.readAsString()) as Map<String, dynamic>;
       final filePaths = (data['filePaths'] as List).cast<String>();
 
-      final restored = <Song>[];
-      for (final fp in filePaths) {
-        final song = await db.getSongByFilePath(fp);
-        if (song != null && song.isAvailable == 1) restored.add(song);
-      }
+      // 批量查一次（WHERE file_path IN (...)），避免逐首单行 SELECT 的 N+1。
+      // 返回顺序与 filePaths 一致且仅保留可用歌曲。
+      final restored = await db.getSongsByFilePaths(filePaths);
 
       if (restored.isNotEmpty) {
         _queue = restored;
+        _songsView = UnmodifiableListView(_queue);
         final savedIndex = data['currentIndex'] as int? ?? 0;
         _currentIndex = savedIndex.clamp(0, restored.length - 1);
       }
@@ -234,7 +261,35 @@ class PlayQueue extends ChangeNotifier {
   }
 
   void _save() {
-    _saveToJson();
+    // 防抖：合并短时间内的连续变更（如 setPlaybackState 每 5s 一次 + 切歌/暂停
+    // 叠加），避免每次操作都整份重写 play_queue.json。
+    _saveDebounceTimer?.cancel();
+    _saveDebounceTimer = Timer(_kSaveDebounce, () {
+      _saveDebounceTimer = null;
+      if (_savePending) {
+        _savePending = false;
+        _enqueueWrite();
+      }
+    });
+    _savePending = true;
+  }
+
+  /// 立即落盘（跳过防抖等待），返回写入完成的 Future。
+  ///
+  /// 供 App 生命周期挂起/退出前调用，避免防抖窗口内的变更丢失。
+  Future<void> flushPendingSave() {
+    _saveDebounceTimer?.cancel();
+    _saveDebounceTimer = null;
+    if (_savePending) {
+      _savePending = false;
+      _enqueueWrite();
+    }
+    return _saveChain;
+  }
+
+  /// 把一次写盘追加到串行链尾部：写入依次排队，避免并发写乱序覆盖。
+  void _enqueueWrite() {
+    _saveChain = _saveChain.then((_) => _saveToJson());
   }
 
   Future<void> _saveToJson() async {

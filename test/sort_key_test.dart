@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_music/core/utils/sort_key.dart';
+import 'package:txvziwm/core/utils/sort_key.dart';
 
 void main() {
   test('空/空白返回空串', () {

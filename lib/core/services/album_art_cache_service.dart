@@ -107,6 +107,50 @@ class AlbumArtCacheService {
     return File(path).exists();
   }
 
+  /// 删除 `covers/` 目录中未被 [keepFileNames] 引用的封面文件。
+  ///
+  /// [keepFileNames] 为仍被引用的文件名集合(如 `a1b2c3d4.jpg`)。
+  /// 返回删除的文件数。
+  Future<int> deleteOrphans(Set<String> keepFileNames) async {
+    final dir = await cacheDir;
+    if (!await dir.exists()) return 0;
+    var deleted = 0;
+    await for (final entity in dir.list()) {
+      if (entity is! File) continue;
+      if (keepFileNames.contains(p.basename(entity.path))) continue;
+      try {
+        await entity.delete();
+        deleted++;
+      } catch (e) {
+        AppLogger.warning('Cache', 'Failed to delete orphan art', e);
+      }
+    }
+    return deleted;
+  }
+
+  /// 统计 `covers/` 目录中所有封面缓存文件的字节总数（目录不存在返回 0）。
+  ///
+  /// 供设置页「缓存」行显示占用大小。统计失败不抛（记 warning 后返回 0）。
+  Future<int> cacheSizeBytes() async {
+    try {
+      final dir = await cacheDir;
+      if (!await dir.exists()) return 0;
+      var total = 0;
+      await for (final entity in dir.list()) {
+        if (entity is! File) continue;
+        try {
+          total += await entity.length();
+        } catch (_) {
+          // 单个文件读取失败（如权限）不影响整体统计。
+        }
+      }
+      return total;
+    } catch (e) {
+      AppLogger.warning('Cache', 'Failed to compute cache size', e);
+      return 0;
+    }
+  }
+
   /// Computes a deterministic hash of [path] to use as a stable file name.
   ///
   /// Uses a simple FNV-1a hash over the UTF-8 bytes, which is deterministic

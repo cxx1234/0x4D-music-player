@@ -5,6 +5,9 @@ class ScannedSong {
   final String filePath;
   final String fileName;
   final int fileSize;
+
+  /// 文件最后修改时间(epoch ms),用于扫描变化检测。
+  final int? lastModifiedMs;
   final String title;
   final String? artist;
 
@@ -39,6 +42,7 @@ class ScannedSong {
     required this.filePath,
     required this.fileName,
     required this.fileSize,
+    this.lastModifiedMs,
     required this.title,
     this.artist,
     this.albumArtist,

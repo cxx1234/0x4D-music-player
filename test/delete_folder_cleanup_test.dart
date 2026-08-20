@@ -1,19 +1,19 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_music/core/database/database.dart';
-import 'package:flutter_music/core/services/song_repository.dart';
-import 'package:flutter_music/models/scanned_song.dart';
+import 'package:txvziwm/core/database/database.dart';
+import 'package:txvziwm/core/services/song_repository.dart';
+import 'package:txvziwm/models/scanned_song.dart';
 
 /// 验证移除文件夹后的孤儿数据清理：
 /// 被删歌曲对应的专辑/歌手，以及指向已删歌曲的播放列表引用，都应一并清除；
 /// 其他文件夹仍在使用的专辑/歌手不受影响。
 void main() {
-  late FlutterMusicDatabase db;
+  late AppDatabase db;
   late SongRepository repo;
 
   setUp(() {
-    db = FlutterMusicDatabase(NativeDatabase.memory());
+    db = AppDatabase(NativeDatabase.memory());
     repo = SongRepository(database: db);
   });
 

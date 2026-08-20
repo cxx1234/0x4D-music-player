@@ -1,7 +1,7 @@
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_music/core/utils/grid_layout.dart';
+import 'package:txvziwm/core/utils/grid_layout.dart';
 
 SliverGridRegularTileLayout _layoutFor(
   double width, {

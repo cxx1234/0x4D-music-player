@@ -25,7 +25,9 @@ class PlayerViewModel extends ChangeNotifier {
   // ─── Lifecycle ─────────────────────────────────────────
 
   PlayerViewModel() {
-    _player.addListener(_onPlayerChanged);
+    // 只订阅合并通知器（切歌/播放态/队列变化），不再订阅整个 service——
+    // 后者随 positionStream 每 ~200ms 触发，会让整页连带重建。
+    _player.uiListenable.addListener(_onPlayerChanged);
   }
 
   void _onPlayerChanged() {
@@ -34,7 +36,7 @@ class PlayerViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
-    _player.removeListener(_onPlayerChanged);
+    _player.uiListenable.removeListener(_onPlayerChanged);
     super.dispose();
   }
 

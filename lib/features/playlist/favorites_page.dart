@@ -53,7 +53,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
     return Scaffold(
       appBar: const DetailTopBar(title: '我的收藏'),
       body: ListenableBuilder(
-        listenable: player,
+        listenable: player.currentSongNotifier,
         builder: (context, _) {
           if (_loading) {
             return const Center(child: CircularProgressIndicator());

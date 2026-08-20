@@ -8,7 +8,7 @@
 - app 是 macOS 沙盒应用，音乐文件夹默认在 `~/Music/Music`（macOS 音乐 App 资料库位置）。
 - 该路径受系统 **「媒体与 Apple Music」**（Media Library TCC）权限保护；而 app 通过 `FilePicker`(NSOpenPanel) + security-scoped bookmark 访问，走的是「文件与文件夹」授权，**不会触发** Media Library 权限请求。
 - 现象：`resolveBookmark` / `startAccessingSecurityScopedResource` / `Directory.exists` 都成功，但 `dir.list` 仍报 `Operation not permitted, errno=1`。
-- 现状：已通过 **系统设置 → 隐私与安全性 → 媒体与 Apple Music → 手动添加 `flutter_music.app`** 解决（持久授权，重启/重扫均正常，日志 `Scan done: ... found 432 audio file(s), 0 error(s)`）。
+- 现状：已通过 **系统设置 → 隐私与安全性 → 媒体与 Apple Music → 手动添加 `0x4D.app`** 解决（持久授权，重启/重扫均正常，日志 `Scan done: ... found 432 audio file(s), 0 error(s)`）。
 
 ### 待办（后期二选一或组合）
 1. **方案 A：app 主动请求 Media Library 权限**（对应「2」）
@@ -23,8 +23,8 @@
 
 ## 其他已登记待办
 
-- **just_audio 0.10 迁移收尾**（2026-08-11）：`player_service.dart` 仍有 4 处 `ConcatenatingAudioSource` 弃用警告，改用 0.10 新 playlist API；`_rebuildSequence` 兜底逻辑保留。
-- **歌词全屏页红绿灯避让**（2026-08-04/05）：`LyricsPage` 的 M3 AppBar≈56 会与 macOS 红绿灯重叠，窄窗歌词展示方案待讨论。
+- ✅ **just_audio 0.10 迁移收尾**（2026-08-11 → 2026-08-13 完成）：`player_service.dart` 已改用 0.10 新 playlist API（`setAudioSources` / `addAudioSources` / `removeAudioSourceAt` / `insertAudioSources` / `moveAudioSource`），4 处 `ConcatenatingAudioSource` 弃用警告清零；`_rebuildSequence` 兜底逻辑保留。`dart analyze` 干净、`flutter test` 27/27 通过。
+- ✅ **歌词全屏页红绿灯避让**（2026-08-19 关闭）：`LyricsPage` 已随 2026-08-15 播放页 6a 重构删除（歌词并入播放页右栏/窄版 tab），用户已重新设计界面方案，不再存在独立全屏歌词页的避让问题。
 - **日志查看页接入导航**（2026-08-11）：`LogPage` / `LogDetailPage` 已实现未接入，设置页 TODO。
-- **播放页左栏 10px 溢出**（2026-08-10）：`player_page.dart` 顶部区域变矮后 `_LeftPanel` 有 10px 溢出，待修。
-- **清理 `measureTrafficLights()` 诊断打印**（2026-08-10）：macOS 红绿灯测量诊断输出待删除。
+- ✅ **播放页 10px 溢出**（2026-08-19 关闭）：原 `_LeftPanel` 已随 2026-08-17 播放页重构（SongInfoCard + PlayerBar）删除；现信息区包在 `SingleChildScrollView` + `Expanded` 内、底部播放条固定，结构上不再有该溢出，实际运行未复现。
+- ✅ **清理 `measureTrafficLights()` 诊断打印**（2026-08-19 关闭）：用户决定改用 macOS 11+ 特定窗口栏实现效果，原红绿灯测量方案被取代。

@@ -10,9 +10,11 @@ import 'platform_media_controls.dart';
 /// `MPNowPlayingInfoCenter` through a native Swift plugin
 /// (`macos/Runner/MediaControlsPlugin.swift`).
 class MacOsMediaControls implements PlatformMediaControls {
-  static const _methodChannel = MethodChannel('flutter_music/media_controls');
+  static const _methodChannel = MethodChannel(
+    'com.jerryc.txvziwm/media_controls',
+  );
   static const _eventChannel = EventChannel(
-    'flutter_music/media_controls_events',
+    'com.jerryc.txvziwm/media_controls_events',
   );
 
   final _controller = StreamController<MediaControlEvent>.broadcast();

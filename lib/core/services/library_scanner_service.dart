@@ -80,6 +80,9 @@ class LibraryScannerService {
       );
     }
 
+    // 计时:用于最终日志里的耗时统计。
+    final stopwatch = Stopwatch()..start();
+
     // ── Phase 1: Collect files from disk ──────────────────
     onProgress?.call(
       const ScanProgress(
@@ -100,6 +103,7 @@ class LibraryScannerService {
 
     // ── Phase 2: Diff with database ───────────────────────
     final dbFiles = await _songRepository.getExistingFilePaths();
+    final existingStamps = await _songRepository.getExistingFileStats();
 
     final newFiles = diskFiles.difference(dbFiles).toList()..sort();
     final existingFiles = dbFiles.intersection(diskFiles).toList()..sort();
@@ -110,13 +114,26 @@ class LibraryScannerService {
     // Remove restored files from the "missing" set
     final trulyMissing = missingFromDb.difference(restoredFiles);
 
-    final skippedCount = existingFiles.length;
+    // 变化检测:全量扫描只重解析「mtime 或大小」与上次不同的已存在文件,
+    // 未变化的直接跳过(计入 skipped),避免每次全量重写整库。
+    final changedExistingFiles = updateExisting
+        ? existingFiles.where((path) {
+            final stamp = existingStamps[path];
+            if (stamp == null) return true; // 旧数据无时间戳 → 视为变化
+            try {
+              final stat = FileStat.statSync(path);
+              return stat.modified.millisecondsSinceEpoch !=
+                      stamp.lastModifiedMs ||
+                  stat.size != stamp.fileSize;
+            } catch (_) {
+              return true; // 读不到 stat → 交给解析阶段容错
+            }
+          }).toList()
+        : <String>[];
+    final skippedCount = existingFiles.length - changedExistingFiles.length;
 
-    // Determine which files to parse: new files + optionally existing ones.
-    final filesToParse = <String>[
-      ...newFiles,
-      if (updateExisting) ...existingFiles,
-    ];
+    // Determine which files to parse: new files + changed existing ones.
+    final filesToParse = <String>[...newFiles, ...changedExistingFiles];
 
     onProgress?.call(
       ScanProgress(
@@ -159,6 +176,12 @@ class LibraryScannerService {
       markedMissing.addAll(trulyMissing);
     }
 
+    // ── Phase 3d: 清理孤儿数据 ──────────────────────────
+    // 清理不再被任何歌曲引用的 album/artist/playlist 行,以及未被引用的
+    // 封面缓存文件(例如歌曲改了专辑后旧专辑及其封面成为孤儿)。
+    await _songRepository.cleanupOrphans();
+    await _songRepository.cleanupOrphanCovers();
+
     onProgress?.call(
       ScanProgress(
         processed: filesToParse.length,
@@ -169,15 +192,20 @@ class LibraryScannerService {
     );
 
     // Count newly added (or updated) files for the result summary.
-    final addedCount = updateExisting ? filesToParse.length : newFiles.length;
+    final addedCount = filesToParse.length;
+    stopwatch.stop();
 
-    // 扫描完成（元数据解析已结束）后统一记录：扫描位置、收集到的文件总数、
-    // 以及目录级错误数。无论成功失败都有记录。
+    // 扫描完成（元数据解析已结束）后统一记录：扫描位置、扫描模式（full/quick）、
+    // 收集到的文件总数、增/跳/恢复/缺失/错误数及耗时。无论成功失败都有记录,
+    // 便于区分"快速同步"与"全量扫描",并核对本次实际写入量。
     AppLogger.info(
       'Scan',
       'Scan done: ${folderPaths.join(', ')} — '
+          'mode ${updateExisting ? 'full' : 'quick'}, '
           'found ${diskFiles.length} audio file(s), '
-          '${errorDetails.length} error(s)',
+          'added $addedCount, skipped $skippedCount, '
+          'restored ${restoredFiles.length}, missing ${markedMissing.length}, '
+          'errors ${errorDetails.length}, took ${stopwatch.elapsedMilliseconds}ms',
     );
 
     // 批量失败聚合为一条 error 日志,避免逐文件刷屏(单文件失败已在上层
