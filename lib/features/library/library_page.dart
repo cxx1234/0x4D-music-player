@@ -462,21 +462,25 @@ class _LibraryPageState extends State<LibraryPage> {
                   style: theme.textTheme.bodySmall,
                   overflow: TextOverflow.ellipsis,
                 ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (!_viewModel.isScanning)
+                // 整个 trailing（刷新 + 移除）整体向右平移 2pt。
+                trailing: Transform.translate(
+                  offset: const Offset(3.1, 0),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!_viewModel.isScanning)
+                        IconButton(
+                          icon: const Icon(Icons.refresh, size: 18),
+                          tooltip: '重新扫描此文件夹',
+                          onPressed: () => _viewModel.rescanFolder(folder),
+                        ),
                       IconButton(
-                        icon: const Icon(Icons.refresh, size: 18),
-                        tooltip: '重新扫描此文件夹',
-                        onPressed: () => _viewModel.rescanFolder(folder),
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        tooltip: '移除',
+                        onPressed: () => _removeFolder(folder),
                       ),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      tooltip: '移除',
-                      onPressed: () => _removeFolder(folder),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );

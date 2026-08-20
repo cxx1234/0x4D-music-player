@@ -204,7 +204,7 @@ class SongTile extends StatelessWidget {
               ),
             ),
           if (hasMenu) ...[
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
             PopupMenuButton<String>(
               tooltip: '更多',
               icon: const Icon(Icons.more_vert),
