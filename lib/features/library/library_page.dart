@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
 import '../../core/database/song_sort_order.dart';
+import '../../core/services/library_scanner_service.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/search_util.dart';
 import '../../widgets/animated_collapse.dart';
@@ -348,10 +349,15 @@ class _LibraryPageState extends State<LibraryPage> {
           ),
         if (_musicFolders.isNotEmpty) ...[
           if (!_viewModel.isScanning)
-            IconButton(
-              onPressed: _viewModel.startScan,
-              icon: const Icon(Icons.refresh),
-              tooltip: '重新扫描',
+            GestureDetector(
+              // 桌面右键：直接强制刷新（忽略 mtime/大小变化检测，全量重解析）。
+              onSecondaryTapDown: (_) => _viewModel.forceScan(),
+              child: IconButton(
+                onPressed: _viewModel.startScan,
+                onLongPress: _viewModel.forceScan,
+                icon: const Icon(Icons.refresh),
+                tooltip: '重新扫描（右键/长按强制刷新）',
+              ),
             ),
           const SizedBox(width: 8),
           FilledButton.icon(
@@ -425,9 +431,7 @@ class _LibraryPageState extends State<LibraryPage> {
           ),
           const SizedBox(width: 8),
           Text(
-            '扫描完成：${result.added > 0 ? '添加 ${result.added} 首' : '无新文件'}'
-            '${result.markedMissing > 0 ? '，${result.markedMissing} 首已移除' : ''}'
-            '${result.errors > 0 ? '，${result.errors} 处失败' : ''}',
+            '扫描完成：${scanResultText(result)}',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -509,4 +513,19 @@ class _LibraryPageState extends State<LibraryPage> {
       ),
     );
   }
+}
+
+/// 扫描结果横幅文案：按 添加/更新/无新文件/移除/失败 拼接。
+///
+/// 强制刷新会把全部已存在文件重解析，此时 `updated` 可能很大而 `added` 为 0，
+/// 不能沿用旧的「添加 N 首 / 无新文件」二分口径，否则会误报成「添加了全部歌曲」。
+String scanResultText(ScanResult result) {
+  final parts = <String>[
+    if (result.added > 0) '添加 ${result.added} 首',
+    if (result.updated > 0) '更新 ${result.updated} 首',
+    if (result.added == 0 && result.updated == 0) '无新文件',
+    if (result.markedMissing > 0) '${result.markedMissing} 首已移除',
+    if (result.errors > 0) '${result.errors} 处失败',
+  ];
+  return parts.join('，');
 }

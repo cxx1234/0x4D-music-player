@@ -146,6 +146,14 @@ class LibraryViewModel extends PageViewModel {
     await _runScan(folders);
   }
 
+  /// 强制刷新：忽略 mtime/大小变化检测，把全部已存在歌曲重新解析一遍。
+  /// 用于文件没变但元数据/封面缓存可能已过期的情况（如封面路径变更后）。
+  Future<void> forceScan() async {
+    final folders = ServiceLocator.settings.musicFolders;
+    if (folders.isEmpty) return;
+    await _runScan(folders, force: true);
+  }
+
   /// Re-scans a specific folder.
   Future<void> rescanFolder(String folderPath) async {
     await _runScan([folderPath]);
@@ -163,7 +171,7 @@ class LibraryViewModel extends PageViewModel {
 
   // ─── Internal ──────────────────────────────────────────
 
-  Future<void> _runScan(List<String> folders) async {
+  Future<void> _runScan(List<String> folders, {bool force = false}) async {
     _scanState = LibraryScanState.scanning;
     _scanProgress = null;
     _scanResult = null;
@@ -174,6 +182,7 @@ class LibraryViewModel extends PageViewModel {
       final result = await _scanner.scanFolders(
         folders,
         updateExisting: true,
+        force: force,
         onProgress: (progress) {
           _scanProgress = progress;
           safeNotify();

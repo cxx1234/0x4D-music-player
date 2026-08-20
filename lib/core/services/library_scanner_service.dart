@@ -22,7 +22,12 @@ class ScanProgress {
 
 /// Result of a completed scan.
 class ScanResult {
+  /// 本次**新发现**并解析入库的文件数。
   final int added;
+
+  /// 本次**重新解析**的已存在文件数（增量=有变化的，强制刷新=全部）。
+  final int updated;
+
   final int markedMissing;
   final int skipped;
   final int errors;
@@ -30,16 +35,18 @@ class ScanResult {
 
   const ScanResult({
     required this.added,
+    required this.updated,
     required this.markedMissing,
     required this.skipped,
     required this.errors,
     required this.errorDetails,
   });
 
-  int get totalProcessed => added + markedMissing + skipped;
+  int get totalProcessed => added + updated + markedMissing + skipped;
 
   @override
-  String toString() => '添加 $added，标记缺失 $markedMissing，跳过 $skipped，错误 $errors';
+  String toString() =>
+      '添加 $added，更新 $updated，标记缺失 $markedMissing，跳过 $skipped，错误 $errors';
 }
 
 /// Scans music folders for audio files and syncs them with the database.
@@ -63,16 +70,24 @@ class LibraryScannerService {
   /// exist in the database will also be re-parsed and their metadata
   /// (album art, lyrics, etc.) updated. Set this for full/refresh scans.
   ///
+  /// When [force] is `true` (implies [updateExisting]), the mtime/size
+  /// change detection is bypassed and **all** existing files are re-parsed.
+  /// Use this for a manual "force refresh" when metadata may be stale even
+  /// though the file timestamps/sizes haven't changed (e.g. after a schema
+  /// or cover-cache-path change).
+  ///
   /// [onProgress] is called throughout the scan to report progress.
   Future<ScanResult> scanFolders(
     List<String> folderPaths, {
     void Function(ScanProgress)? onProgress,
     bool markMissing = true,
     bool updateExisting = false,
+    bool force = false,
   }) async {
     if (folderPaths.isEmpty) {
       return const ScanResult(
         added: 0,
+        updated: 0,
         markedMissing: 0,
         skipped: 0,
         errors: 0,
@@ -116,19 +131,22 @@ class LibraryScannerService {
 
     // 变化检测:全量扫描只重解析「mtime 或大小」与上次不同的已存在文件,
     // 未变化的直接跳过(计入 skipped),避免每次全量重写整库。
+    // force=true 时(强制刷新)忽略变化检测,全部已存在文件都重解析。
     final changedExistingFiles = updateExisting
-        ? existingFiles.where((path) {
-            final stamp = existingStamps[path];
-            if (stamp == null) return true; // 旧数据无时间戳 → 视为变化
-            try {
-              final stat = FileStat.statSync(path);
-              return stat.modified.millisecondsSinceEpoch !=
-                      stamp.lastModifiedMs ||
-                  stat.size != stamp.fileSize;
-            } catch (_) {
-              return true; // 读不到 stat → 交给解析阶段容错
-            }
-          }).toList()
+        ? (force
+              ? existingFiles
+              : existingFiles.where((path) {
+                  final stamp = existingStamps[path];
+                  if (stamp == null) return true; // 旧数据无时间戳 → 视为变化
+                  try {
+                    final stat = FileStat.statSync(path);
+                    return stat.modified.millisecondsSinceEpoch !=
+                            stamp.lastModifiedMs ||
+                        stat.size != stamp.fileSize;
+                  } catch (_) {
+                    return true; // 读不到 stat → 交给解析阶段容错
+                  }
+                }).toList())
         : <String>[];
     final skippedCount = existingFiles.length - changedExistingFiles.length;
 
@@ -191,19 +209,20 @@ class LibraryScannerService {
       ),
     );
 
-    // Count newly added (or updated) files for the result summary.
-    final addedCount = filesToParse.length;
+    // Count newly added vs re-parsed existing files for the result summary.
+    final addedCount = newFiles.length;
+    final updatedCount = changedExistingFiles.length;
     stopwatch.stop();
 
-    // 扫描完成（元数据解析已结束）后统一记录：扫描位置、扫描模式（full/quick）、
-    // 收集到的文件总数、增/跳/恢复/缺失/错误数及耗时。无论成功失败都有记录,
-    // 便于区分"快速同步"与"全量扫描",并核对本次实际写入量。
+    // 扫描完成（元数据解析已结束）后统一记录：扫描位置、扫描模式（full/quick、
+    // 可选 force 强制）、收集到的文件总数、增/更新/跳/恢复/缺失/错误数及耗时。
+    // 无论成功失败都有记录,便于区分"快速同步"与"全量扫描",并核对本次实际写入量。
     AppLogger.info(
       'Scan',
       'Scan done: ${folderPaths.join(', ')} — '
-          'mode ${updateExisting ? 'full' : 'quick'}, '
+          'mode ${updateExisting ? 'full' : 'quick'}${force ? '+force' : ''}, '
           'found ${diskFiles.length} audio file(s), '
-          'added $addedCount, skipped $skippedCount, '
+          'added $addedCount, updated $updatedCount, skipped $skippedCount, '
           'restored ${restoredFiles.length}, missing ${markedMissing.length}, '
           'errors ${errorDetails.length}, took ${stopwatch.elapsedMilliseconds}ms',
     );
@@ -220,6 +239,7 @@ class LibraryScannerService {
 
     return ScanResult(
       added: addedCount,
+      updated: updatedCount,
       markedMissing: markedMissing.length,
       skipped: skippedCount,
       errors: errorDetails.length,
