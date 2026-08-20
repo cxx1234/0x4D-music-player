@@ -87,9 +87,7 @@ Color logLevelColor(ThemeData theme, String level) {
 /// 日志查看页：读取 `{appDocDir}/logs/` 下的日志文件,按行展示。
 /// 每行可点击进入 [LogDetailPage] 查看该条日志的完整内容。
 ///
-/// TODO(日志)：本页尚未接入任何导航。接入方式 —— 在设置页
-/// (`lib/features/settings/settings_page.dart`)添加「日志」入口：
-/// `Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LogPage()));`
+/// 入口：设置页（`lib/features/settings/settings_page.dart`）「通用 → 日志」。
 class LogPage extends StatefulWidget {
   const LogPage({super.key});
 
@@ -174,6 +172,7 @@ class _LogPageState extends State<LogPage> {
 
   @override
   Widget build(BuildContext context) {
+    final variant = Theme.of(context).colorScheme.onSurfaceVariant;
     return Scaffold(
       appBar: DetailTopBar(
         title: '日志',
@@ -187,7 +186,26 @@ class _LogPageState extends State<LogPage> {
                 for (final day in _days)
                   PopupMenuItem(value: day, child: Text(day)),
               ],
-              icon: const Icon(Icons.calendar_month),
+              // 方案 B：按钮直接显示「日历图标 + 当前日期 + 下拉箭头」，
+              // 颜色/字号与顶栏其余元素统一（onSurfaceVariant）。
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.calendar_month, size: 18, color: variant),
+                    const SizedBox(width: 4),
+                    Text(
+                      _selectedDay ?? '',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: variant),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(Icons.arrow_drop_down, size: 18, color: variant),
+                  ],
+                ),
+              ),
             ),
         ],
       ),
@@ -234,6 +252,7 @@ class _LogPageState extends State<LogPage> {
       type: MaterialType.transparency,
       clipBehavior: Clip.hardEdge,
       child: ListView.builder(
+        padding: const EdgeInsets.only(top: 8, bottom: 8, left: 15, right: 15),
         itemCount: _entries.length,
         itemBuilder: (context, index) {
           final entry = _entries[index];

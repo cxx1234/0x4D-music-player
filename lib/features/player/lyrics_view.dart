@@ -3,31 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lyric/core/lyric_model.dart';
 import 'package:flutter_lyric/flutter_lyric.dart';
 
+import '../../core/models/lyric_text_size.dart';
 import 'player_ui_state.dart';
-
-/// 歌词字号档位 → 相对基准字号的缩放比例。
-double lyricTextScale(LyricTextSize size) {
-  switch (size) {
-    case LyricTextSize.small:
-      return 0.85;
-    case LyricTextSize.medium:
-      return 1.0;
-    case LyricTextSize.large:
-      return 1.25;
-  }
-}
-
-/// 歌词字号档位的中文标签（菜单项显示）。
-String lyricTextSizeLabel(LyricTextSize size) {
-  switch (size) {
-    case LyricTextSize.small:
-      return '小';
-    case LyricTextSize.medium:
-      return '中';
-    case LyricTextSize.large:
-      return '大';
-  }
-}
 
 /// 歌词视图：上方菜单栏（文本大小）+ 歌词内容区。
 ///
@@ -48,6 +25,9 @@ class LyricsView extends StatefulWidget {
   /// 翻译显示开关变化回调（页面级，触发歌词重载）。
   final VoidCallback? onToggleTranslation;
 
+  /// 歌词字号档位变化回调（页面级，负责写盘持久化）。
+  final ValueChanged<LyricTextSize>? onTextSizeChanged;
+
   const LyricsView({
     super.key,
     required this.controller,
@@ -55,6 +35,7 @@ class LyricsView extends StatefulWidget {
     required this.uiState,
     this.isNarrow = false,
     this.onToggleTranslation,
+    this.onTextSizeChanged,
   });
 
   @override
@@ -86,7 +67,7 @@ class _LyricsViewState extends State<LyricsView> {
   /// 按主题 + 字号档位派生 LyricStyle：文字色用 onSurface（明暗适配）、
   /// 高亮条用主题主色、字号按档位缩放。
   LyricStyle _computeStyle(LyricTextSize size) {
-    final scale = lyricTextScale(size);
+    final scale = size.scale;
     final base = LyricStyles.default1;
     final onSurface = theme.colorScheme.onSurface;
     final primary = theme.colorScheme.primary;
@@ -130,12 +111,14 @@ class _LyricsViewState extends State<LyricsView> {
           CheckedPopupMenuItem(
             value: size,
             checked: size == widget.uiState.lyricTextSize,
-            child: Text(lyricTextSizeLabel(size)),
+            child: Text(size.label),
           ),
       ],
     );
     if (selected != null && selected != widget.uiState.lyricTextSize) {
       setState(() => widget.uiState.lyricTextSize = selected);
+      // 写盘持久化（设置页不展示该选项，但跨重启保留）。
+      widget.onTextSizeChanged?.call(selected);
     }
   }
 

@@ -128,6 +128,29 @@ class AlbumArtCacheService {
     return deleted;
   }
 
+  /// 统计 `covers/` 目录中所有封面缓存文件的字节总数（目录不存在返回 0）。
+  ///
+  /// 供设置页「缓存」行显示占用大小。统计失败不抛（记 warning 后返回 0）。
+  Future<int> cacheSizeBytes() async {
+    try {
+      final dir = await cacheDir;
+      if (!await dir.exists()) return 0;
+      var total = 0;
+      await for (final entity in dir.list()) {
+        if (entity is! File) continue;
+        try {
+          total += await entity.length();
+        } catch (_) {
+          // 单个文件读取失败（如权限）不影响整体统计。
+        }
+      }
+      return total;
+    } catch (e) {
+      AppLogger.warning('Cache', 'Failed to compute cache size', e);
+      return 0;
+    }
+  }
+
   /// Computes a deterministic hash of [path] to use as a stable file name.
   ///
   /// Uses a simple FNV-1a hash over the UTF-8 bytes, which is deterministic

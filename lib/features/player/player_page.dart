@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_lyric/flutter_lyric.dart';
 
 import '../../core/constants/layout.dart';
 import '../../core/database/database.dart';
+import '../../core/models/lyric_text_size.dart';
 import '../../core/services/service_locator.dart';
 import '../../widgets/player_bar.dart';
 import '../../widgets/song_info_card.dart';
@@ -83,9 +85,20 @@ class _PlayerPageState extends State<PlayerPage> {
     super.dispose();
   }
 
-  /// 歌词翻译显示开关（LyricsView 已更新 uiState，这里触发重新加载）。
+  /// 歌词翻译显示开关（LyricsView 已更新 uiState，这里触发重新加载 + 写盘）。
   void _toggleTranslation() {
     _lyrics.setShowTranslation(widget.uiState.showTranslation);
+    // 写盘持久化：跨重启保留翻译开关状态。
+    unawaited(
+      ServiceLocator.settings.setShowTranslation(
+        widget.uiState.showTranslation,
+      ),
+    );
+  }
+
+  /// 歌词字号档位变化（LyricsView 已更新 uiState，这里写盘持久化）。
+  void _onTextSizeChanged(LyricTextSize size) {
+    unawaited(ServiceLocator.settings.setLyricTextSize(size));
   }
 
   /// 顶部栏：红绿灯预留区 + 下方 56 控件区（播放器/歌词/播放列表切换）。
@@ -247,6 +260,7 @@ class _PlayerPageState extends State<PlayerPage> {
                             uiState: widget.uiState,
                             lyricsController: _lyrics.controller,
                             onToggleTranslation: _toggleTranslation,
+                            onTextSizeChanged: _onTextSizeChanged,
                           ),
                         ),
                       ],
@@ -382,6 +396,7 @@ class _PlayerPageState extends State<PlayerPage> {
             uiState: widget.uiState,
             lyricsController: _lyrics.controller,
             onToggleTranslation: _toggleTranslation,
+            onTextSizeChanged: _onTextSizeChanged,
           ),
         ),
         _InfoReveal(
@@ -517,6 +532,9 @@ class _NarrowLyricsQueue extends StatefulWidget {
   /// 翻译显示开关变化回调（页面级，触发歌词重载）。
   final VoidCallback? onToggleTranslation;
 
+  /// 歌词字号档位变化回调（页面级，负责写盘持久化）。
+  final ValueChanged<LyricTextSize>? onTextSizeChanged;
+
   const _NarrowLyricsQueue({
     required this.viewModel,
     required this.theme,
@@ -524,6 +542,7 @@ class _NarrowLyricsQueue extends StatefulWidget {
     required this.uiState,
     required this.lyricsController,
     this.onToggleTranslation,
+    this.onTextSizeChanged,
   });
 
   @override
@@ -574,6 +593,7 @@ class _NarrowLyricsQueueState extends State<_NarrowLyricsQueue> {
                 uiState: widget.uiState,
                 isNarrow: true,
                 onToggleTranslation: widget.onToggleTranslation,
+                onTextSizeChanged: widget.onTextSizeChanged,
               ),
             ),
     );
@@ -621,6 +641,9 @@ class _RightPanel extends StatefulWidget {
   /// 翻译显示开关变化回调（页面级，触发歌词重载）。
   final VoidCallback? onToggleTranslation;
 
+  /// 歌词字号档位变化回调（页面级，负责写盘持久化）。
+  final ValueChanged<LyricTextSize>? onTextSizeChanged;
+
   const _RightPanel({
     required this.viewModel,
     required this.theme,
@@ -628,6 +651,7 @@ class _RightPanel extends StatefulWidget {
     required this.uiState,
     required this.lyricsController,
     this.onToggleTranslation,
+    this.onTextSizeChanged,
   });
 
   @override
@@ -678,6 +702,7 @@ class _RightPanelState extends State<_RightPanel> {
                       theme: widget.theme,
                       uiState: widget.uiState,
                       onToggleTranslation: widget.onToggleTranslation,
+                      onTextSizeChanged: widget.onTextSizeChanged,
                     ),
                   ),
           ),

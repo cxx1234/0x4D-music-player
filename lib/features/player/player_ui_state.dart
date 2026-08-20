@@ -1,3 +1,5 @@
+import '../../core/models/lyric_text_size.dart';
+
 /// 播放器 UI 界面状态：跨「打开/关闭」会话保留（App 持有，pop 不销毁）。
 ///
 /// 需求：重开播放页时队列滚动位置、歌词/队列标签选择不重置。
@@ -25,6 +27,3 @@ class PlayerUiState {
 
 /// 窄模式下的可切换标签：播放器 / 歌词 / 播放队列。
 enum NarrowTab { player, lyrics, queue }
-
-/// 歌词字号档位：小 / 中 / 大。
-enum LyricTextSize { small, medium, large }

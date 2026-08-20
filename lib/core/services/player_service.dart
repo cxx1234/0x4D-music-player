@@ -38,6 +38,11 @@ class PlayerService extends ChangeNotifier {
   /// 播放音量（0.0~1.0）。
   double _volume = 1.0;
 
+  /// 续播开关：关闭时序列未加载的 position/duration 不回退到上次保存值，
+  /// 避免界面显示上次播放位置（实际会从头播放）。
+  /// 注意：不影响当前播放歌曲信息与总时长（后者仍用 currentSong 兜底）。
+  final bool _resumePlaybackEnabled;
+
   /// 待应用的启动续播位置（构造时从 [PlayQueue] 读取，首次加载序列时消费）。
   Duration? _resumePosition;
 
@@ -106,7 +111,8 @@ class PlayerService extends ChangeNotifier {
     PlayQueue? playQueue,
     bool resumePlaybackPosition = true,
     double volume = 1.0,
-  }) : _playQueue = playQueue ?? PlayQueue() {
+  }) : _playQueue = playQueue ?? PlayQueue(),
+       _resumePlaybackEnabled = resumePlaybackPosition {
     _volume = volume;
     // Forward PlayQueue changes to this service's listeners（经 _onQueueChanged
     // 汇聚，顺带维护按歌曲去重的 currentSongNotifier）。
@@ -276,6 +282,9 @@ class PlayerService extends ChangeNotifier {
   /// 让播放页进度条直接显示续播点。
   Duration get position {
     if (_sequenceLoaded) return _player.position;
+    // 续播关闭时，未加载序列不回退到上次保存的位置（否则界面会显示
+    // 上次播放位置，即便实际会从头播放）。
+    if (!_resumePlaybackEnabled) return Duration.zero;
     return _playQueue.position;
   }
 
@@ -295,8 +304,12 @@ class PlayerService extends ChangeNotifier {
       final d = _player.duration;
       if (d != null && d > Duration.zero) return d;
     }
-    final saved = _playQueue.duration;
-    if (saved > Duration.zero) return saved;
+    // 续播关闭时跳过上次保存的时长（避免显示上次歌曲的总长）；
+    // 总时长仍由当前歌曲在库里的扫描时长兜底，不丢失。
+    if (_resumePlaybackEnabled) {
+      final saved = _playQueue.duration;
+      if (saved > Duration.zero) return saved;
+    }
     final ms = currentSong?.durationMs;
     if (ms != null && ms > 0) return Duration(milliseconds: ms);
     return Duration.zero;

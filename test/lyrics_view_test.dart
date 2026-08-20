@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_lyric/flutter_lyric.dart';
 
+import 'package:flutter_music/core/models/lyric_text_size.dart';
 import 'package:flutter_music/features/player/lyrics_view.dart';
 import 'package:flutter_music/features/player/player_ui_state.dart';
 

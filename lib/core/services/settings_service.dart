@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../database/song_sort_order.dart';
+import '../models/lyric_text_size.dart';
 
 /// A music folder with an optional macOS security-scoped bookmark.
 ///
@@ -43,12 +45,20 @@ class AppSettings {
   /// 播放音量（0.0~1.0）。
   final double volume;
 
+  /// 歌词字号档位（[LyricTextSize.name]）。
+  final String lyricTextSize;
+
+  /// 歌词是否显示翻译副行。
+  final bool showTranslation;
+
   const AppSettings({
     this.musicFolders = const [],
     this.themeMode = 'system',
     this.songSortOrder = 'title',
     this.resumePlaybackPosition = true,
     this.volume = 1.0,
+    this.lyricTextSize = 'medium',
+    this.showTranslation = true,
   });
 
   /// The raw folder paths (convenience getter).
@@ -60,6 +70,8 @@ class AppSettings {
     'songSortOrder': songSortOrder,
     'resumePlaybackPosition': resumePlaybackPosition,
     'volume': volume,
+    'lyricTextSize': lyricTextSize,
+    'showTranslation': showTranslation,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -84,6 +96,8 @@ class AppSettings {
       songSortOrder: json['songSortOrder'] as String? ?? 'title',
       resumePlaybackPosition: json['resumePlaybackPosition'] as bool? ?? true,
       volume: (json['volume'] as num?)?.toDouble() ?? 1.0,
+      lyricTextSize: json['lyricTextSize'] as String? ?? 'medium',
+      showTranslation: json['showTranslation'] as bool? ?? true,
     );
   }
 
@@ -93,6 +107,8 @@ class AppSettings {
     String? songSortOrder,
     bool? resumePlaybackPosition,
     double? volume,
+    String? lyricTextSize,
+    bool? showTranslation,
   }) {
     return AppSettings(
       musicFolders: musicFolders ?? this.musicFolders,
@@ -101,6 +117,8 @@ class AppSettings {
       resumePlaybackPosition:
           resumePlaybackPosition ?? this.resumePlaybackPosition,
       volume: volume ?? this.volume,
+      lyricTextSize: lyricTextSize ?? this.lyricTextSize,
+      showTranslation: showTranslation ?? this.showTranslation,
     );
   }
 
@@ -158,6 +176,25 @@ class SettingsService {
     await _save();
   }
 
+  /// 歌词字号档位（小/中/大）。
+  LyricTextSize get lyricTextSize =>
+      LyricTextSize.fromName(_settings.lyricTextSize);
+
+  /// 持久化歌词字号档位（播放页歌词菜单修改时写盘）。
+  Future<void> setLyricTextSize(LyricTextSize size) async {
+    _settings = _settings.copyWith(lyricTextSize: size.name);
+    await _save();
+  }
+
+  /// 歌词是否显示翻译副行。
+  bool get showTranslation => _settings.showTranslation;
+
+  /// 持久化歌词翻译显示开关（播放页歌词菜单修改时写盘）。
+  Future<void> setShowTranslation(bool value) async {
+    _settings = _settings.copyWith(showTranslation: value);
+    await _save();
+  }
+
   Future<void> initialize() async {
     if (_initialized) return;
 
@@ -173,6 +210,9 @@ class SettingsService {
       _settings = const AppSettings();
       await _save();
     }
+
+    // 同步主题模式：启动读取持久化值并通知 MaterialApp。
+    themeModeNotifier.value = _themeModeFromName(_settings.themeMode);
 
     _initialized = true;
   }
@@ -214,8 +254,32 @@ class SettingsService {
     await _save();
   }
 
-  Future<void> setThemeMode(String mode) async {
-    _settings = _settings.copyWith(themeMode: mode);
+  /// 主题模式（跟随系统/浅色/深色）。
+  ///
+  /// [AppSettings.themeMode] 持久化为字符串（'system'/'light'/'dark'），
+  /// 这里解析成 [ThemeMode] 供 MaterialApp 使用。
+  ThemeMode get themeMode => _themeModeFromName(_settings.themeMode);
+
+  /// 主题模式变化通知：设置页切换后驱动 [MaterialApp] 重建。
+  final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier<ThemeMode>(
+    ThemeMode.system,
+  );
+
+  /// 持久化主题模式并广播变化（触发 [MaterialApp] 切换主题）。
+  Future<void> setThemeMode(ThemeMode mode) async {
+    _settings = _settings.copyWith(themeMode: mode.name);
+    themeModeNotifier.value = mode;
     await _save();
+  }
+
+  static ThemeMode _themeModeFromName(String name) {
+    switch (name) {
+      case 'light':
+        return ThemeMode.light;
+      case 'dark':
+        return ThemeMode.dark;
+      default:
+        return ThemeMode.system;
+    }
   }
 }

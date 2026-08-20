@@ -68,6 +68,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       AppLogger.error('App', 'MetadataGod initialization failed', e);
     }
     if (mounted) {
+      // 歌词 UI 状态（字号/翻译）从持久化设置恢复（设置页不展示，跨重启保留）。
+      _playerUiState.lyricTextSize = ServiceLocator.settings.lyricTextSize;
+      _playerUiState.showTranslation = ServiceLocator.settings.showTranslation;
       setState(() => _initialized = true);
     }
   }
@@ -141,53 +144,64 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     );
   }
 
+  /// 主题模式兜底 notifier：ServiceLocator 就绪前 MaterialApp 也能稳定监听。
+  static final _fallbackThemeMode = ValueNotifier<ThemeMode>(ThemeMode.system);
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Music',
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
-      home: _startupError != null
-          ? StartupErrorPage(error: _startupError!, onRetry: _retry)
-          : ShellPage(
-              isInitialized: _initialized,
-              controller: _shellController,
-            ),
-      onGenerateRoute: AppRouter.generateRoute,
-      navigatorKey: _navKey,
-      navigatorObservers: [_NowPlayingBarVisibilityObserver(_showBar)],
-      debugShowCheckedModeBanner: false,
-      builder: (context, child) {
-        // 根 Overlay 包裹整个应用：底栏位于 Navigator（含 Overlay）之外，
-        // 没有这个根 Overlay，底栏里的 Tooltip 等依赖 Overlay 的组件
-        // 会报 "No Overlay widgets found"。
-        return Overlay(
-          initialEntries: [
-            OverlayEntry(
-              builder: (context) => Scaffold(
-                // 所有页面（Shell + 子页面 + 播放页）都渲染在底栏上方，底栏不被
-                // 子页面盖住。顶部不再有全局顶栏，改由各页面自行避让（左侧边栏
-                // 顶部预留 45 给红绿灯，右侧内容区用统一高度的 PageToolbar）。
-                body: _PlaybackErrorConsumer(
-                  child: child ?? const SizedBox.shrink(),
-                ),
-                bottomNavigationBar: ValueListenableBuilder<bool>(
-                  valueListenable: _showBar,
-                  builder: (context, show, _) {
-                    // 全屏“正在播放”打开时隐藏底栏，关闭后恢复。
-                    // 启动失败时不显示底栏（此时没有播放器/队列）。
-                    if (!show || _startupError != null) {
-                      return const SizedBox.shrink();
-                    }
-                    return NowPlayingBar(onTap: _openPlayer);
-                  },
+    // 主题模式由 SettingsService 广播：初始化前用静态兜底，就绪后切真实源。
+    final themeModeListenable = ServiceLocator.isReady
+        ? ServiceLocator.settings.themeModeNotifier
+        : _fallbackThemeMode;
+
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeModeListenable,
+      builder: (context, themeMode, _) => MaterialApp(
+        title: 'Flutter Music',
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: themeMode,
+        home: _startupError != null
+            ? StartupErrorPage(error: _startupError!, onRetry: _retry)
+            : ShellPage(
+                isInitialized: _initialized,
+                controller: _shellController,
+              ),
+        onGenerateRoute: AppRouter.generateRoute,
+        navigatorKey: _navKey,
+        navigatorObservers: [_NowPlayingBarVisibilityObserver(_showBar)],
+        debugShowCheckedModeBanner: false,
+        builder: (context, child) {
+          // 根 Overlay 包裹整个应用：底栏位于 Navigator（含 Overlay）之外，
+          // 没有这个根 Overlay，底栏里的 Tooltip 等依赖 Overlay 的组件
+          // 会报 "No Overlay widgets found"。
+          return Overlay(
+            initialEntries: [
+              OverlayEntry(
+                builder: (context) => Scaffold(
+                  // 所有页面（Shell + 子页面 + 播放页）都渲染在底栏上方，底栏不被
+                  // 子页面盖住。顶部不再有全局顶栏，改由各页面自行避让（左侧边栏
+                  // 顶部预留 45 给红绿灯，右侧内容区用统一高度的 PageToolbar）。
+                  body: _PlaybackErrorConsumer(
+                    child: child ?? const SizedBox.shrink(),
+                  ),
+                  bottomNavigationBar: ValueListenableBuilder<bool>(
+                    valueListenable: _showBar,
+                    builder: (context, show, _) {
+                      // 全屏“正在播放”打开时隐藏底栏，关闭后恢复。
+                      // 启动失败时不显示底栏（此时没有播放器/队列）。
+                      if (!show || _startupError != null) {
+                        return const SizedBox.shrink();
+                      }
+                      return NowPlayingBar(onTap: _openPlayer);
+                    },
+                  ),
                 ),
               ),
-            ),
-          ],
-        );
-      },
+            ],
+          );
+        },
+      ),
     );
   }
 }
