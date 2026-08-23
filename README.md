@@ -3,6 +3,8 @@
 A local music player built with **Flutter**.
 
 <p align="center">
+  <img src="assets/icon/0x4D_rounded_full.png" alt="App Icon" width="120">
+  <br/>
   <img src="screenshots/0x4D_V0_2.png" alt="0x4D Music Player" width="720">
 </p>
 

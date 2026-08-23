@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../core/services/player_service.dart';
 
-/// 播放控制按钮行：循环 / 上一首 / 播放·暂停 / 下一首 / 随机。
+/// 播放控制按钮行：上一首 / 播放·暂停 / 下一首。
+///
+/// 循环/随机等播放模式按钮已移至播放队列功能栏。
 ///
 /// - [compact]：B 两栏 / 迷你播放器用小号按钮。
 /// - [alignment]：默认居中；B 两栏传 [MainAxisAlignment.start] 左对齐。
@@ -25,16 +27,6 @@ class PlayerControls extends StatelessWidget {
     return Row(
       mainAxisAlignment: alignment,
       children: [
-        // Repeat mode
-        _ControlButton(
-          icon: _repeatIcon(player.repeatMode),
-          isActive: player.repeatMode != PlayerRepeatMode.off,
-          iconSize: compact ? 20 : 24,
-          tooltip: '循环模式',
-          onPressed: player.cycleRepeatMode,
-        ),
-        SizedBox(width: compact ? 6 : 8),
-
         // Previous（图标尺寸固定不随 compact 缩小——切歌按钮保持不变）
         _ControlButton(
           icon: Icons.skip_previous_rounded,
@@ -67,29 +59,8 @@ class PlayerControls extends StatelessWidget {
           tooltip: '下一首',
           onPressed: player.next,
         ),
-        SizedBox(width: compact ? 6 : 8),
-
-        // Shuffle
-        _ControlButton(
-          icon: Icons.shuffle_rounded,
-          isActive: player.isShuffled,
-          iconSize: compact ? 20 : 24,
-          tooltip: '随机播放',
-          onPressed: player.toggleShuffle,
-        ),
       ],
     );
-  }
-
-  IconData _repeatIcon(PlayerRepeatMode mode) {
-    switch (mode) {
-      case PlayerRepeatMode.off:
-        return Icons.repeat_rounded;
-      case PlayerRepeatMode.one:
-        return Icons.repeat_one_rounded;
-      case PlayerRepeatMode.all:
-        return Icons.repeat_rounded;
-    }
   }
 }
 

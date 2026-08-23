@@ -39,6 +39,9 @@ migrate_working_dir/
 # Test audio fixtures (large, not committed)
 test/music/
 
+# Dev/diagnostic scripts (not part of the app)
+tool/
+
 # Symbolication related
 app.*.symbols
 
@@ -57,3 +60,4 @@ app.*.map.json
 
 # AI
 .copilot/
+test/impeller_flicker_repro.dart

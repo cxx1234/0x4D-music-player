@@ -128,10 +128,10 @@
 - **位置**：`lib/core/services/player_service.dart:377`。
 - **改法**：分批 `addAudioSources` + 加载反馈（loading 状态）。
 
-### 5.2 封面缓存扩展名不一致
+### 5.2 封面缓存扩展名不一致 ✅ 已修复
 - **问题**：`getAlbumArtPath` 恒返回 `.jpg`，但 `saveAlbumArt` 按 mime 存 `png/webp/gif` 扩展名 → 潜在读取不到。
 - **位置**：`lib/core/services/album_art_cache_service.dart:77/96`。
-- **改法**：统一扩展名（保存时记录真实扩展名，或读取时按 mime 探测）。
+- **修复**：路径读取改为按已知扩展名探测真实文件；保存时清理同 hash 的旧扩展名残留；`song_repository._saveArtIfChanged` 返回 `saveAlbumArt` 的真实路径。回归测试：`test/album_art_cache_ext_test.dart`。
 
 ---
 

@@ -436,7 +436,10 @@ class SongRepository {
       final path = await _artCache.getAlbumArtPath(albumKey);
       if (verifiedArtKeys.add(albumKey)) {
         if (await _artContentChanged(path, bytes)) {
-          await _artCache.saveAlbumArt(albumKey, bytes, mimeType);
+          // saveAlbumArt 返回按 mime 存的真实扩展名路径(png/webp/gif/jpg),
+          // 不能沿用 getAlbumArtPath 的 `.jpg` 回退,否则 DB 记录指向不存在的
+          // 文件,封面不显示(见 docs/Performance-Optimization.md 5.2)。
+          return await _artCache.saveAlbumArt(albumKey, bytes, mimeType);
         }
       }
       return path;

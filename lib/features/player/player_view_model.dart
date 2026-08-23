@@ -21,6 +21,9 @@ class PlayerViewModel extends ChangeNotifier {
   bool get isShuffled => _player.isShuffled;
   List<Song> get queue => _player.queue;
   int get currentIndex => _player.currentIndex;
+  List<Song> get effectiveQueue => _player.effectiveQueue;
+  int get effectiveIndex => _player.effectiveIndex;
+  int logicalIndexForEffective(int e) => _player.logicalIndexForEffective(e);
 
   // ─── Lifecycle ─────────────────────────────────────────
 
@@ -53,8 +56,9 @@ class PlayerViewModel extends ChangeNotifier {
   Future<void> next() => _player.next();
   Future<void> previous() => _player.previous();
   Future<void> seek(Duration position) => _player.seek(position);
-  void cycleRepeatMode() => _player.cycleRepeatMode();
-  Future<void> toggleShuffle() => _player.toggleShuffle();
+  PlayerRepeatMode get baseRepeatMode => _player.baseRepeatMode;
+  void cyclePlayMode() => _player.cyclePlayMode();
+  void toggleSingleRepeat() => _player.toggleSingleRepeat();
 
   // ─── Queue management ─────────────────────────────────
 
