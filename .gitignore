@@ -60,3 +60,4 @@ app.*.map.json
 
 # AI
 .copilot/
+test/impeller_flicker_repro.dart

@@ -35,11 +35,11 @@ void main() {
       );
     });
 
-    test('all + 随机：随机循环列表（到底也不变）', () {
-      expect(queueFooterText(PlayerRepeatMode.all, true), '随机 · 循环列表播放');
+    test('all + 随机：随机播放（随机循环，到底也不变）', () {
+      expect(queueFooterText(PlayerRepeatMode.all, true), '随机播放');
       expect(
         queueFooterText(PlayerRepeatMode.all, true, atBottom: true),
-        '随机 · 循环列表播放',
+        '随机播放',
       );
     });
 

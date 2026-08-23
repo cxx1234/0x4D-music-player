@@ -10,7 +10,7 @@ import 'player_view_model.dart';
 ///
 /// - off + 未随机：顺序播放（滚动到底显示「· 到底了」）
 /// - off + 随机：随机播放（滚动到底显示「· 到底了」）
-/// - all：循环整个列表（可叠加随机）
+/// - all：循环整个列表（随机循环时也显示「随机播放」，到底不变）
 /// - one：单曲循环
 ///
 /// [atBottom]：列表滚动到底时传 true，追加「· 到底了」（仅不循环模式有意义）。
@@ -23,7 +23,7 @@ String queueFooterText(
     case PlayerRepeatMode.one:
       return '单曲循环播放';
     case PlayerRepeatMode.all:
-      return isShuffled ? '随机 · 循环列表播放' : '循环列表播放';
+      return isShuffled ? '随机播放' : '循环列表播放';
     case PlayerRepeatMode.off:
       final base = isShuffled ? '随机播放' : '顺序播放';
       return atBottom ? '$base · 到底了' : base;
@@ -36,7 +36,7 @@ IconData _queueFooterIcon(PlayerRepeatMode repeatMode, bool isShuffled) {
     case PlayerRepeatMode.one:
       return Icons.repeat_one_rounded;
     case PlayerRepeatMode.all:
-      return Icons.repeat_rounded;
+      return isShuffled ? Icons.shuffle_rounded : Icons.repeat_rounded;
     case PlayerRepeatMode.off:
       return isShuffled ? Icons.shuffle_rounded : Icons.playlist_play_rounded;
   }
@@ -99,6 +99,14 @@ class _QueueViewState extends State<QueueView> {
   PlayerViewModel get vm => widget.viewModel;
   ThemeData get theme => widget.theme;
 
+  // 展示用队列与当前下标：随机开启时用播放排列（effective），否则用逻辑队列。
+  List<Song> get _displayQueue => vm.isShuffled ? vm.effectiveQueue : vm.queue;
+  int get _displayIndex => vm.isShuffled ? vm.effectiveIndex : vm.currentIndex;
+
+  // 展示位置 → 逻辑下标（供 jumpTo/removeFromQueue 使用）。
+  int _toLogicalIndex(int displayIndex) =>
+      vm.isShuffled ? vm.logicalIndexForEffective(displayIndex) : displayIndex;
+
   @override
   void initState() {
     super.initState();
@@ -106,7 +114,7 @@ class _QueueViewState extends State<QueueView> {
     _scrollController = ScrollController(
       initialScrollOffset: widget.uiState.queueScrollOffset,
     );
-    _lastCurrentIndex = vm.currentIndex;
+    _lastCurrentIndex = _displayIndex;
     // 重开判断：当前歌与上次会话相同 → 恢复滚动位置；不同（离开期间切歌）→ 跟随当前歌。
     final follow = vm.currentSong?.id != widget.uiState.lastCurrentSongId;
     widget.uiState.lastCurrentSongId = vm.currentSong?.id;
@@ -123,8 +131,8 @@ class _QueueViewState extends State<QueueView> {
   @override
   void didUpdateWidget(QueueView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_lastCurrentIndex != vm.currentIndex) {
-      _lastCurrentIndex = vm.currentIndex;
+    if (_lastCurrentIndex != _displayIndex) {
+      _lastCurrentIndex = _displayIndex;
       widget.uiState.lastCurrentSongId = vm.currentSong?.id;
       // 当前播放项变化后自动滚动到高亮位置（删除/拖拽模式下不打扰用户）。
       if (!_deleteMode && !_reorderMode) {
@@ -151,8 +159,8 @@ class _QueueViewState extends State<QueueView> {
   // 滚动到当前播放项并置于视口顶部下方（先快后慢 easeOutCubic，400ms）。
   void _scrollToCurrent() {
     if (!mounted) return;
-    final index = vm.currentIndex;
-    final queue = vm.queue;
+    final index = _displayIndex;
+    final queue = _displayQueue;
     if (index < 0 || index >= queue.length) return;
     if (!_scrollController.hasClients) return;
 
@@ -185,6 +193,8 @@ class _QueueViewState extends State<QueueView> {
   }
 
   void _toggleReorderMode() {
+    // 随机模式下展示的是排列坐标，与逻辑下标不一致，拖拽排序语义混乱——禁用。
+    if (vm.isShuffled) return;
     setState(() {
       _reorderMode = !_reorderMode;
       if (_reorderMode) {
@@ -240,8 +250,10 @@ class _QueueViewState extends State<QueueView> {
   }
 
   Future<void> _deleteSelected() async {
-    // Sort descending so indices stay valid after removal
-    final sorted = _selectedIndices.toList()..sort((a, b) => b.compareTo(a));
+    // 先把选中项从展示位置换算成逻辑下标，再降序删除——
+    // 随机模式下若直接按展示位置删，排列位移会让下标失效。
+    final sorted = _selectedIndices.map(_toLogicalIndex).toList()
+      ..sort((a, b) => b.compareTo(a));
     for (final i in sorted) {
       await vm.removeFromQueue(i);
     }
@@ -253,7 +265,7 @@ class _QueueViewState extends State<QueueView> {
 
   @override
   Widget build(BuildContext context) {
-    final queue = vm.queue;
+    final queue = _displayQueue;
     if (queue.isEmpty) {
       return Center(
         child: Text(
@@ -321,8 +333,8 @@ class _QueueViewState extends State<QueueView> {
 
   // 当前高亮项是否在视口内（部分可见也算）——完全不可见时显示「定位」。
   bool _isCurrentInView(ScrollMetrics metrics) {
-    final index = vm.currentIndex;
-    if (index < 0 || index >= vm.queue.length) return true;
+    final index = _displayIndex;
+    if (index < 0 || index >= _displayQueue.length) return true;
     return isQueueItemInView(
       index: index,
       itemExtent: _kQueueTileExtent,
@@ -375,6 +387,21 @@ class _QueueViewState extends State<QueueView> {
     );
   }
 
+  // 播放模式合并按钮三态图标：顺序 / 列表循环 / 随机循环。
+  IconData _playModeIcon(PlayerRepeatMode repeat, bool shuffled) {
+    if (repeat == PlayerRepeatMode.all) {
+      return shuffled ? Icons.shuffle_rounded : Icons.repeat_rounded;
+    }
+    return Icons.playlist_play_rounded;
+  }
+
+  String _playModeTooltip(PlayerRepeatMode repeat, bool shuffled) {
+    if (repeat == PlayerRepeatMode.all) {
+      return shuffled ? '随机播放' : '列表循环';
+    }
+    return '顺序播放';
+  }
+
   Widget _buildToolbar(int count) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -421,20 +448,51 @@ class _QueueViewState extends State<QueueView> {
               onPressed: _toggleReorderMode,
             ),
           ] else ...[
-            IconButton(
-              icon: const Icon(Icons.delete_sweep_rounded, size: 20),
-              tooltip: '清空列表',
-              onPressed: _confirmClear,
-            ),
+            // 随机模式下展示的是排列坐标，拖拽排序语义混乱——隐藏手动排序入口。
+            // 条件按钮放在常驻按钮左侧：出现/消失只影响左侧，不挤动最右常驻按钮。
+            if (!vm.isShuffled)
+              IconButton(
+                icon: const Icon(Icons.reorder_rounded, size: 20),
+                tooltip: '手动排序',
+                onPressed: _toggleReorderMode,
+              ),
             IconButton(
               icon: const Icon(Icons.checklist_rounded, size: 20),
               tooltip: '选择删除',
               onPressed: _toggleDeleteMode,
             ),
             IconButton(
-              icon: const Icon(Icons.reorder_rounded, size: 20),
-              tooltip: '手动排序',
-              onPressed: _toggleReorderMode,
+              icon: const Icon(Icons.delete_sweep_rounded, size: 20),
+              tooltip: '清空列表',
+              onPressed: _confirmClear,
+            ),
+            // 单曲循环独立按钮（单曲循环时高亮，关闭回到基础模式）。
+            IconButton(
+              icon: Icon(
+                Icons.repeat_one_rounded,
+                size: 20,
+                color: vm.repeatMode == PlayerRepeatMode.one
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+              tooltip: '单曲循环',
+              onPressed: vm.toggleSingleRepeat,
+            ),
+            // 播放模式合并按钮：顺序 / 列表循环 / 随机循环 三态循环。
+            // 单曲循环时显示基础模式但不高亮（由单曲循环按钮高亮）。
+            // 常驻按钮最右：随机开关/定位显隐都不会移动播放模式与单曲循环。
+            IconButton(
+              icon: Icon(
+                _playModeIcon(vm.baseRepeatMode, vm.isShuffled),
+                // playlist_play_rounded 字形留白多、观感偏小，放大到 22 与其他图标看齐。
+                size: vm.baseRepeatMode == PlayerRepeatMode.all ? 20 : 22,
+                color: vm.repeatMode != PlayerRepeatMode.one
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+              tooltip:
+                  '播放模式：${_playModeTooltip(vm.baseRepeatMode, vm.isShuffled)}',
+              onPressed: vm.cyclePlayMode,
             ),
           ],
         ],
@@ -473,6 +531,7 @@ class _QueueViewState extends State<QueueView> {
   }
 
   Widget _buildList(List<Song> queue) {
+    final displayIndex = _displayIndex;
     return ListView.builder(
       controller: _scrollController,
       itemExtent: _kQueueTileExtent,
@@ -480,13 +539,15 @@ class _QueueViewState extends State<QueueView> {
       itemCount: queue.length,
       itemBuilder: (context, index) {
         final song = queue[index];
-        final isCurrent = index == vm.currentIndex;
-        return _buildListTile(song, index, isCurrent);
+        final isCurrent = index == displayIndex;
+        final isDimmed = vm.isShuffled && !isCurrent && index < displayIndex;
+        return _buildListTile(song, index, isCurrent, isDimmed: isDimmed);
       },
     );
   }
 
   Widget _buildReorderableList(List<Song> queue) {
+    final displayIndex = _displayIndex;
     return ReorderableListView.builder(
       scrollController: _scrollController,
       itemExtent: _kQueueTileExtent,
@@ -498,83 +559,95 @@ class _QueueViewState extends State<QueueView> {
       },
       itemBuilder: (context, index) {
         final song = queue[index];
-        final isCurrent = index == vm.currentIndex;
+        final isCurrent = index == displayIndex;
+        final isDimmed = vm.isShuffled && !isCurrent && index < displayIndex;
         return _buildListTile(
           song,
           index,
           isCurrent,
+          isDimmed: isDimmed,
           key: ValueKey(song.filePath),
         );
       },
     );
   }
 
-  Widget _buildListTile(Song song, int index, bool isCurrent, {Key? key}) {
-    return SongTile(
-      key: key,
-      song: song,
-      isCurrentSong: isCurrent,
-      // 队列用 leading 指示当前项（播放图标/序号），隐藏行尾音量图标避免重复
-      showCurrentIndicator: false,
-      onTap: _deleteMode
-          ? () {
-              setState(() {
-                if (_selectedIndices.contains(index)) {
-                  _selectedIndices.remove(index);
-                } else {
-                  _selectedIndices.add(index);
-                }
-              });
-            }
-          : (isCurrent ? null : () => vm.jumpTo(index)),
-      leading: _deleteMode
-          ? Checkbox(
-              value: _selectedIndices.contains(index),
-              onChanged: (checked) {
+  Widget _buildListTile(
+    Song song,
+    int index,
+    bool isCurrent, {
+    bool isDimmed = false,
+    Key? key,
+  }) {
+    // 随机模式下当前歌之前的已播部分置灰淡出（Apple Music 风格）。
+    return Opacity(
+      opacity: isDimmed ? 0.45 : 1.0,
+      child: SongTile(
+        key: key,
+        song: song,
+        isCurrentSong: isCurrent,
+        // 队列用 leading 指示当前项（播放图标/序号），隐藏行尾音量图标避免重复
+        showCurrentIndicator: false,
+        onTap: _deleteMode
+            ? () {
                 setState(() {
-                  if (checked == true) {
-                    _selectedIndices.add(index);
-                  } else {
+                  if (_selectedIndices.contains(index)) {
                     _selectedIndices.remove(index);
+                  } else {
+                    _selectedIndices.add(index);
                   }
                 });
-              },
-            )
-          : _reorderMode
-          ? ReorderableDragStartListener(
-              index: index,
-              child: SizedBox(
+              }
+            : (isCurrent ? null : () => vm.jumpTo(_toLogicalIndex(index))),
+        leading: _deleteMode
+            ? Checkbox(
+                value: _selectedIndices.contains(index),
+                onChanged: (checked) {
+                  setState(() {
+                    if (checked == true) {
+                      _selectedIndices.add(index);
+                    } else {
+                      _selectedIndices.remove(index);
+                    }
+                  });
+                },
+              )
+            : _reorderMode
+            ? ReorderableDragStartListener(
+                index: index,
+                child: SizedBox(
+                  width: 36,
+                  height: 32,
+                  child: Center(
+                    child: Icon(
+                      Icons.drag_handle,
+                      size: 20,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              )
+            : SizedBox(
                 width: 36,
                 height: 32,
                 child: Center(
-                  child: Icon(
-                    Icons.drag_handle,
-                    size: 20,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                  child: isCurrent
+                      ? Icon(
+                          Icons.play_arrow_rounded,
+                          color: theme.colorScheme.primary,
+                          size: 20,
+                        )
+                      : Text(
+                          '${index + 1}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                 ),
               ),
-            )
-          : SizedBox(
-              width: 36,
-              height: 32,
-              child: Center(
-                child: isCurrent
-                    ? Icon(
-                        Icons.play_arrow_rounded,
-                        color: theme.colorScheme.primary,
-                        size: 20,
-                      )
-                    : Text(
-                        '${index + 1}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-              ),
-            ),
+      ),
     );
   }
 }

@@ -35,6 +35,9 @@ class PlayerService extends ChangeNotifier {
   PlayerRepeatMode _repeatMode = PlayerRepeatMode.off;
   bool _isShuffled = false;
 
+  /// 进入单曲循环前的重复模式（退出单曲循环时恢复）。
+  PlayerRepeatMode? _preSingleRepeat;
+
   /// 播放音量（0.0~1.0）。
   double _volume = 1.0;
 
@@ -66,6 +69,9 @@ class PlayerService extends ChangeNotifier {
   /// ready），这些都不能当作权威：否则索引会被拉回最后一首、播完分支被反复
   /// 触发。直到引擎回到 ready（用户点播放等操作会触发）才解除。
   bool _handlingQueueEnd = false;
+
+  /// 上一个 playback event 的 currentIndex（用于随机循环"一轮播完"回绕检测）。
+  int? _lastEventIndex;
 
   // ─── 轻量去重通知器 ────────────────────────────────────
   //
@@ -215,6 +221,25 @@ class PlayerService extends ChangeNotifier {
       _resumePosition = Duration.zero;
       unawaited(_player.stop());
     }
+    // 随机循环（all + 随机）下：一轮排列播完、回绕到排列首位时重新生成排列。
+    // just_audio 默认循环复用同一份排列；这里手动 shuffle() 实现"每轮重洗"。
+    if (_repeatMode == PlayerRepeatMode.all &&
+        _isShuffled &&
+        _sequenceLoaded &&
+        !_handlingQueueEnd &&
+        idx != null &&
+        _lastEventIndex != null &&
+        _lastEventIndex != idx) {
+      final indices = _player.effectiveIndices;
+      if (indices.length > 1 &&
+          _lastEventIndex == indices.last &&
+          idx == indices.first) {
+        unawaited(_player.shuffle());
+      }
+    }
+    if (idx != null && _sequenceLoaded) {
+      _lastEventIndex = idx;
+    }
     notifyListeners();
   }
 
@@ -320,6 +345,36 @@ class PlayerService extends ChangeNotifier {
 
   /// Whether shuffle is enabled.
   bool get isShuffled => _isShuffled;
+
+  /// 基础播放模式（单曲循环时为进入前的模式，否则为当前重复模式）。
+  PlayerRepeatMode get baseRepeatMode => _repeatMode == PlayerRepeatMode.one
+      ? (_preSingleRepeat ?? PlayerRepeatMode.off)
+      : _repeatMode;
+
+  /// 实际播放顺序：随机开启且序列已加载时为排列映射后的顺序，否则为逻辑队列。
+  List<Song> get effectiveQueue {
+    if (!_isShuffled || !_sequenceLoaded) return _playQueue.songs;
+    final songs = _playQueue.songs;
+    return [
+      for (final i in _player.effectiveIndices)
+        if (i >= 0 && i < songs.length) songs[i],
+    ];
+  }
+
+  /// 当前歌在实际播放顺序中的位置（随机时为排列位置，否则为逻辑下标）。
+  int get effectiveIndex {
+    if (!_isShuffled || !_sequenceLoaded) return _playQueue.currentIndex;
+    return _player.effectiveIndices.indexOf(_playQueue.currentIndex);
+  }
+
+  /// 把实际播放顺序中的位置换算回逻辑下标（供 jumpTo/removeFromQueue 使用）。
+  int logicalIndexForEffective(int effectiveIndex) {
+    if (!_isShuffled || !_sequenceLoaded) return effectiveIndex;
+    final indices = _player.effectiveIndices;
+    return (effectiveIndex >= 0 && effectiveIndex < indices.length)
+        ? indices[effectiveIndex]
+        : effectiveIndex;
+  }
 
   /// 当前音量（0.0~1.0）。
   double get volume => _volume;
@@ -560,30 +615,46 @@ class PlayerService extends ChangeNotifier {
 
   // ─── Mode switching ────────────────────────────────────
 
-  void cycleRepeatMode() {
-    switch (_repeatMode) {
-      case PlayerRepeatMode.off:
+  void cyclePlayMode() {
+    final base = _repeatMode == PlayerRepeatMode.one
+        ? (_preSingleRepeat ?? PlayerRepeatMode.off)
+        : _repeatMode;
+    switch ((base, _isShuffled)) {
+      case (PlayerRepeatMode.off, false):
         _repeatMode = PlayerRepeatMode.all;
-        break;
-      case PlayerRepeatMode.all:
-        _repeatMode = PlayerRepeatMode.one;
-        break;
-      case PlayerRepeatMode.one:
+        _isShuffled = false;
+      case (PlayerRepeatMode.all, false):
+        _repeatMode = PlayerRepeatMode.all;
+        _isShuffled = true;
+      default:
+        // (all, 随机) 或异常组合 → 回到顺序播放。
         _repeatMode = PlayerRepeatMode.off;
-        break;
+        _isShuffled = false;
     }
-    _playQueue.setRepeatModeName(_repeatMode.name);
-    unawaited(_player.setLoopMode(_loopModeFor(_repeatMode)));
+    _preSingleRepeat = null;
+    _persistModes();
+    unawaited(_applyAudioModes());
     notifyListeners();
   }
 
-  Future<void> toggleShuffle() async {
-    _isShuffled = !_isShuffled;
-    _playQueue.setIsShuffled(_isShuffled);
-    if (_sequenceLoaded) {
-      await _applyAudioModes();
+  /// 切换单曲循环：开启进入 (one)，保留随机状态；关闭恢复到进入前的基础模式。
+  void toggleSingleRepeat() {
+    if (_repeatMode == PlayerRepeatMode.one) {
+      _repeatMode = _preSingleRepeat ?? PlayerRepeatMode.off;
+      _preSingleRepeat = null;
+    } else {
+      _preSingleRepeat = _repeatMode;
+      _repeatMode = PlayerRepeatMode.one;
     }
+    _persistModes();
+    unawaited(_applyAudioModes());
     notifyListeners();
+  }
+
+  /// 把当前播放模式（重复 + 随机）持久化到 [PlayQueue]。
+  void _persistModes() {
+    _playQueue.setRepeatModeName(_repeatMode.name);
+    _playQueue.setIsShuffled(_isShuffled);
   }
 
   // ─── Queue management ───────────────────────────────
