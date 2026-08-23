@@ -26,7 +26,7 @@ class LogDetailPage extends StatelessWidget {
     return Scaffold(
       appBar: DetailTopBar(title: '日志详情'),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         children: [
           Row(
             children: [

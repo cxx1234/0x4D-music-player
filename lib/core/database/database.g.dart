@@ -141,6 +141,17 @@ class $SongsTable extends Songs with TableInfo<$SongsTable, Song> {
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _lastModifiedMsMeta = const VerificationMeta(
+    'lastModifiedMs',
+  );
+  @override
+  late final GeneratedColumn<int> lastModifiedMs = GeneratedColumn<int>(
+    'last_modified_ms',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _mimeTypeMeta = const VerificationMeta(
     'mimeType',
   );
@@ -310,6 +321,7 @@ class $SongsTable extends Songs with TableInfo<$SongsTable, Song> {
     filePath,
     fileName,
     fileSize,
+    lastModifiedMs,
     mimeType,
     year,
     genre,
@@ -413,6 +425,15 @@ class $SongsTable extends Songs with TableInfo<$SongsTable, Song> {
       context.handle(
         _fileSizeMeta,
         fileSize.isAcceptableOrUnknown(data['file_size']!, _fileSizeMeta),
+      );
+    }
+    if (data.containsKey('last_modified_ms')) {
+      context.handle(
+        _lastModifiedMsMeta,
+        lastModifiedMs.isAcceptableOrUnknown(
+          data['last_modified_ms']!,
+          _lastModifiedMsMeta,
+        ),
       );
     }
     if (data.containsKey('mime_type')) {
@@ -576,6 +597,10 @@ class $SongsTable extends Songs with TableInfo<$SongsTable, Song> {
         DriftSqlType.int,
         data['${effectivePrefix}file_size'],
       ),
+      lastModifiedMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}last_modified_ms'],
+      ),
       mimeType: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}mime_type'],
@@ -654,6 +679,7 @@ class Song extends DataClass implements Insertable<Song> {
   final String filePath;
   final String fileName;
   final int? fileSize;
+  final int? lastModifiedMs;
   final String? mimeType;
   final int? year;
   final String? genre;
@@ -683,6 +709,7 @@ class Song extends DataClass implements Insertable<Song> {
     required this.filePath,
     required this.fileName,
     this.fileSize,
+    this.lastModifiedMs,
     this.mimeType,
     this.year,
     this.genre,
@@ -728,6 +755,9 @@ class Song extends DataClass implements Insertable<Song> {
     map['file_name'] = Variable<String>(fileName);
     if (!nullToAbsent || fileSize != null) {
       map['file_size'] = Variable<int>(fileSize);
+    }
+    if (!nullToAbsent || lastModifiedMs != null) {
+      map['last_modified_ms'] = Variable<int>(lastModifiedMs);
     }
     if (!nullToAbsent || mimeType != null) {
       map['mime_type'] = Variable<String>(mimeType);
@@ -792,6 +822,9 @@ class Song extends DataClass implements Insertable<Song> {
       fileSize: fileSize == null && nullToAbsent
           ? const Value.absent()
           : Value(fileSize),
+      lastModifiedMs: lastModifiedMs == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastModifiedMs),
       mimeType: mimeType == null && nullToAbsent
           ? const Value.absent()
           : Value(mimeType),
@@ -841,6 +874,7 @@ class Song extends DataClass implements Insertable<Song> {
       filePath: serializer.fromJson<String>(json['filePath']),
       fileName: serializer.fromJson<String>(json['fileName']),
       fileSize: serializer.fromJson<int?>(json['fileSize']),
+      lastModifiedMs: serializer.fromJson<int?>(json['lastModifiedMs']),
       mimeType: serializer.fromJson<String?>(json['mimeType']),
       year: serializer.fromJson<int?>(json['year']),
       genre: serializer.fromJson<String?>(json['genre']),
@@ -873,6 +907,7 @@ class Song extends DataClass implements Insertable<Song> {
       'filePath': serializer.toJson<String>(filePath),
       'fileName': serializer.toJson<String>(fileName),
       'fileSize': serializer.toJson<int?>(fileSize),
+      'lastModifiedMs': serializer.toJson<int?>(lastModifiedMs),
       'mimeType': serializer.toJson<String?>(mimeType),
       'year': serializer.toJson<int?>(year),
       'genre': serializer.toJson<String?>(genre),
@@ -903,6 +938,7 @@ class Song extends DataClass implements Insertable<Song> {
     String? filePath,
     String? fileName,
     Value<int?> fileSize = const Value.absent(),
+    Value<int?> lastModifiedMs = const Value.absent(),
     Value<String?> mimeType = const Value.absent(),
     Value<int?> year = const Value.absent(),
     Value<String?> genre = const Value.absent(),
@@ -930,6 +966,9 @@ class Song extends DataClass implements Insertable<Song> {
     filePath: filePath ?? this.filePath,
     fileName: fileName ?? this.fileName,
     fileSize: fileSize.present ? fileSize.value : this.fileSize,
+    lastModifiedMs: lastModifiedMs.present
+        ? lastModifiedMs.value
+        : this.lastModifiedMs,
     mimeType: mimeType.present ? mimeType.value : this.mimeType,
     year: year.present ? year.value : this.year,
     genre: genre.present ? genre.value : this.genre,
@@ -969,6 +1008,9 @@ class Song extends DataClass implements Insertable<Song> {
       filePath: data.filePath.present ? data.filePath.value : this.filePath,
       fileName: data.fileName.present ? data.fileName.value : this.fileName,
       fileSize: data.fileSize.present ? data.fileSize.value : this.fileSize,
+      lastModifiedMs: data.lastModifiedMs.present
+          ? data.lastModifiedMs.value
+          : this.lastModifiedMs,
       mimeType: data.mimeType.present ? data.mimeType.value : this.mimeType,
       year: data.year.present ? data.year.value : this.year,
       genre: data.genre.present ? data.genre.value : this.genre,
@@ -1017,6 +1059,7 @@ class Song extends DataClass implements Insertable<Song> {
           ..write('filePath: $filePath, ')
           ..write('fileName: $fileName, ')
           ..write('fileSize: $fileSize, ')
+          ..write('lastModifiedMs: $lastModifiedMs, ')
           ..write('mimeType: $mimeType, ')
           ..write('year: $year, ')
           ..write('genre: $genre, ')
@@ -1049,6 +1092,7 @@ class Song extends DataClass implements Insertable<Song> {
     filePath,
     fileName,
     fileSize,
+    lastModifiedMs,
     mimeType,
     year,
     genre,
@@ -1080,6 +1124,7 @@ class Song extends DataClass implements Insertable<Song> {
           other.filePath == this.filePath &&
           other.fileName == this.fileName &&
           other.fileSize == this.fileSize &&
+          other.lastModifiedMs == this.lastModifiedMs &&
           other.mimeType == this.mimeType &&
           other.year == this.year &&
           other.genre == this.genre &&
@@ -1109,6 +1154,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
   final Value<String> filePath;
   final Value<String> fileName;
   final Value<int?> fileSize;
+  final Value<int?> lastModifiedMs;
   final Value<String?> mimeType;
   final Value<int?> year;
   final Value<String?> genre;
@@ -1136,6 +1182,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
     this.filePath = const Value.absent(),
     this.fileName = const Value.absent(),
     this.fileSize = const Value.absent(),
+    this.lastModifiedMs = const Value.absent(),
     this.mimeType = const Value.absent(),
     this.year = const Value.absent(),
     this.genre = const Value.absent(),
@@ -1164,6 +1211,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
     required String filePath,
     required String fileName,
     this.fileSize = const Value.absent(),
+    this.lastModifiedMs = const Value.absent(),
     this.mimeType = const Value.absent(),
     this.year = const Value.absent(),
     this.genre = const Value.absent(),
@@ -1195,6 +1243,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
     Expression<String>? filePath,
     Expression<String>? fileName,
     Expression<int>? fileSize,
+    Expression<int>? lastModifiedMs,
     Expression<String>? mimeType,
     Expression<int>? year,
     Expression<String>? genre,
@@ -1223,6 +1272,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
       if (filePath != null) 'file_path': filePath,
       if (fileName != null) 'file_name': fileName,
       if (fileSize != null) 'file_size': fileSize,
+      if (lastModifiedMs != null) 'last_modified_ms': lastModifiedMs,
       if (mimeType != null) 'mime_type': mimeType,
       if (year != null) 'year': year,
       if (genre != null) 'genre': genre,
@@ -1253,6 +1303,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
     Value<String>? filePath,
     Value<String>? fileName,
     Value<int?>? fileSize,
+    Value<int?>? lastModifiedMs,
     Value<String?>? mimeType,
     Value<int?>? year,
     Value<String?>? genre,
@@ -1281,6 +1332,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
       filePath: filePath ?? this.filePath,
       fileName: fileName ?? this.fileName,
       fileSize: fileSize ?? this.fileSize,
+      lastModifiedMs: lastModifiedMs ?? this.lastModifiedMs,
       mimeType: mimeType ?? this.mimeType,
       year: year ?? this.year,
       genre: genre ?? this.genre,
@@ -1336,6 +1388,9 @@ class SongsCompanion extends UpdateCompanion<Song> {
     }
     if (fileSize.present) {
       map['file_size'] = Variable<int>(fileSize.value);
+    }
+    if (lastModifiedMs.present) {
+      map['last_modified_ms'] = Variable<int>(lastModifiedMs.value);
     }
     if (mimeType.present) {
       map['mime_type'] = Variable<String>(mimeType.value);
@@ -1397,6 +1452,7 @@ class SongsCompanion extends UpdateCompanion<Song> {
           ..write('filePath: $filePath, ')
           ..write('fileName: $fileName, ')
           ..write('fileSize: $fileSize, ')
+          ..write('lastModifiedMs: $lastModifiedMs, ')
           ..write('mimeType: $mimeType, ')
           ..write('year: $year, ')
           ..write('genre: $genre, ')
@@ -2993,10 +3049,9 @@ class PlaylistSongsCompanion extends UpdateCompanion<PlaylistSong> {
   }
 }
 
-abstract class _$FlutterMusicDatabase extends GeneratedDatabase {
-  _$FlutterMusicDatabase(QueryExecutor e) : super(e);
-  $FlutterMusicDatabaseManager get managers =>
-      $FlutterMusicDatabaseManager(this);
+abstract class _$AppDatabase extends GeneratedDatabase {
+  _$AppDatabase(QueryExecutor e) : super(e);
+  $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $SongsTable songs = $SongsTable(this);
   late final $AlbumsTable albums = $AlbumsTable(this);
   late final $ArtistsTable artists = $ArtistsTable(this);
@@ -3039,6 +3094,7 @@ typedef $$SongsTableCreateCompanionBuilder =
       required String filePath,
       required String fileName,
       Value<int?> fileSize,
+      Value<int?> lastModifiedMs,
       Value<String?> mimeType,
       Value<int?> year,
       Value<String?> genre,
@@ -3068,6 +3124,7 @@ typedef $$SongsTableUpdateCompanionBuilder =
       Value<String> filePath,
       Value<String> fileName,
       Value<int?> fileSize,
+      Value<int?> lastModifiedMs,
       Value<String?> mimeType,
       Value<int?> year,
       Value<String?> genre,
@@ -3084,8 +3141,7 @@ typedef $$SongsTableUpdateCompanionBuilder =
       Value<String?> titleSortKey,
     });
 
-class $$SongsTableFilterComposer
-    extends Composer<_$FlutterMusicDatabase, $SongsTable> {
+class $$SongsTableFilterComposer extends Composer<_$AppDatabase, $SongsTable> {
   $$SongsTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -3150,6 +3206,11 @@ class $$SongsTableFilterComposer
 
   ColumnFilters<int> get fileSize => $composableBuilder(
     column: $table.fileSize,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get lastModifiedMs => $composableBuilder(
+    column: $table.lastModifiedMs,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3225,7 +3286,7 @@ class $$SongsTableFilterComposer
 }
 
 class $$SongsTableOrderingComposer
-    extends Composer<_$FlutterMusicDatabase, $SongsTable> {
+    extends Composer<_$AppDatabase, $SongsTable> {
   $$SongsTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -3290,6 +3351,11 @@ class $$SongsTableOrderingComposer
 
   ColumnOrderings<int> get fileSize => $composableBuilder(
     column: $table.fileSize,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get lastModifiedMs => $composableBuilder(
+    column: $table.lastModifiedMs,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -3365,7 +3431,7 @@ class $$SongsTableOrderingComposer
 }
 
 class $$SongsTableAnnotationComposer
-    extends Composer<_$FlutterMusicDatabase, $SongsTable> {
+    extends Composer<_$AppDatabase, $SongsTable> {
   $$SongsTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -3414,6 +3480,11 @@ class $$SongsTableAnnotationComposer
 
   GeneratedColumn<int> get fileSize =>
       $composableBuilder(column: $table.fileSize, builder: (column) => column);
+
+  GeneratedColumn<int> get lastModifiedMs => $composableBuilder(
+    column: $table.lastModifiedMs,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get mimeType =>
       $composableBuilder(column: $table.mimeType, builder: (column) => column);
@@ -3477,7 +3548,7 @@ class $$SongsTableAnnotationComposer
 class $$SongsTableTableManager
     extends
         RootTableManager<
-          _$FlutterMusicDatabase,
+          _$AppDatabase,
           $SongsTable,
           Song,
           $$SongsTableFilterComposer,
@@ -3485,11 +3556,11 @@ class $$SongsTableTableManager
           $$SongsTableAnnotationComposer,
           $$SongsTableCreateCompanionBuilder,
           $$SongsTableUpdateCompanionBuilder,
-          (Song, BaseReferences<_$FlutterMusicDatabase, $SongsTable, Song>),
+          (Song, BaseReferences<_$AppDatabase, $SongsTable, Song>),
           Song,
           PrefetchHooks Function()
         > {
-  $$SongsTableTableManager(_$FlutterMusicDatabase db, $SongsTable table)
+  $$SongsTableTableManager(_$AppDatabase db, $SongsTable table)
     : super(
         TableManagerState(
           db: db,
@@ -3514,6 +3585,7 @@ class $$SongsTableTableManager
                 Value<String> filePath = const Value.absent(),
                 Value<String> fileName = const Value.absent(),
                 Value<int?> fileSize = const Value.absent(),
+                Value<int?> lastModifiedMs = const Value.absent(),
                 Value<String?> mimeType = const Value.absent(),
                 Value<int?> year = const Value.absent(),
                 Value<String?> genre = const Value.absent(),
@@ -3541,6 +3613,7 @@ class $$SongsTableTableManager
                 filePath: filePath,
                 fileName: fileName,
                 fileSize: fileSize,
+                lastModifiedMs: lastModifiedMs,
                 mimeType: mimeType,
                 year: year,
                 genre: genre,
@@ -3570,6 +3643,7 @@ class $$SongsTableTableManager
                 required String filePath,
                 required String fileName,
                 Value<int?> fileSize = const Value.absent(),
+                Value<int?> lastModifiedMs = const Value.absent(),
                 Value<String?> mimeType = const Value.absent(),
                 Value<int?> year = const Value.absent(),
                 Value<String?> genre = const Value.absent(),
@@ -3597,6 +3671,7 @@ class $$SongsTableTableManager
                 filePath: filePath,
                 fileName: fileName,
                 fileSize: fileSize,
+                lastModifiedMs: lastModifiedMs,
                 mimeType: mimeType,
                 year: year,
                 genre: genre,
@@ -3622,7 +3697,7 @@ class $$SongsTableTableManager
 
 typedef $$SongsTableProcessedTableManager =
     ProcessedTableManager<
-      _$FlutterMusicDatabase,
+      _$AppDatabase,
       $SongsTable,
       Song,
       $$SongsTableFilterComposer,
@@ -3630,7 +3705,7 @@ typedef $$SongsTableProcessedTableManager =
       $$SongsTableAnnotationComposer,
       $$SongsTableCreateCompanionBuilder,
       $$SongsTableUpdateCompanionBuilder,
-      (Song, BaseReferences<_$FlutterMusicDatabase, $SongsTable, Song>),
+      (Song, BaseReferences<_$AppDatabase, $SongsTable, Song>),
       Song,
       PrefetchHooks Function()
     >;
@@ -3660,7 +3735,7 @@ typedef $$AlbumsTableUpdateCompanionBuilder =
     });
 
 class $$AlbumsTableFilterComposer
-    extends Composer<_$FlutterMusicDatabase, $AlbumsTable> {
+    extends Composer<_$AppDatabase, $AlbumsTable> {
   $$AlbumsTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -3715,7 +3790,7 @@ class $$AlbumsTableFilterComposer
 }
 
 class $$AlbumsTableOrderingComposer
-    extends Composer<_$FlutterMusicDatabase, $AlbumsTable> {
+    extends Composer<_$AppDatabase, $AlbumsTable> {
   $$AlbumsTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -3770,7 +3845,7 @@ class $$AlbumsTableOrderingComposer
 }
 
 class $$AlbumsTableAnnotationComposer
-    extends Composer<_$FlutterMusicDatabase, $AlbumsTable> {
+    extends Composer<_$AppDatabase, $AlbumsTable> {
   $$AlbumsTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -3815,7 +3890,7 @@ class $$AlbumsTableAnnotationComposer
 class $$AlbumsTableTableManager
     extends
         RootTableManager<
-          _$FlutterMusicDatabase,
+          _$AppDatabase,
           $AlbumsTable,
           Album,
           $$AlbumsTableFilterComposer,
@@ -3823,11 +3898,11 @@ class $$AlbumsTableTableManager
           $$AlbumsTableAnnotationComposer,
           $$AlbumsTableCreateCompanionBuilder,
           $$AlbumsTableUpdateCompanionBuilder,
-          (Album, BaseReferences<_$FlutterMusicDatabase, $AlbumsTable, Album>),
+          (Album, BaseReferences<_$AppDatabase, $AlbumsTable, Album>),
           Album,
           PrefetchHooks Function()
         > {
-  $$AlbumsTableTableManager(_$FlutterMusicDatabase db, $AlbumsTable table)
+  $$AlbumsTableTableManager(_$AppDatabase db, $AlbumsTable table)
     : super(
         TableManagerState(
           db: db,
@@ -3892,7 +3967,7 @@ class $$AlbumsTableTableManager
 
 typedef $$AlbumsTableProcessedTableManager =
     ProcessedTableManager<
-      _$FlutterMusicDatabase,
+      _$AppDatabase,
       $AlbumsTable,
       Album,
       $$AlbumsTableFilterComposer,
@@ -3900,7 +3975,7 @@ typedef $$AlbumsTableProcessedTableManager =
       $$AlbumsTableAnnotationComposer,
       $$AlbumsTableCreateCompanionBuilder,
       $$AlbumsTableUpdateCompanionBuilder,
-      (Album, BaseReferences<_$FlutterMusicDatabase, $AlbumsTable, Album>),
+      (Album, BaseReferences<_$AppDatabase, $AlbumsTable, Album>),
       Album,
       PrefetchHooks Function()
     >;
@@ -3922,7 +3997,7 @@ typedef $$ArtistsTableUpdateCompanionBuilder =
     });
 
 class $$ArtistsTableFilterComposer
-    extends Composer<_$FlutterMusicDatabase, $ArtistsTable> {
+    extends Composer<_$AppDatabase, $ArtistsTable> {
   $$ArtistsTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -3957,7 +4032,7 @@ class $$ArtistsTableFilterComposer
 }
 
 class $$ArtistsTableOrderingComposer
-    extends Composer<_$FlutterMusicDatabase, $ArtistsTable> {
+    extends Composer<_$AppDatabase, $ArtistsTable> {
   $$ArtistsTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -3992,7 +4067,7 @@ class $$ArtistsTableOrderingComposer
 }
 
 class $$ArtistsTableAnnotationComposer
-    extends Composer<_$FlutterMusicDatabase, $ArtistsTable> {
+    extends Composer<_$AppDatabase, $ArtistsTable> {
   $$ArtistsTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -4023,7 +4098,7 @@ class $$ArtistsTableAnnotationComposer
 class $$ArtistsTableTableManager
     extends
         RootTableManager<
-          _$FlutterMusicDatabase,
+          _$AppDatabase,
           $ArtistsTable,
           Artist,
           $$ArtistsTableFilterComposer,
@@ -4031,14 +4106,11 @@ class $$ArtistsTableTableManager
           $$ArtistsTableAnnotationComposer,
           $$ArtistsTableCreateCompanionBuilder,
           $$ArtistsTableUpdateCompanionBuilder,
-          (
-            Artist,
-            BaseReferences<_$FlutterMusicDatabase, $ArtistsTable, Artist>,
-          ),
+          (Artist, BaseReferences<_$AppDatabase, $ArtistsTable, Artist>),
           Artist,
           PrefetchHooks Function()
         > {
-  $$ArtistsTableTableManager(_$FlutterMusicDatabase db, $ArtistsTable table)
+  $$ArtistsTableTableManager(_$AppDatabase db, $ArtistsTable table)
     : super(
         TableManagerState(
           db: db,
@@ -4087,7 +4159,7 @@ class $$ArtistsTableTableManager
 
 typedef $$ArtistsTableProcessedTableManager =
     ProcessedTableManager<
-      _$FlutterMusicDatabase,
+      _$AppDatabase,
       $ArtistsTable,
       Artist,
       $$ArtistsTableFilterComposer,
@@ -4095,7 +4167,7 @@ typedef $$ArtistsTableProcessedTableManager =
       $$ArtistsTableAnnotationComposer,
       $$ArtistsTableCreateCompanionBuilder,
       $$ArtistsTableUpdateCompanionBuilder,
-      (Artist, BaseReferences<_$FlutterMusicDatabase, $ArtistsTable, Artist>),
+      (Artist, BaseReferences<_$AppDatabase, $ArtistsTable, Artist>),
       Artist,
       PrefetchHooks Function()
     >;
@@ -4117,15 +4189,14 @@ typedef $$PlaylistsTableUpdateCompanionBuilder =
     });
 
 final class $$PlaylistsTableReferences
-    extends BaseReferences<_$FlutterMusicDatabase, $PlaylistsTable, Playlist> {
+    extends BaseReferences<_$AppDatabase, $PlaylistsTable, Playlist> {
   $$PlaylistsTableReferences(super.$_db, super.$_table, super.$_typedResult);
 
   static MultiTypedResultKey<$PlaylistSongsTable, List<PlaylistSong>>
-  _playlistSongsRefsTable(_$FlutterMusicDatabase db) =>
-      MultiTypedResultKey.fromTable(
-        db.playlistSongs,
-        aliasName: 'playlists__id__playlist_songs__playlist_id',
-      );
+  _playlistSongsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.playlistSongs,
+    aliasName: 'playlists__id__playlist_songs__playlist_id',
+  );
 
   $$PlaylistSongsTableProcessedTableManager get playlistSongsRefs {
     final manager = $$PlaylistSongsTableTableManager(
@@ -4141,7 +4212,7 @@ final class $$PlaylistsTableReferences
 }
 
 class $$PlaylistsTableFilterComposer
-    extends Composer<_$FlutterMusicDatabase, $PlaylistsTable> {
+    extends Composer<_$AppDatabase, $PlaylistsTable> {
   $$PlaylistsTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -4201,7 +4272,7 @@ class $$PlaylistsTableFilterComposer
 }
 
 class $$PlaylistsTableOrderingComposer
-    extends Composer<_$FlutterMusicDatabase, $PlaylistsTable> {
+    extends Composer<_$AppDatabase, $PlaylistsTable> {
   $$PlaylistsTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -4236,7 +4307,7 @@ class $$PlaylistsTableOrderingComposer
 }
 
 class $$PlaylistsTableAnnotationComposer
-    extends Composer<_$FlutterMusicDatabase, $PlaylistsTable> {
+    extends Composer<_$AppDatabase, $PlaylistsTable> {
   $$PlaylistsTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -4288,7 +4359,7 @@ class $$PlaylistsTableAnnotationComposer
 class $$PlaylistsTableTableManager
     extends
         RootTableManager<
-          _$FlutterMusicDatabase,
+          _$AppDatabase,
           $PlaylistsTable,
           Playlist,
           $$PlaylistsTableFilterComposer,
@@ -4300,7 +4371,7 @@ class $$PlaylistsTableTableManager
           Playlist,
           PrefetchHooks Function({bool playlistSongsRefs})
         > {
-  $$PlaylistsTableTableManager(_$FlutterMusicDatabase db, $PlaylistsTable table)
+  $$PlaylistsTableTableManager(_$AppDatabase db, $PlaylistsTable table)
     : super(
         TableManagerState(
           db: db,
@@ -4385,7 +4456,7 @@ class $$PlaylistsTableTableManager
 
 typedef $$PlaylistsTableProcessedTableManager =
     ProcessedTableManager<
-      _$FlutterMusicDatabase,
+      _$AppDatabase,
       $PlaylistsTable,
       Playlist,
       $$PlaylistsTableFilterComposer,
@@ -4413,19 +4484,14 @@ typedef $$PlaylistSongsTableUpdateCompanionBuilder =
     });
 
 final class $$PlaylistSongsTableReferences
-    extends
-        BaseReferences<
-          _$FlutterMusicDatabase,
-          $PlaylistSongsTable,
-          PlaylistSong
-        > {
+    extends BaseReferences<_$AppDatabase, $PlaylistSongsTable, PlaylistSong> {
   $$PlaylistSongsTableReferences(
     super.$_db,
     super.$_table,
     super.$_typedResult,
   );
 
-  static $PlaylistsTable _playlistIdTable(_$FlutterMusicDatabase db) =>
+  static $PlaylistsTable _playlistIdTable(_$AppDatabase db) =>
       db.playlists.createAlias('playlist_songs__playlist_id__playlists__id');
 
   $$PlaylistsTableProcessedTableManager get playlistId {
@@ -4444,7 +4510,7 @@ final class $$PlaylistSongsTableReferences
 }
 
 class $$PlaylistSongsTableFilterComposer
-    extends Composer<_$FlutterMusicDatabase, $PlaylistSongsTable> {
+    extends Composer<_$AppDatabase, $PlaylistSongsTable> {
   $$PlaylistSongsTableFilterComposer({
     required super.$db,
     required super.$table,
@@ -4492,7 +4558,7 @@ class $$PlaylistSongsTableFilterComposer
 }
 
 class $$PlaylistSongsTableOrderingComposer
-    extends Composer<_$FlutterMusicDatabase, $PlaylistSongsTable> {
+    extends Composer<_$AppDatabase, $PlaylistSongsTable> {
   $$PlaylistSongsTableOrderingComposer({
     required super.$db,
     required super.$table,
@@ -4540,7 +4606,7 @@ class $$PlaylistSongsTableOrderingComposer
 }
 
 class $$PlaylistSongsTableAnnotationComposer
-    extends Composer<_$FlutterMusicDatabase, $PlaylistSongsTable> {
+    extends Composer<_$AppDatabase, $PlaylistSongsTable> {
   $$PlaylistSongsTableAnnotationComposer({
     required super.$db,
     required super.$table,
@@ -4584,7 +4650,7 @@ class $$PlaylistSongsTableAnnotationComposer
 class $$PlaylistSongsTableTableManager
     extends
         RootTableManager<
-          _$FlutterMusicDatabase,
+          _$AppDatabase,
           $PlaylistSongsTable,
           PlaylistSong,
           $$PlaylistSongsTableFilterComposer,
@@ -4596,10 +4662,8 @@ class $$PlaylistSongsTableTableManager
           PlaylistSong,
           PrefetchHooks Function({bool playlistId})
         > {
-  $$PlaylistSongsTableTableManager(
-    _$FlutterMusicDatabase db,
-    $PlaylistSongsTable table,
-  ) : super(
+  $$PlaylistSongsTableTableManager(_$AppDatabase db, $PlaylistSongsTable table)
+    : super(
         TableManagerState(
           db: db,
           table: table,
@@ -4688,7 +4752,7 @@ class $$PlaylistSongsTableTableManager
 
 typedef $$PlaylistSongsTableProcessedTableManager =
     ProcessedTableManager<
-      _$FlutterMusicDatabase,
+      _$AppDatabase,
       $PlaylistSongsTable,
       PlaylistSong,
       $$PlaylistSongsTableFilterComposer,
@@ -4701,9 +4765,9 @@ typedef $$PlaylistSongsTableProcessedTableManager =
       PrefetchHooks Function({bool playlistId})
     >;
 
-class $FlutterMusicDatabaseManager {
-  final _$FlutterMusicDatabase _db;
-  $FlutterMusicDatabaseManager(this._db);
+class $AppDatabaseManager {
+  final _$AppDatabase _db;
+  $AppDatabaseManager(this._db);
   $$SongsTableTableManager get songs =>
       $$SongsTableTableManager(_db, _db.songs);
   $$AlbumsTableTableManager get albums =>

@@ -21,11 +21,16 @@ class PlayerViewModel extends ChangeNotifier {
   bool get isShuffled => _player.isShuffled;
   List<Song> get queue => _player.queue;
   int get currentIndex => _player.currentIndex;
+  List<Song> get effectiveQueue => _player.effectiveQueue;
+  int get effectiveIndex => _player.effectiveIndex;
+  int logicalIndexForEffective(int e) => _player.logicalIndexForEffective(e);
 
   // ─── Lifecycle ─────────────────────────────────────────
 
   PlayerViewModel() {
-    _player.addListener(_onPlayerChanged);
+    // 只订阅合并通知器（切歌/播放态/队列变化），不再订阅整个 service——
+    // 后者随 positionStream 每 ~200ms 触发，会让整页连带重建。
+    _player.uiListenable.addListener(_onPlayerChanged);
   }
 
   void _onPlayerChanged() {
@@ -34,7 +39,7 @@ class PlayerViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
-    _player.removeListener(_onPlayerChanged);
+    _player.uiListenable.removeListener(_onPlayerChanged);
     super.dispose();
   }
 
@@ -51,8 +56,9 @@ class PlayerViewModel extends ChangeNotifier {
   Future<void> next() => _player.next();
   Future<void> previous() => _player.previous();
   Future<void> seek(Duration position) => _player.seek(position);
-  void cycleRepeatMode() => _player.cycleRepeatMode();
-  Future<void> toggleShuffle() => _player.toggleShuffle();
+  PlayerRepeatMode get baseRepeatMode => _player.baseRepeatMode;
+  void cyclePlayMode() => _player.cyclePlayMode();
+  void toggleSingleRepeat() => _player.toggleSingleRepeat();
 
   // ─── Queue management ─────────────────────────────────
 

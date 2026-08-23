@@ -16,7 +16,11 @@ import '../playlist/song_actions.dart';
 import 'artist_view_model.dart';
 
 class ArtistsPage extends StatefulWidget {
-  const ArtistsPage({super.key});
+  /// 是否为当前选中的 tab；从非激活切回激活时重新加载数据（保活下的
+  /// 跨页数据新鲜度：扫描/删文件夹等变更后切回本页能看到最新数据）。
+  final bool active;
+
+  const ArtistsPage({super.key, this.active = true});
 
   @override
   State<ArtistsPage> createState() => _ArtistsPageState();
@@ -32,6 +36,14 @@ class _ArtistsPageState extends State<ArtistsPage> {
     super.initState();
     _viewModel.addListener(_onChanged);
     _viewModel.load();
+  }
+
+  @override
+  void didUpdateWidget(ArtistsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) {
+      _viewModel.load();
+    }
   }
 
   @override
@@ -139,8 +151,9 @@ class _ArtistsPageState extends State<ArtistsPage> {
         itemCount: artists.length,
         itemBuilder: (context, index) {
           final artist = artists[index];
-          final albumCount = _viewModel.albumsForArtist(artist).length;
-          final songCount = _viewModel.songsForArtist(artist).length;
+          final stats = _viewModel.statsFor(artist);
+          final albumCount = stats.albumCount;
+          final songCount = stats.songCount;
           return ListItemTile(
             leading: CircleAvatar(
               // 44 直径，与 SongTile 默认封面同宽，保证标题位置一致
@@ -183,7 +196,12 @@ class ArtistDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: DetailTopBar(title: artist.name),
-      body: _ArtistDetailContent(artist: artist),
+      // 监听"当前歌曲"去重通知器：切歌时实时刷新行内 isCurrent 高亮，与其他
+      // 详情页（专辑/播放列表/我的收藏）的 ListenableBuilder 用法保持一致。
+      body: ListenableBuilder(
+        listenable: ServiceLocator.player.currentSongNotifier,
+        builder: (context, _) => _ArtistDetailContent(artist: artist),
+      ),
     );
   }
 }
@@ -258,16 +276,27 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
               child: _SectionHeader(title: '专辑 (${_albums.length})'),
             ),
             SliverToBoxAdapter(
-              child: SizedBox(
-                height: 200,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: _albums.length,
-                  itemBuilder: (context, index) {
-                    final album = _albums[index];
-                    return _ArtistAlbumCard(album: album);
-                  },
+              child: Padding(
+                // 专辑卡片区域顶部留 5pt，与上方标题栏隔开
+                padding: const EdgeInsets.only(top: 5, left: 10),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      // 高度 210：容纳封面 150 + 最多两行标题 + 年份行，年份不会被挤掉
+                      height: 210,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: _albums.length,
+                        itemBuilder: (context, index) {
+                          final album = _albums[index];
+                          return _ArtistAlbumCard(album: album);
+                        },
+                      ),
+                    ),
+                    // 横向列表下方的空白区域，分隔专辑卡片与「歌曲」标题
+                    const SizedBox(height: 16),
+                  ],
                 ),
               ),
             ),
@@ -284,7 +313,7 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
             ),
           ),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            padding: const EdgeInsets.fromLTRB(24, 0, 8, 16),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate((context, index) {
                 final song = _songs[index];
@@ -348,42 +377,83 @@ class _ArtistAlbumCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: () {
-        // 跳转正式专辑详情页（DetailTopBar + 分碟 + 播放全部）
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => AlbumDetailPage(album: album)),
-        );
-      },
-      child: Container(
-        width: 150,
-        margin: const EdgeInsets.only(right: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                width: 150,
-                height: 150,
-                child: CachedAlbumArt(
-                  albumArtFilePath: album.albumArtFilePath,
-                  hasEmbeddedArt: album.albumArtFilePath != null,
-                  size: 150,
-                  borderRadius: 8,
-                ),
+    // 卡片自带透明 Material + Clip.hardEdge：InkWell 的墨迹画在最近的 Material
+    // 上，若不包这一层会画到外层 CustomScrollView 的 Material，水波/hover 高亮
+    // 会渗出横向列表边界；圆角 8 与封面一致，高亮被裁剪在卡片内。
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Material(
+        type: MaterialType.transparency,
+        clipBehavior: Clip.hardEdge,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          // 悬停/按下高亮，与其余可交互卡片保持一致
+          hoverColor: theme.colorScheme.onSurface.withValues(alpha: 0.06),
+          onTap: () {
+            // 跳转正式专辑详情页（DetailTopBar + 分碟 + 播放全部）
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => AlbumDetailPage(album: album)),
+            );
+          },
+          // 卡片内部 2pt padding：内容内缩，墨迹仍覆盖整卡，hover 高亮更清晰
+          child: Padding(
+            padding: const EdgeInsets.all(2),
+            child: SizedBox(
+              width: 150,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: SizedBox(
+                      width: 150,
+                      height: 150,
+                      child: CachedAlbumArt(
+                        albumArtFilePath: album.albumArtFilePath,
+                        hasEmbeddedArt: album.albumArtFilePath != null,
+                        size: 150,
+                        borderRadius: 8,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // 文本区弹性填满剩余高度：标题在上、年份沉底（spaceBetween），
+                  // 两行标题 + 年份也放得下；单行标题时中间空白由 spaceBetween 吸收，
+                  // 底部不显空。标题 Flexible 防超长溢出。
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            album.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        // 年份独立文本块：更小一号、颜色更灰；无年份则整块隐藏
+                        if (album.year != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            '(${album.year})',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontSize: 11,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              album.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -32,6 +32,14 @@ class CachedAlbumArt extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // 降采样解码：缓存封面是原始分辨率（常 1000~3000px），按显示尺寸×
+    // 设备像素比解码即可——避免全尺寸位图占内存，以及 ImageCache 逐出后
+    // 滚动回来反复全尺寸重解码（44px 行封面也解整张图）。
+    final decodeWidth = albumArtDecodeWidth(
+      size,
+      MediaQuery.devicePixelRatioOf(context),
+    );
+
     // Determine whether we have a valid cached file to display.
     Widget child;
     if (hasEmbeddedArt && albumArtFilePath != null) {
@@ -43,6 +51,9 @@ class CachedAlbumArt extends StatelessWidget {
           width: size,
           height: size,
           fit: BoxFit.cover,
+          cacheWidth: decodeWidth,
+          // 重载期间保留上一帧，避免透明帧闪烁（配合降采样减少重解码）。
+          gaplessPlayback: true,
           errorBuilder: (context, error, stackTrace) =>
               _buildPlaceholder(theme, size),
           // Fade in when the image loads.
@@ -83,4 +94,21 @@ Widget _buildPlaceholder(ThemeData theme, double size) {
       color: theme.colorScheme.onPrimaryContainer,
     ),
   );
+}
+
+/// 封面解码宽度钳制范围（物理像素）。
+const int _kMinDecodeSize = 32;
+const int _kMaxDecodeSize = 2048;
+
+/// [size] 为 double.infinity（网格卡片 Expanded 填满 / 播放列表 2×2 拼图）时的
+/// 解码尺寸（逻辑像素）。网格卡片最大宽 ~200（maxCrossAxisExtent），
+/// 256 已足够覆盖且远小于原图。
+const double _kDefaultDecodeSize = 256;
+
+/// 计算封面解码宽度（物理像素）：按显示尺寸×设备像素比降采样并钳制；
+/// [size] 为无限时用 [_kDefaultDecodeSize]（此时无法从布局得知真实尺寸）。
+@visibleForTesting
+int albumArtDecodeWidth(double size, double dpr) {
+  final target = size.isFinite ? size * dpr : _kDefaultDecodeSize * dpr;
+  return target.round().clamp(_kMinDecodeSize, _kMaxDecodeSize).toInt();
 }

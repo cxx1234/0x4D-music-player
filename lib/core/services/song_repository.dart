@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart';
+import 'package:path/path.dart' as p;
 
 import '../../models/scanned_song.dart';
 import '../database/database.dart';
@@ -10,17 +13,17 @@ import 'service_locator.dart';
 
 /// Repository for song data access.
 ///
-/// Wraps [FlutterMusicDatabase] and provides higher-level operations
+/// Wraps [AppDatabase] and provides higher-level operations
 /// like batch upsert, file-state sync, and folder-scoped queries.
 class SongRepository {
-  final FlutterMusicDatabase? _database;
-  FlutterMusicDatabase get _db => _database ?? ServiceLocator.database;
+  final AppDatabase? _database;
+  AppDatabase get _db => _database ?? ServiceLocator.database;
   final _artCache = AlbumArtCacheService();
 
   /// [database] is optional and used for testing; defaults to the app-wide
   /// [ServiceLocator.database].
   // ignore: prefer_initializing_formals (公开参数名 database，字段私有 _database)
-  SongRepository({FlutterMusicDatabase? database}) : _database = database;
+  SongRepository({AppDatabase? database}) : _database = database;
 
   // ─── Song queries ──────────────────────────────────────
 
@@ -69,6 +72,10 @@ class SongRepository {
 
   Stream<List<Song>> watchSongsByArtist(int artistId) =>
       _db.watchSongsByArtist(artistId);
+
+  /// 每个歌手的歌曲/专辑统计（浏览页计数用，避免加载全量歌曲）。
+  Future<Map<int, ({int songCount, int albumCount})>> getArtistStats() =>
+      _db.getArtistStats();
 
   // ─── Playlist queries ──────────────────────────────────
 
@@ -151,6 +158,12 @@ class SongRepository {
     }
   }
 
+  /// 若已有专辑的 year 为空且当前歌曲提供了年份，则补写。
+  Future<void> _fillYearIfEmpty(Album album, ScannedSong song) async {
+    if (album.year != null || song.year == null) return;
+    await _db.updateAlbum(AlbumsCompanion(year: Value(song.year)), album.id);
+  }
+
   // ─── File paths (for sync) ─────────────────────────────
 
   /// Returns the set of all available file paths in the database.
@@ -164,6 +177,12 @@ class SongRepository {
     final paths = await _db.getFolderFilePaths(folderPath);
     return paths.toSet();
   }
+
+  /// Returns existing songs' file stamps (mtime + size) keyed by file path.
+  ///
+  /// 供扫描变化检测使用。
+  Future<Map<String, ({int? lastModifiedMs, int? fileSize})>>
+  getExistingFileStats() => _db.getExistingFileStats();
 
   // ─── Batch upsert with album/artist resolution ─────────
 
@@ -181,6 +200,8 @@ class SongRepository {
   Future<int> insertOrUpdateFromScan(List<ScannedSong> scanned) async {
     if (scanned.isEmpty) return 0;
 
+    // 本次批量内已比对过封面内容的 albumKey,避免每首歌重复读盘。
+    final verifiedArtKeys = <String>{};
     var count = 0;
     await _db.transaction(() async {
       for (final song in scanned) {
@@ -190,7 +211,7 @@ class SongRepository {
           artistId = await _getOrCreateArtist(song.artist!.trim());
         }
 
-        // ── Resolve album ───────────────────────────────
+        // ── Resolve album + album art ───────────────────
         int? albumId;
         String? albumArtPath;
         if (song.album != null && song.album!.trim().isNotEmpty) {
@@ -198,18 +219,53 @@ class SongRepository {
             song.album!.trim(),
             artistId,
             song,
+            verifiedArtKeys,
           );
           albumId = result.$1;
           albumArtPath = result.$2;
+        } else {
+          // 无专辑名:封面按「无专辑 + 歌手」回退 key 缓存,写入歌曲行
+          // (albumArtFilePath 属于 song 列,不依赖 album)。
+          albumArtPath = await _cacheArtForNoAlbum(song, verifiedArtKeys);
         }
 
+        // ── 保留首次入库时间 ────────────────────────────
+        // 更新已存在歌曲时沿用原 dateAdded,避免全量扫描反复重置
+        // "最近添加"排序(文件创建时间无法通过 dart:io 读取)。
+        final existing = await _db.getSongByFilePath(song.filePath);
+        final dateAdded = existing?.dateAdded ?? DateTime.now();
+
         await _db.insertSongOnConflictReplace(
-          _toCompanion(song, artistId, albumId, albumArtPath),
+          _toCompanion(
+            song,
+            artistId,
+            albumId,
+            albumArtPath,
+            dateAdded: dateAdded,
+          ),
         );
         count++;
       }
     });
     return count;
+  }
+
+  /// 无专辑名歌曲的封面缓存:按「无专辑 + 歌手」key 去重,复用专辑封面缓存。
+  Future<String?> _cacheArtForNoAlbum(
+    ScannedSong song,
+    Set<String> verifiedArtKeys,
+  ) async {
+    if (!song.hasEmbeddedArt ||
+        song.pictureBytes == null ||
+        song.pictureMimeType == null) {
+      return null;
+    }
+    return _saveArtIfChanged(
+      _buildAlbumKey(_kNoAlbumName, song.albumArtist ?? song.artist),
+      song.pictureBytes!,
+      song.pictureMimeType!,
+      verifiedArtKeys,
+    );
   }
 
   // ─── Artist helpers ────────────────────────────────────
@@ -234,6 +290,9 @@ class SongRepository {
   ///
   /// Uses the album artist (falling back to the song artist) so a compilation
   /// album shared by many artists keeps a single cover.
+  /// 无专辑名歌曲的封面缓存 key 前缀(避免与真实专辑名冲突)。
+  static const String _kNoAlbumName = '__no_album__';
+
   String _buildAlbumKey(String albumName, String? albumArtist) {
     return '$albumName::${albumArtist ?? 'Unknown'}';
   }
@@ -257,6 +316,7 @@ class SongRepository {
     String albumName,
     int? artistId,
     ScannedSong song,
+    Set<String> verifiedArtKeys,
   ) async {
     final albumArtist = song.albumArtist ?? song.artist;
     final albumKey = _buildAlbumKey(albumName, albumArtist);
@@ -266,7 +326,13 @@ class SongRepository {
       final existing = await _db.getAlbumByNameAndArtist(albumName, artistId);
       if (existing != null) {
         await _fillAlbumArtistIfEmpty(existing, song);
-        final artPath = await _ensureAlbumArt(existing, song, albumKey);
+        await _fillYearIfEmpty(existing, song);
+        final artPath = await _ensureAlbumArt(
+          existing,
+          song,
+          albumKey,
+          verifiedArtKeys,
+        );
         return (existing.id, artPath);
       }
     }
@@ -275,7 +341,13 @@ class SongRepository {
     final byName = await _db.getAlbumByName(albumName);
     if (byName != null && !_isDistinctAlbum(byName, song.albumArtist)) {
       await _fillAlbumArtistIfEmpty(byName, song);
-      final artPath = await _ensureAlbumArt(byName, song, albumKey);
+      await _fillYearIfEmpty(byName, song);
+      final artPath = await _ensureAlbumArt(
+        byName,
+        song,
+        albumKey,
+        verifiedArtKeys,
+      );
       return (byName.id, artPath);
     }
 
@@ -284,22 +356,13 @@ class SongRepository {
     if (song.hasEmbeddedArt &&
         song.pictureBytes != null &&
         song.pictureMimeType != null) {
-      // Check if art for this album key already exists on disk.
-      // This handles the case where the album record was deleted but the
-      // cached file remains.
-      if (!await _artCache.hasAlbumArt(albumKey)) {
-        try {
-          albumArtPath = await _artCache.saveAlbumArt(
-            albumKey,
-            song.pictureBytes!,
-            song.pictureMimeType!,
-          );
-        } catch (e) {
-          AppLogger.warning('Cache', 'Failed to cache album art', e);
-        }
-      } else {
-        albumArtPath = await _artCache.getAlbumArtPath(albumKey);
-      }
+      // 复用 / 覆盖该 albumKey 的缓存封面(内容变化才重写,路径保持不变)。
+      albumArtPath = await _saveArtIfChanged(
+        albumKey,
+        song.pictureBytes!,
+        song.pictureMimeType!,
+        verifiedArtKeys,
+      );
     }
 
     final albumId = await _db.insertAlbum(
@@ -309,6 +372,7 @@ class SongRepository {
         albumArtist: Value(albumArtist),
         nameSortKey: Value(buildSortKey(albumName)),
         albumArtFilePath: Value(albumArtPath),
+        year: Value(song.year),
       ),
     );
 
@@ -327,38 +391,77 @@ class SongRepository {
     return existing != tag;
   }
 
-  /// Returns the album's art path, filling it from the current song's embedded
-  /// art (and writing the cached path back to the album) when missing.
+  /// Returns the album's art path, saving (or refreshing) it from the current
+  /// song's embedded art when the cached content differs.
+  ///
+  /// 封面路径由 [albumKey] 决定且保持不变,因此封面变更时直接覆盖同一文件,
+  /// 所有引用该封面的歌曲无需改动数据库。
   Future<String?> _ensureAlbumArt(
     Album album,
     ScannedSong song,
     String albumKey,
+    Set<String> verifiedArtKeys,
   ) async {
-    if (album.albumArtFilePath != null) return album.albumArtFilePath;
     if (!song.hasEmbeddedArt ||
         song.pictureBytes == null ||
         song.pictureMimeType == null) {
-      return null;
+      return album.albumArtFilePath;
     }
-    try {
-      final String path;
-      if (await _artCache.hasAlbumArt(albumKey)) {
-        path = await _artCache.getAlbumArtPath(albumKey);
-      } else {
-        path = await _artCache.saveAlbumArt(
-          albumKey,
-          song.pictureBytes!,
-          song.pictureMimeType!,
-        );
-      }
+    final path = await _saveArtIfChanged(
+      albumKey,
+      song.pictureBytes!,
+      song.pictureMimeType!,
+      verifiedArtKeys,
+    );
+    if (path != null && path != album.albumArtFilePath) {
       await _db.updateAlbum(
         AlbumsCompanion(albumArtFilePath: Value(path)),
         album.id,
       );
+    }
+    return path ?? album.albumArtFilePath;
+  }
+
+  /// 保存封面缓存,仅当缓存内容与 [bytes] 不同(或缓存缺失)时重写。
+  ///
+  /// [verifiedArtKeys] 记录本次批量已比对过的 albumKey:同一专辑只比对一次,
+  /// 避免每首歌重复读盘。
+  Future<String?> _saveArtIfChanged(
+    String albumKey,
+    Uint8List bytes,
+    String mimeType,
+    Set<String> verifiedArtKeys,
+  ) async {
+    try {
+      final path = await _artCache.getAlbumArtPath(albumKey);
+      if (verifiedArtKeys.add(albumKey)) {
+        if (await _artContentChanged(path, bytes)) {
+          // saveAlbumArt 返回按 mime 存的真实扩展名路径(png/webp/gif/jpg),
+          // 不能沿用 getAlbumArtPath 的 `.jpg` 回退,否则 DB 记录指向不存在的
+          // 文件,封面不显示(见 docs/Performance-Optimization.md 5.2)。
+          return await _artCache.saveAlbumArt(albumKey, bytes, mimeType);
+        }
+      }
       return path;
     } catch (e) {
       AppLogger.warning('Cache', 'Failed to cache album art', e);
       return null;
+    }
+  }
+
+  /// 判断 [cachedPath] 上已缓存的封面内容是否与 [newBytes] 不同。
+  Future<bool> _artContentChanged(String cachedPath, Uint8List newBytes) async {
+    final file = File(cachedPath);
+    if (!await file.exists()) return true;
+    try {
+      final oldBytes = await file.readAsBytes();
+      if (oldBytes.length != newBytes.length) return true;
+      for (var i = 0; i < newBytes.length; i++) {
+        if (oldBytes[i] != newBytes[i]) return true;
+      }
+      return false;
+    } catch (_) {
+      return true;
     }
   }
 
@@ -394,14 +497,25 @@ class SongRepository {
     return _db.deleteFolderSongs(folderPath);
   }
 
+  /// 清理不再被任何歌曲引用的 album / artist / playlist 行(全量扫描后调用)。
+  Future<void> cleanupOrphans() => _db.cleanupOrphans();
+
+  /// 删除 covers/ 目录中不再被任何专辑或歌曲引用的封面文件。
+  Future<int> cleanupOrphanCovers() async {
+    final referenced = await _db.getAllAlbumArtPaths();
+    final keep = {for (final path in referenced) p.basename(path)};
+    return _artCache.deleteOrphans(keep);
+  }
+
   // ─── Helpers ───────────────────────────────────────────
 
   SongsCompanion _toCompanion(
     ScannedSong scanned,
     int? artistId,
     int? albumId,
-    String? albumArtPath,
-  ) {
+    String? albumArtPath, {
+    required DateTime dateAdded,
+  }) {
     return SongsCompanion(
       title: Value(scanned.title),
       titleSortKey: Value(buildSortKey(scanned.title)),
@@ -415,6 +529,7 @@ class SongRepository {
       filePath: Value(scanned.filePath),
       fileName: Value(scanned.fileName),
       fileSize: Value(scanned.fileSize),
+      lastModifiedMs: Value(scanned.lastModifiedMs),
       mimeType: Value(scanned.mimeType),
       year: Value(scanned.year),
       genre: Value(scanned.genre),
@@ -424,7 +539,7 @@ class SongRepository {
       hasEmbeddedArt: Value(scanned.hasEmbeddedArt ? 1 : 0),
       hasEmbeddedLyrics: Value(scanned.hasEmbeddedLyrics ? 1 : 0),
       lyricsFilePath: Value(scanned.lyricsFilePath),
-      dateAdded: Value(DateTime.now()),
+      dateAdded: Value(dateAdded),
       isAvailable: const Value(1),
     );
   }

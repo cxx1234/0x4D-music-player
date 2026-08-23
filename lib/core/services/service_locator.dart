@@ -19,7 +19,7 @@ import 'song_repository.dart';
 class ServiceLocator {
   ServiceLocator._();
 
-  static FlutterMusicDatabase? _database;
+  static AppDatabase? _database;
   static SettingsService? _settings;
   static SongRepository? _songRepo;
   static FolderWatcherService? _folderWatcher;
@@ -31,7 +31,7 @@ class ServiceLocator {
   /// 启动时恢复沙箱权限失败的文件夹数量（0 = 全部成功）。
   static int _sandboxRestoreFailures = 0;
 
-  static FlutterMusicDatabase get database {
+  static AppDatabase get database {
     if (_database == null) {
       throw StateError(
         'Database not initialized. Call ServiceLocator.initialize() first.',
@@ -116,6 +116,13 @@ class ServiceLocator {
     _sandboxRestoreFailures = 0;
   }
 
+  /// 落盘所有待写的持久化（如队列防抖窗口内的变更）。
+  ///
+  /// 供 App 生命周期挂起/退出前调用，避免防抖窗口内的数据丢失。
+  static Future<void> flushPendingWrites() async {
+    await _playQueue?.flushPendingSave();
+  }
+
   /// 幂等初始化：整个 isolate 生命周期内只执行一次。
   ///
   /// 即使被重复调用（例如某些情况下 initState 再次触发），也返回同一份
@@ -147,7 +154,7 @@ class ServiceLocator {
     }
     _settings = SettingsService();
     await _settings!.initialize();
-    _database = await FlutterMusicDatabase.create();
+    _database = await AppDatabase.create();
     _songRepo = SongRepository();
     // 迁移后为 NULL 的 sort_key 回填拼音/日文排序键（一次性）。
     await _songRepo!.backfillSortKeys();
@@ -157,6 +164,7 @@ class ServiceLocator {
     _player = PlayerService(
       playQueue: _playQueue!,
       resumePlaybackPosition: _settings!.settings.resumePlaybackPosition,
+      volume: _settings!.settings.volume,
     );
     _sandbox = SandboxService();
 

@@ -5,13 +5,13 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = flutter_music
+PRODUCT_NAME = 0x4D
 
 // The application's bundle identifier
 // 注意：macOS 沙盒容器按 bundle id 划分（~/Library/Containers/<bundle-id>/Data/...）。
 // .beta 后缀让当前 beta 版（metadata-reader-test / audio_metadata_reader 迁移版）
 // 的数据库与封面缓存和正式版分开存储，互不污染。
-PRODUCT_BUNDLE_IDENTIFIER = com.jerryc.flutterMusic.beta
+PRODUCT_BUNDLE_IDENTIFIER = com.jerryc.txvziwm.beta
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 Jerry Chen. All rights reserved.

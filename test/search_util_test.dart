@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_music/core/utils/search_util.dart';
+import 'package:txvziwm/core/utils/search_util.dart';
 
 void main() {
   group('normalizeQuery', () {

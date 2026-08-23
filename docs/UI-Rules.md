@@ -23,7 +23,7 @@
 - 旧的**全局顶栏（TopBar）已于 2026-08-04 移除**，改为「页面避让」方案：
   - 左侧 NavigationRail 顶部预留 `layoutConfig.sidebarTopInset`（macOS=52）给红绿灯；
   - 右侧内容区各页使用统一高度的 `PageToolbar`（`lib/widgets/page_toolbar.dart`）。
-- 传原生：Flutter 启动仍会通过 **MethodChannel `flutter_music/window`**（方法 `setTopBarHeight`）
+- 传原生：Flutter 启动仍会通过 **MethodChannel `com.jerryc.txvziwm/window`**（方法 `setTopBarHeight`）
   发送 `layoutConfig.sidebarTopInset`（52），但**红绿灯已由 unified 工具栏原生定位，Swift 端为 no-op**。
   **仅 macOS 会调用**（其他平台无 handler，避免 MissingPluginException 噪音）。
 - **数值微调**：Windows 版调试时改 `_default`（或新增 Windows 专属配置）即可，无需动 UI 代码。
@@ -91,5 +91,5 @@
 
 - 已用 `DetailTopBar` 完成避让（2026-08-04）：专辑/歌手/播放列表详情、我的收藏、播放列表（队列）全屏页。
 - 播放页：保留其 `AppBar`，结构改为「顶部红绿灯预留 `playerTopBarTopReserve`（macOS 45）+ 下方 56 控件区」，控件固定在下方；标题字号与 `DetailTopBar` 一致（2026-08-05）。
-- 仍待处理：歌词全屏页（`LyricsPage`，M3 `AppBar`≈56 会与红绿灯重叠）；其窄窗歌词展示方案后续另行讨论。
+- 仍待处理：歌词全屏页（`LyricsPage`，M3 `AppBar`≈56 会与红绿灯重叠）；其窄窗歌词展示方案后续另行讨论。(页面已完全重做，没有这个问题了)
 - 详情页按钮回归（2026-08-05）：专辑/播放列表/我的收藏 详情的「播放全部」统一用 `PlayAllButton` 椭圆形文本按钮（▶ 播放全部），置于**详情块信息文本下方**，详情块底部 Material 阴影分隔列表；播放列表详情的「添加歌曲/更多」放回 `DetailTopBar` actions；歌手详情用「歌曲」区块标题右侧的同一 `PlayAllButton`。收藏页 `_playAll` unused 告警已清零。

@@ -40,7 +40,7 @@ class MainFlutterWindow: NSWindow {
 
     // 兼容旧调用：Flutter 启动仍会发 setTopBarHeight，这里仅保持通道平衡。
     let channel = FlutterMethodChannel(
-      name: "flutter_music/window",
+      name: "com.jerryc.txvziwm/window",
       binaryMessenger: flutterViewController.engine.binaryMessenger)
     channel.setMethodCallHandler { _, result in
       result(nil)

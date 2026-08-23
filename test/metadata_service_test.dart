@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter_music/core/services/metadata_service.dart';
+import 'package:txvziwm/core/services/metadata_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// 针对 [MetadataService]（已切换为本地补强的 audio_metadata_reader）的

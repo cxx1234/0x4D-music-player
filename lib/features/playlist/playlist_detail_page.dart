@@ -60,25 +60,29 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   }
 
   Future<void> _exportM3u() async {
-    final path = await FilePicker.saveFile(
-      dialogTitle: '导出播放列表',
-      fileName: '$_name.m3u8',
-      type: FileType.custom,
-      allowedExtensions: const ['m3u8', 'm3u'],
-    );
-    if (path == null || !mounted) return;
+    final ({Uint8List bytes, int count}) content;
     try {
-      final count = await exportPlaylistToFile(widget.playlist.id, path);
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('已导出 $count 首歌曲')));
+      content = await buildPlaylistM3u8(widget.playlist.id);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('导出失败：无法写入文件')));
+      ).showSnackBar(const SnackBar(content: Text('导出失败：无法生成播放列表内容')));
+      return;
     }
+
+    final uri = await FilePicker.saveFile(
+      dialogTitle: '导出播放列表',
+      fileName: '$_name.m3u8',
+      bytes: content.bytes,
+      type: FileType.custom,
+      allowedExtensions: const ['m3u8', 'm3u'],
+    );
+    if (uri == null || !mounted) return;
+    // saveFile 已把 bytes 写入所选位置，uri 非空即成功。
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已导出 ${content.count} 首歌曲')));
   }
 
   Future<void> _rename() async {
@@ -186,6 +190,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           ),
           PopupMenuButton<String>(
             tooltip: '更多',
+            // 默认 iconTheme.color 是固定纯黑/纯白（M2 遗留），显式指定跟随主题。
+            iconColor: theme.colorScheme.onSurfaceVariant,
             onSelected: (value) {
               if (value == 'rename') _rename();
               if (value == 'delete') _delete();
@@ -200,7 +206,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
         ],
       ),
       body: ListenableBuilder(
-        listenable: player,
+        listenable: player.currentSongNotifier,
         builder: (context, _) {
           return Column(
             children: [
@@ -330,7 +336,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
               ),
             ),
           // 序号/拖拽把手与封面间距（翻倍，避免贴住封面）
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
           SizedBox(
             width: 40,
             height: 40,

@@ -1,17 +1,17 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:flutter_music/core/database/database.dart';
-import 'package:flutter_music/core/services/song_repository.dart';
-import 'package:flutter_music/models/scanned_song.dart';
+import 'package:txvziwm/core/database/database.dart';
+import 'package:txvziwm/core/services/song_repository.dart';
+import 'package:txvziwm/models/scanned_song.dart';
 
 /// 验证扫描期专辑归并逻辑：同一专辑多歌手 → 只生成一条专辑记录。
 void main() {
-  late FlutterMusicDatabase db;
+  late AppDatabase db;
   late SongRepository repo;
 
   setUp(() {
-    db = FlutterMusicDatabase(NativeDatabase.memory());
+    db = AppDatabase(NativeDatabase.memory());
     repo = SongRepository(database: db);
   });
 

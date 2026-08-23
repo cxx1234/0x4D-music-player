@@ -1,11 +1,10 @@
-import 'package:flutter/foundation.dart';
-
 import '../../core/database/database.dart';
 import '../../core/database/song_sort_order.dart';
 import '../../core/services/library_scanner_service.dart';
 import '../../core/services/player_service.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/logger.dart';
+import '../../core/viewmodels/page_view_model.dart';
 
 /// Possible states of the library scan.
 enum LibraryScanState {
@@ -25,7 +24,7 @@ enum LibraryScanState {
 /// ViewModel for the Library page.
 ///
 /// Manages scan lifecycle, song list, and folder watching.
-class LibraryViewModel extends ChangeNotifier {
+class LibraryViewModel extends PageViewModel {
   LibraryScanState _scanState = LibraryScanState.idle;
   ScanProgress? _scanProgress;
   ScanResult? _scanResult;
@@ -69,25 +68,32 @@ class LibraryViewModel extends ChangeNotifier {
 
   final _scanner = LibraryScannerService();
 
-  /// 本 ViewModel 是否已注册到 PlayerService 的监听。
+  /// 本 ViewModel 是否已订阅播放器的轻量通知器。
   ///
   /// 用于保证「注册最多一次 / 注销彻底一次」。ChangeNotifier 的 addListener
   /// 不去重、removeListener 一次只移除一个匹配项;若 initialize() 被重复调用
   /// (initState / 轮询兜底 / didUpdateWidget 多个触发源)会残留指向已 dispose
-  /// 实例的监听,播放时 positionStream 触发即抛 "used after being disposed"。
+  /// 实例的监听,播放时触发即抛 "used after being disposed"。
   bool _playerListenerAttached = false;
 
-  /// 幂等注册:无论调用多少次,PlayerService 上最多挂一个本 VM 的监听。
+  /// 幂等注册:无论调用多少次,最多挂一份轻量通知器监听。
+  ///
+  /// 只订阅去重的 [PlayerService.currentSongNotifier] 与 [playingNotifier]
+  /// (切歌/播放态翻转才触发),不订阅整个 PlayerService——后者随
+  /// positionStream 每 ~200ms notify,会让整页(尤其保活后的 offstage 页)
+  /// 跟着高频重建。
   void _attachPlayerListener() {
     if (_playerListenerAttached) return;
-    ServiceLocator.player.addListener(notifyListeners);
+    ServiceLocator.player.currentSongNotifier.addListener(safeNotify);
+    ServiceLocator.player.playingNotifier.addListener(safeNotify);
     _playerListenerAttached = true;
   }
 
   /// 注销注册:页面生命周期结束时调用,保证移除干净。
   void _detachPlayerListener() {
     if (!_playerListenerAttached) return;
-    ServiceLocator.player.removeListener(notifyListeners);
+    ServiceLocator.player.currentSongNotifier.removeListener(safeNotify);
+    ServiceLocator.player.playingNotifier.removeListener(safeNotify);
     _playerListenerAttached = false;
   }
 
@@ -112,23 +118,23 @@ class LibraryViewModel extends ChangeNotifier {
     }
     _sortOrder = ServiceLocator.settings.songSortOrder;
     await _loadSongs();
-    notifyListeners();
+    safeNotify();
   }
 
   /// 重新加载歌曲列表（排序或收藏变化后调用）。
   Future<void> reloadSongs() async {
     await _loadSongs();
-    notifyListeners();
+    safeNotify();
   }
 
   /// 切换排序方式并持久化到设置。
   Future<void> setSortOrder(SongSortOrder order) async {
     if (_sortOrder == order) return;
     _sortOrder = order;
-    notifyListeners();
+    safeNotify();
     await ServiceLocator.settings.setSongSortOrder(order);
     await _loadSongs();
-    notifyListeners();
+    safeNotify();
   }
 
   // ─── Scanning ──────────────────────────────────────────
@@ -138,6 +144,14 @@ class LibraryViewModel extends ChangeNotifier {
     final folders = ServiceLocator.settings.musicFolders;
     if (folders.isEmpty) return;
     await _runScan(folders);
+  }
+
+  /// 强制刷新：忽略 mtime/大小变化检测，把全部已存在歌曲重新解析一遍。
+  /// 用于文件没变但元数据/封面缓存可能已过期的情况（如封面路径变更后）。
+  Future<void> forceScan() async {
+    final folders = ServiceLocator.settings.musicFolders;
+    if (folders.isEmpty) return;
+    await _runScan(folders, force: true);
   }
 
   /// Re-scans a specific folder.
@@ -152,25 +166,26 @@ class LibraryViewModel extends ChangeNotifier {
     await ServiceLocator.settings.removeMusicFolder(folderPath);
     await _syncQueueWithLibrary();
     await _loadSongs();
-    notifyListeners();
+    safeNotify();
   }
 
   // ─── Internal ──────────────────────────────────────────
 
-  Future<void> _runScan(List<String> folders) async {
+  Future<void> _runScan(List<String> folders, {bool force = false}) async {
     _scanState = LibraryScanState.scanning;
     _scanProgress = null;
     _scanResult = null;
     _errorMessage = null;
-    notifyListeners();
+    safeNotify();
 
     try {
       final result = await _scanner.scanFolders(
         folders,
         updateExisting: true,
+        force: force,
         onProgress: (progress) {
           _scanProgress = progress;
-          notifyListeners();
+          safeNotify();
         },
       );
 
@@ -186,7 +201,18 @@ class LibraryViewModel extends ChangeNotifier {
 
     await _syncQueueWithLibrary();
     await _loadSongs();
-    notifyListeners();
+    safeNotify();
+  }
+
+  /// 清除扫描结果横幅（扫描完成后 N 秒自动收起时调用）。
+  ///
+  /// 页面全部保活后 VM 常驻，结果横幅不再随"切换 tab 重建页面"被清掉，
+  /// 需要 UI 主动清除，否则会一直挂在页面上。
+  void clearScanResult() {
+    if (_scanResult == null) return;
+    _scanResult = null;
+    _scanState = LibraryScanState.idle;
+    safeNotify();
   }
 
   Future<void> _quickSync(List<String> folders) async {
@@ -218,6 +244,6 @@ class LibraryViewModel extends ChangeNotifier {
     if (ServiceLocator.isReady) {
       _detachPlayerListener();
     }
-    super.dispose();
+    super.dispose(); // 基类置 _disposed 并释放
   }
 }

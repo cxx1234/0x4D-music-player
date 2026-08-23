@@ -13,6 +13,7 @@ class Songs extends Table {
   TextColumn get filePath => text().unique()();
   TextColumn get fileName => text().withLength(max: 500)();
   IntColumn get fileSize => integer().nullable()();
+  IntColumn get lastModifiedMs => integer().nullable()();
   TextColumn get mimeType => text().nullable()();
   IntColumn get year => integer().nullable()();
   TextColumn get genre => text().nullable()();

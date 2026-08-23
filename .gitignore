@@ -36,6 +36,12 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Test audio fixtures (large, not committed)
+test/music/
+
+# Dev/diagnostic scripts (not part of the app)
+tool/
+
 # Symbolication related
 app.*.symbols
 
@@ -47,6 +53,7 @@ ios/Runner.xcworkspace/xcshareddata/swiftpm/
 
 # Xcode auto-generated build artifacts (deps via CocoaPods, not SPM)
 ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+ios/Runner.xcworkspace/xcshareddata/swiftpm/
 macos/Runner.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings
 
 # Obfuscation related
@@ -59,3 +66,4 @@ app.*.map.json
 
 # AI
 .copilot/
+test/impeller_flicker_repro.dart

@@ -20,10 +20,28 @@ enum NavigationItem {
   const NavigationItem(this.label, this.icon);
 }
 
+/// 允许外部（App/播放页）切换 Shell tab 的控制器。
+///
+/// Shell 自身点击也写回 [tab] 保持双向同步；ValueNotifier 同值不 notify，无循环。
+class ShellController {
+  final ValueNotifier<NavigationItem> tab = ValueNotifier(
+    NavigationItem.library,
+  );
+
+  void dispose() => tab.dispose();
+}
+
 class ShellPage extends StatefulWidget {
   final bool isInitialized;
 
-  const ShellPage({super.key, this.isInitialized = false});
+  /// Shell tab 外部控制（双向同步）。
+  final ShellController controller;
+
+  const ShellPage({
+    super.key,
+    this.isInitialized = false,
+    required this.controller,
+  });
 
   @override
   State<ShellPage> createState() => _ShellPageState();
@@ -32,16 +50,51 @@ class ShellPage extends StatefulWidget {
 class _ShellPageState extends State<ShellPage> {
   NavigationItem _selected = NavigationItem.library;
 
-  Widget _buildPage() {
-    switch (_selected) {
+  /// 已访问过的 tab：惰性保活——首次选中才构建页面，之后切换不销毁重建
+  /// （State / 滚动位置 / 搜索状态保留）。
+  final Set<NavigationItem> _visited = {NavigationItem.library};
+
+  @override
+  void initState() {
+    super.initState();
+    // 以控制器当前值为准（兜住 Shell 重建后控制器可能已非初始 tab 的失步）。
+    _selected = widget.controller.tab.value;
+    widget.controller.tab.addListener(_onExternalTab);
+  }
+
+  /// 外部（App/播放页）请求切 tab。
+  void _onExternalTab() {
+    final requested = widget.controller.tab.value;
+    if (requested == _selected) return;
+    setState(() {
+      _selected = requested;
+      _visited.add(requested);
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.controller.tab.removeListener(_onExternalTab);
+    super.dispose();
+  }
+
+  /// 返回 [item] 对应的页面；未访问过的 tab 用空占位（惰性构建）。
+  ///
+  /// 每次 build 都重建 widget 实例（同类型同位置 → 框架复用 Element/State 保活），
+  /// 这样 `LibraryPage(isInitialized:)` 的启动就绪信号能正常走 didUpdateWidget；
+  /// 不能缓存 widget 实例，否则参数会变 stale。
+  Widget _pageFor(NavigationItem item) {
+    if (!_visited.contains(item)) return const SizedBox.shrink();
+    final active = _selected == item;
+    switch (item) {
       case NavigationItem.library:
         return LibraryPage(isInitialized: widget.isInitialized);
       case NavigationItem.albums:
-        return const AlbumsPage();
+        return AlbumsPage(active: active);
       case NavigationItem.artists:
-        return const ArtistsPage();
+        return ArtistsPage(active: active);
       case NavigationItem.playlists:
-        return const PlaylistPage();
+        return PlaylistPage(active: active);
       case NavigationItem.settings:
         return const SettingsPage();
     }
@@ -63,7 +116,13 @@ class _ShellPageState extends State<ShellPage> {
               child: NavigationRail(
                 selectedIndex: _selected.index,
                 onDestinationSelected: (index) {
-                  setState(() => _selected = NavigationItem.values[index]);
+                  final item = NavigationItem.values[index];
+                  setState(() {
+                    _selected = item;
+                    _visited.add(item);
+                  });
+                  // 双向同步：外部（App/播放页）也能读到当前 tab。
+                  widget.controller.tab.value = item;
                 },
                 labelType: NavigationRailLabelType.selected,
                 leading: Padding(
@@ -86,7 +145,16 @@ class _ShellPageState extends State<ShellPage> {
             ),
           ),
           const VerticalDivider(width: 1),
-          Expanded(child: _buildPage()),
+          // IndexedStack 保活已访问的页面：非选中页不销毁（State 保留），
+          // 只是不绘制。未访问的 tab 是空占位，首次选中才构建。
+          Expanded(
+            child: IndexedStack(
+              index: _selected.index,
+              children: [
+                for (final item in NavigationItem.values) _pageFor(item),
+              ],
+            ),
+          ),
         ],
       ),
     );

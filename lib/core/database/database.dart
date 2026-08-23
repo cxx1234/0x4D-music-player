@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -15,17 +16,18 @@ import 'tables/songs.dart';
 part 'database.g.dart';
 
 @DriftDatabase(tables: [Songs, Albums, Artists, Playlists, PlaylistSongs])
-class FlutterMusicDatabase extends _$FlutterMusicDatabase {
-  FlutterMusicDatabase(super.e);
+class AppDatabase extends _$AppDatabase {
+  AppDatabase(super.e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (Migrator m) async {
         await m.createAll();
+        await _createIndexes();
       },
       onUpgrade: (Migrator m, int from, int to) async {
         if (from == 1) {
@@ -44,14 +46,64 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
           await m.createTable(playlists);
           await m.createTable(playlistSongs);
         }
+        if (from <= 4) {
+          await m.addColumn(songs, songs.lastModifiedMs);
+        }
+        if (from <= 5) {
+          await _createIndexes();
+        }
       },
     );
   }
 
-  static Future<FlutterMusicDatabase> create() async {
+  /// 建查询索引（onCreate 新装 + 老库升级共用）。
+  ///
+  /// 大库下 WHERE/JOIN/GROUP BY/ORDER BY 常用列都加索引，避免全表扫；
+  /// `IF NOT EXISTS` 幂等，迁移失败重试不冲突。
+  Future<void> _createIndexes() async {
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_songs_avail_sort '
+      'ON songs(is_available, title_sort_key)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_songs_album_id ON songs(album_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_songs_artist_id ON songs(artist_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_songs_fav_avail '
+      'ON songs(is_favorite, is_available)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_plsongs_playlist '
+      'ON playlist_songs(playlist_id, position)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_plsongs_song ON playlist_songs(song_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_albums_artist ON albums(artist_id)',
+    );
+  }
+
+  static Future<AppDatabase> create() async {
     final dir = await getApplicationDocumentsDirectory();
     final dbFile = File(p.join(dir.path, 'music_library.db'));
-    return FlutterMusicDatabase(NativeDatabase(dbFile, logStatements: true));
+    return AppDatabase(
+      NativeDatabase(
+        dbFile,
+        // SQL 日志只在 debug 打印，release/profile 不逐条输出。
+        logStatements: kDebugMode,
+        // setup 回调收到的是 sqlite3 包的原始 Database（FFI 层），用 execute。
+        setup: (db) {
+          // WAL：读写互不阻塞（扫描批量写/后台 5s 位置落盘 vs 列表查询）。
+          db.execute('PRAGMA journal_mode = WAL');
+          // 并发写冲突时排队等待而非立即抛 SQLITE_BUSY。
+          db.execute('PRAGMA busy_timeout = 5000');
+        },
+      ),
+    );
   }
 
   // ─── CRUD ───────────────────────────────────────────────
@@ -73,8 +125,9 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
 
   Future<int> insertSong(SongsCompanion entry) => into(songs).insert(entry);
 
-  Future<int> insertSongOnConflictReplace(SongsCompanion entry) =>
-      into(songs).insertOnConflictUpdate(entry);
+  Future<int> insertSongOnConflictReplace(SongsCompanion entry) => into(
+    songs,
+  ).insert(entry, onConflict: DoUpdate((_) => entry, target: [songs.filePath]));
 
   Future<int> deleteSong(Song song) => delete(songs).delete(song);
 
@@ -97,6 +150,21 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
   Future<Song?> getSongByFilePath(String filePath) => (select(
     songs,
   )..where((t) => t.filePath.equals(filePath))).getSingleOrNull();
+
+  /// 按 filePath 批量查询（restoreQueue 用，替代逐首单行 SELECT 的 N+1）。
+  ///
+  /// 返回顺序与 [filePaths] 一致，仅保留存在且可用的歌曲。
+  Future<List<Song>> getSongsByFilePaths(List<String> filePaths) async {
+    if (filePaths.isEmpty) return const [];
+    final rows = await (select(
+      songs,
+    )..where((t) => t.filePath.isIn(filePaths))).get();
+    final byPath = {for (final s in rows) s.filePath: s};
+    return [
+      for (final fp in filePaths)
+        if (byPath[fp]?.isAvailable == 1) byPath[fp]!,
+    ];
+  }
 
   Future<int> getSongCount() async {
     final result = await customSelect('SELECT COUNT(*) FROM songs').getSingle();
@@ -132,6 +200,38 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
     )..where((t) => t.isAvailable.equals(1))).map((s) => s.filePath).get();
   }
 
+  /// 返回已存在歌曲的文件时间戳(file_size + last_modified_ms),按路径索引。
+  ///
+  /// 供扫描"变化检测"使用:只有 mtime 或大小与上次扫描不同才会被重解析。
+  Future<Map<String, ({int? lastModifiedMs, int? fileSize})>>
+  getExistingFileStats() async {
+    final rows = await (select(
+      songs,
+    )..where((t) => t.isAvailable.equals(1))).get();
+    return {
+      for (final s in rows)
+        s.filePath: (lastModifiedMs: s.lastModifiedMs, fileSize: s.fileSize),
+    };
+  }
+
+  /// 返回当前仍被专辑或歌曲引用的所有封面文件路径(用于清理孤儿封面)。
+  Future<Set<String>> getAllAlbumArtPaths() async {
+    final albumRows =
+        await (selectOnly(albums)
+              ..addColumns([albums.albumArtFilePath])
+              ..where(albums.albumArtFilePath.isNotNull()))
+            .get();
+    final songRows =
+        await (selectOnly(songs)
+              ..addColumns([songs.albumArtFilePath])
+              ..where(songs.albumArtFilePath.isNotNull()))
+            .get();
+    return {
+      for (final r in albumRows) r.read(albums.albumArtFilePath)!,
+      for (final r in songRows) r.read(songs.albumArtFilePath)!,
+    };
+  }
+
   Future<List<String>> getFolderFilePaths(String folderPath) async {
     final pattern = '$folderPath%';
     return (select(songs)
@@ -152,9 +252,73 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
     );
   }
 
+  /// Deletes all songs under [folderPath], then removes orphaned
+  /// albums / artists / playlist references that no longer point at any song.
+  ///
+  /// Runs in a single transaction so the cleanup is atomic with the delete.
   Future<int> deleteFolderSongs(String folderPath) async {
     final pattern = '$folderPath%';
-    return (delete(songs)..where((t) => t.filePath.like(pattern))).go();
+    return transaction(() async {
+      final deleted = await (delete(
+        songs,
+      )..where((t) => t.filePath.like(pattern))).go();
+      await cleanupOrphans();
+      return deleted;
+    });
+  }
+
+  /// Removes rows in [playlistSongs] / [albums] / [artists] that no longer
+  /// reference any song in the `songs` table (e.g. after a folder is removed,
+  /// or a full scan moved songs to other albums).
+  ///
+  /// Rows for songs merely marked unavailable (`isAvailable=0`) are kept —
+  /// those still exist and may come back on a later scan.
+  Future<void> cleanupOrphans() async {
+    // 1. Playlist rows pointing at deleted songs.
+    final songRows = await (selectOnly(songs)..addColumns([songs.id])).get();
+    final songIds = songRows
+        .map((row) => row.read(songs.id))
+        .whereType<int>()
+        .toList();
+    if (songIds.isEmpty) {
+      await delete(playlistSongs).go();
+    } else {
+      await (delete(
+        playlistSongs,
+      )..where((t) => t.songId.isNotIn(songIds))).go();
+    }
+
+    // 2. Albums with no remaining songs.
+    final albumRows =
+        await (selectOnly(songs)
+              ..addColumns([songs.albumId])
+              ..where(songs.albumId.isNotNull()))
+            .get();
+    final albumIds = albumRows
+        .map((row) => row.read(songs.albumId))
+        .whereType<int>()
+        .toList();
+    if (albumIds.isEmpty) {
+      await delete(albums).go();
+    } else {
+      await (delete(albums)..where((t) => t.id.isNotIn(albumIds))).go();
+    }
+
+    // 3. Artists with no remaining songs.
+    final artistRows =
+        await (selectOnly(songs)
+              ..addColumns([songs.artistId])
+              ..where(songs.artistId.isNotNull()))
+            .get();
+    final artistIds = artistRows
+        .map((row) => row.read(songs.artistId))
+        .whereType<int>()
+        .toList();
+    if (artistIds.isEmpty) {
+      await delete(artists).go();
+    } else {
+      await (delete(artists)..where((t) => t.id.isNotIn(artistIds))).go();
+    }
   }
 
   Future<List<Song>> getUnavailableSongs() {
@@ -400,6 +564,27 @@ class FlutterMusicDatabase extends _$FlutterMusicDatabase {
       'GROUP BY ps.playlist_id',
     ).get();
     return {for (final r in rows) r.read<int>('pid'): r.read<int>('c')};
+  }
+
+  /// 每个歌手的可用歌曲数与专辑数（聚合查询）。
+  ///
+  /// 供歌手浏览页计数用，避免在内存里持有全量歌曲/专辑副本。
+  Future<Map<int, ({int songCount, int albumCount})>> getArtistStats() async {
+    final rows = await customSelect(
+      'SELECT artist_id AS aid, '
+      'COUNT(*) AS song_count, '
+      'COUNT(DISTINCT album_id) AS album_count '
+      'FROM songs '
+      'WHERE is_available = 1 AND artist_id IS NOT NULL '
+      'GROUP BY artist_id',
+    ).get();
+    return {
+      for (final r in rows)
+        r.read<int>('aid'): (
+          songCount: r.read<int>('song_count'),
+          albumCount: r.read<int>('album_count'),
+        ),
+    };
   }
 
   // ─── Sort key backfill ─────────────────────────────────
