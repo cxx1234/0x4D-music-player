@@ -132,4 +132,42 @@ void main() {
       );
     });
   });
+
+  group('MetadataService.parseAll（受限并发 + 批量 isolate）', () {
+    test('批量并发解析 3 个真实文件：结果齐全 + onProgress 累计', () async {
+      if (!available) {
+        markTestSkipped('test/music 不存在，跳过真实文件测试');
+        return;
+      }
+      const files = [
+        'test/music/黒うさP - 下弦の月.mp3',
+        'test/music/幽閉サテライト - 大地に咲く旋律 (with senya).flac',
+        'test/music/SawanoHiroyuki[nZk] - Unti-L.m4a',
+      ];
+      final (songs, failures) = await service.parseAll(files);
+      expect(failures, isEmpty, reason: '三文件均应解析成功');
+      expect(songs, hasLength(3));
+      expect(
+        songs.map((s) => s.albumArtist),
+        containsAll(['黒うさP', '幽閉サテライト', 'SawanoHiroyuki[nZk]']),
+        reason: '三格式 albumArtist 均应取到',
+      );
+
+      // onProgress 每文件回调一次，processed 累计到总数。
+      var calls = 0;
+      var lastProcessed = 0;
+      await service.parseAll(files, onProgress: (p, t, f) {
+        calls++;
+        lastProcessed = p;
+      });
+      expect(calls, 3);
+      expect(lastProcessed, 3);
+    });
+
+    test('空列表：直接返回空结果', () async {
+      final (songs, failures) = await service.parseAll(const []);
+      expect(songs, isEmpty);
+      expect(failures, isEmpty);
+    });
+  });
 }
