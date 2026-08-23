@@ -153,15 +153,18 @@ void main() {
         reason: '三格式 albumArtist 均应取到',
       );
 
-      // onProgress 每文件回调一次，processed 累计到总数。
-      var calls = 0;
+      // 进度节流：不保证每文件回调，但最终 processed 必须回拨到总数，
+      // 且进度单调递增（不会倒退）。
       var lastProcessed = 0;
+      var previous = -1;
+      var monotonic = true;
       await service.parseAll(files, onProgress: (p, t, f) {
-        calls++;
+        if (p < previous) monotonic = false;
+        previous = p;
         lastProcessed = p;
       });
-      expect(calls, 3);
-      expect(lastProcessed, 3);
+      expect(lastProcessed, 3, reason: '收尾应回拨到总数');
+      expect(monotonic, isTrue, reason: '进度应单调递增');
     });
 
     test('空列表：直接返回空结果', () async {
