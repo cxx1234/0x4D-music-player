@@ -135,6 +135,28 @@ class MetadataService {
     return (results, failures);
   }
 
+  /// 读取单个文件的内嵌歌词（播放时惰性调用）。
+  ///
+  /// 与 [parse] 不同：只取歌词文本、不读封面（`getImage: false`），更轻量。
+  /// 在后台 isolate 执行防卡 UI；返回 trim 后非空的歌词，无内嵌/失败返回 null。
+  Future<String?> readEmbeddedLyrics(String filePath) async {
+    try {
+      return await Isolate.run(() {
+        final meta = readMetadata(File(filePath), getImage: false);
+        final lyrics = meta.lyrics;
+        return (lyrics != null && lyrics.trim().isNotEmpty) ? lyrics : null;
+      });
+    } catch (e, s) {
+      AppLogger.warning(
+        'Lyric',
+        'Failed to read embedded lyrics: $filePath',
+        e,
+        s,
+      );
+      return null;
+    }
+  }
+
   /// Looks for a `.lrc` file with the same base name as [audioPath].
   ///
   /// Returns the path if found, or `null` otherwise.

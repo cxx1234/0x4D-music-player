@@ -14,7 +14,8 @@ import 'package:flutter_test/flutter_test.dart';
 /// - MP3 artist 取 TPE1（本地 fork 已修 TPE1 优先，避免 albumArtist 覆盖）
 /// - FLAC artist 列表不再混入 ALBUMARTIST
 /// - M4A aART → albumArtist
-/// - hasEmbeddedLyrics 标志（MP3 无内嵌歌词，FLAC/M4A 有）
+/// - hasEmbeddedLyrics 标志（三格式均带内嵌歌词；MP3 已补 USLT）
+/// - readEmbeddedLyrics 惰性读取（播放时抓取，不读封面）
 void main() {
   final musicDir = Directory('test/music');
   final available = musicDir.existsSync();
@@ -22,7 +23,7 @@ void main() {
   final service = MetadataService();
 
   group('MetadataService（audio_metadata_reader）', () {
-    test('MP3：字段映射 + artist 取 TPE1（TPE1≠TPE2 样本）+ 无内嵌歌词', () async {
+    test('MP3：字段映射 + artist 取 TPE1（TPE1≠TPE2 样本）+ 带内嵌歌词', () async {
       if (!available) {
         markTestSkipped('test/music 不存在，跳过真实文件测试');
         return;
@@ -36,7 +37,7 @@ void main() {
       expect(song.album, '月と星の虚構空間');
       expect(song.durationMs, greaterThan(0));
       expect(song.bitrate, isNotNull, reason: 'MP3 应有 bitrate');
-      expect(song.hasEmbeddedLyrics, isFalse, reason: '该 MP3 未内嵌歌词');
+      expect(song.hasEmbeddedLyrics, isTrue, reason: '该 MP3 现带 USLT 内嵌歌词');
       expect(song.mimeType, 'audio/mpeg');
     });
 
@@ -83,6 +84,52 @@ void main() {
       expect(song.durationMs, greaterThan(0));
       expect(song.hasEmbeddedLyrics, isTrue, reason: 'M4A 有 ©lyr');
       expect(song.mimeType, 'audio/mp4');
+    });
+  });
+
+  group('MetadataService.readEmbeddedLyrics（播放时惰性读内嵌歌词）', () {
+    test('MP3 读回 USLT 歌词', () async {
+      if (!available) {
+        markTestSkipped('test/music 不存在，跳过真实文件测试');
+        return;
+      }
+      final lyrics = await service.readEmbeddedLyrics(
+        'test/music/黒うさP - 下弦の月.mp3',
+      );
+      expect(lyrics, isNotNull, reason: '该 MP3 现带 USLT');
+      expect(lyrics!.trim(), isNotEmpty);
+    });
+
+    test('FLAC 读回 Vorbis LYRICS（LRC）', () async {
+      if (!available) {
+        markTestSkipped('test/music 不存在，跳过真实文件测试');
+        return;
+      }
+      final lyrics = await service.readEmbeddedLyrics(
+        'test/music/幽閉サテライト - 大地に咲く旋律 (with senya).flac',
+      );
+      expect(lyrics, isNotNull);
+      expect(
+        lyrics!,
+        contains(RegExp(r'\[\d{1,}:\d{2}')),
+        reason: '应含 LRC 时间轴',
+      );
+    });
+
+    test('M4A 读回 ©lyr（LRC）', () async {
+      if (!available) {
+        markTestSkipped('test/music 不存在，跳过真实文件测试');
+        return;
+      }
+      final lyrics = await service.readEmbeddedLyrics(
+        'test/music/SawanoHiroyuki[nZk] - Unti-L.m4a',
+      );
+      expect(lyrics, isNotNull);
+      expect(
+        lyrics!,
+        contains(RegExp(r'\[\d{1,}:\d{2}')),
+        reason: '应含 LRC 时间轴',
+      );
     });
   });
 }
