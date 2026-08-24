@@ -44,9 +44,11 @@ packages:
   audio_metadata_reader:
     dependency: "direct main"
     description:
-      path: "../audio_metadata_reader/audio_metadata_reader"
-      relative: true
-    source: path
+      path: "."
+      ref: "feat/album-artist"
+      resolved-ref: "40e0421d77a377aafd211ba63a93e7617add4668"
+      url: "https://github.com/cxx1234/audio_metadata_reader.git"
+    source: git
     version: "1.7.1"
   audio_session:
     dependency: transitive

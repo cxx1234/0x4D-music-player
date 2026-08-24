@@ -39,11 +39,13 @@ dependencies:
   sqlite3: ^3.3.4
   path_provider: ^2.1.0
   path: ^1.9.0
-  # 本地 fork 补强后的 audio_metadata_reader（feat/album-artist）：
+  # fork 补强后的 audio_metadata_reader（feat/album-artist）：
   # 纯 Dart，支持 albumArtist（TPE1/ALBUMARTIST/aART）+ 嵌入歌词解析。
-  # path 依赖指向本地 beta 版，PR 合并发布后换 ^1.8.0。
+  # 指向 GitHub cxx1234 fork 的 feat/album-artist 分支；上游 PR 合并发布后换 ^1.8.0。
   audio_metadata_reader:
-    path: ../audio_metadata_reader/audio_metadata_reader
+    git:
+      url: https://github.com/cxx1234/audio_metadata_reader.git
+      ref: feat/album-artist
   watcher: ^1.1.0
   just_audio: ^0.10.6
   just_audio_platform_interface: ^4.6.0
