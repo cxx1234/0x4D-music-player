@@ -179,10 +179,9 @@ class _LibraryPageState extends State<LibraryPage> {
           visible: !_searchActive && ServiceLocator.sandboxRestoreFailures > 0,
           child: _buildSandboxWarning(theme),
         ),
-        AnimatedCollapse(
-          visible: !_searchActive && _viewModel.isScanning,
-          child: _buildScanProgress(theme),
-        ),
+        // 进度条移出 AnimatedCollapse：进度刷新（每 100ms）不经过 AnimatedSize，
+        // 避免其尺寸动画把重排传播到下方歌曲列表，拖慢扫描主线程。
+        if (!_searchActive && _viewModel.isScanning) _buildScanProgress(theme),
         AnimatedCollapse(
           visible:
               !_searchActive &&
@@ -371,44 +370,61 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   Widget _buildScanProgress(ThemeData theme) {
-    final progress = _viewModel.scanProgress;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              const SizedBox(width: 12),
-              if (progress != null && progress.phase == 'collecting')
-                const Text('正在扫描文件夹...')
-              else if (progress != null && progress.phase == 'parsing')
-                Text('正在解析元数据 ${progress.processed}/${progress.total}...')
-              else
-                const Text('正在处理...'),
-              const Spacer(),
-              if (progress != null && progress.currentFile.isNotEmpty)
-                Flexible(
-                  child: Text(
-                    progress.currentFile,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+    // 进度走独立 ValueNotifier + RepaintBoundary：进度刷新只重建本区域，
+    // 且固定高度（尺寸不变），不触发整页 setState / AnimatedSize / 布局传播。
+    return RepaintBoundary(
+      child: ValueListenableBuilder<ScanProgress?>(
+        valueListenable: _viewModel.scanProgressNotifier,
+        builder: (context, progress, _) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            child: SizedBox(
+              height: 48, // 固定高度：进度刷新不改变尺寸
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 12),
+                      if (progress != null && progress.phase == 'collecting')
+                        const Text('正在扫描文件夹...')
+                      else if (progress != null && progress.phase == 'parsing')
+                        Text(
+                          '正在解析元数据 ${progress.processed}/${progress.total}...',
+                        )
+                      else
+                        const Text('正在处理...'),
+                      const Spacer(),
+                      if (progress != null && progress.currentFile.isNotEmpty)
+                        Flexible(
+                          child: Text(
+                            progress.currentFile,
+                            maxLines: 1,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-            ],
-          ),
-          if (progress != null && progress.total > 0) ...[
-            const SizedBox(height: 8),
-            LinearProgressIndicator(value: progress.processed / progress.total),
-          ],
-        ],
+                  if (progress != null && progress.total > 0) ...[
+                    const SizedBox(height: 8),
+                    LinearProgressIndicator(
+                      value: progress.processed / progress.total,
+                      minHeight: 4,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

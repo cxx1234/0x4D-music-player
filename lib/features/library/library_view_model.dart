@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../core/database/database.dart';
 import '../../core/database/song_sort_order.dart';
 import '../../core/services/library_scanner_service.dart';
@@ -26,14 +28,17 @@ enum LibraryScanState {
 /// Manages scan lifecycle, song list, and folder watching.
 class LibraryViewModel extends PageViewModel {
   LibraryScanState _scanState = LibraryScanState.idle;
-  ScanProgress? _scanProgress;
+
+  /// 扫描进度独立通知（ValueNotifier）：进度更新只重建进度条区域，
+  /// 不触发整页 setState（避免扫描期间反复重建歌曲大列表拖慢主线程）。
+  final ValueNotifier<ScanProgress?> scanProgressNotifier = ValueNotifier(null);
   ScanResult? _scanResult;
   List<Song> _songs = [];
   String? _errorMessage;
   SongSortOrder _sortOrder = SongSortOrder.title;
 
   LibraryScanState get scanState => _scanState;
-  ScanProgress? get scanProgress => _scanProgress;
+  ScanProgress? get scanProgress => scanProgressNotifier.value;
   ScanResult? get scanResult => _scanResult;
   List<Song> get songs => _songs;
   String? get errorMessage => _errorMessage;
@@ -173,7 +178,7 @@ class LibraryViewModel extends PageViewModel {
 
   Future<void> _runScan(List<String> folders, {bool force = false}) async {
     _scanState = LibraryScanState.scanning;
-    _scanProgress = null;
+    scanProgressNotifier.value = null;
     _scanResult = null;
     _errorMessage = null;
     safeNotify();
@@ -184,8 +189,9 @@ class LibraryViewModel extends PageViewModel {
         updateExisting: true,
         force: force,
         onProgress: (progress) {
-          _scanProgress = progress;
-          safeNotify();
+          // 进度走独立 notifier，不触发整页 setState（避免扫描期间
+          // 反复重建歌曲大列表拖慢主线程 / 拖慢扫描）。
+          scanProgressNotifier.value = progress;
         },
       );
 
@@ -244,6 +250,7 @@ class LibraryViewModel extends PageViewModel {
     if (ServiceLocator.isReady) {
       _detachPlayerListener();
     }
+    scanProgressNotifier.dispose();
     super.dispose(); // 基类置 _disposed 并释放
   }
 }

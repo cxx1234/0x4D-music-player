@@ -59,7 +59,7 @@ See [docs/Architecture.md](docs/Architecture.md) for the full architecture and [
 - **Flutter / Dart**
 - **drift** — SQLite ORM for the local library database
 - **just_audio** — audio playback
-- **metadata_god** — metadata & embedded cover art parsing
+- **audio_metadata_reader** — metadata & embedded cover art parsing (pure Dart)
 - **file_picker / watcher** — folder selection & library change watching
 - **lpinyin** — pinyin sort keys
 

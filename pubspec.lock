@@ -41,6 +41,15 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.13.1"
+  audio_metadata_reader:
+    dependency: "direct main"
+    description:
+      path: "."
+      ref: "feat/album-artist"
+      resolved-ref: "40e0421d77a377aafd211ba63a93e7617add4668"
+      url: "https://github.com/cxx1234/audio_metadata_reader.git"
+    source: git
+    version: "1.7.1"
   audio_session:
     dependency: transitive
     description:
@@ -65,14 +74,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.10"
-  build_cli_annotations:
-    dependency: transitive
-    description:
-      name: build_cli_annotations
-      sha256: e563c2e01de8974566a1998410d3f6f03521788160a02503b0b1f1a46c7b3d95
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.1.1"
   build_config:
     dependency: transitive
     description:
@@ -129,6 +130,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
+  charset:
+    dependency: transitive
+    description:
+      name: charset
+      sha256: "27802032a581e01ac565904ece8c8962564b1070690794f0072f6865958ce8b9"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.1"
   checked_yaml:
     dependency: transitive
     description:
@@ -334,14 +343,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.7"
-  flutter_rust_bridge:
-    dependency: "direct overridden"
-    description:
-      name: flutter_rust_bridge
-      sha256: "37ef40bc6f863652e865f0b2563ea07f0d3c58d8efad803cc01933a4b2ee067e"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.11.1"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -392,6 +393,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.2"
+  intl:
+    dependency: transitive
+    description:
+      name: intl
+      sha256: "1ca20c894b1717686a2319b8548763d812bc0aabdac580420a44c5178c57a867"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.20.3"
   io:
     dependency: transitive
     description:
@@ -528,14 +537,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.19.0"
-  metadata_god:
-    dependency: "direct main"
-    description:
-      name: metadata_god
-      sha256: "2b19b7e88cf5ab7016fe8d1f868bb35a193aaef06fd96cfc7de4ec3eacc16eb0"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.0"
   mime:
     dependency: transitive
     description:
