@@ -9,6 +9,7 @@ import '../../core/services/library_scanner_service.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/search_util.dart';
 import '../../widgets/animated_collapse.dart';
+import '../../widgets/card_surface.dart';
 import '../../widgets/page_toolbar.dart';
 import '../../widgets/search_empty_state.dart';
 import '../../widgets/song_tile.dart';
@@ -469,7 +470,7 @@ class _LibraryPageState extends State<LibraryPage> {
           itemCount: _musicFolders.length,
           itemBuilder: (context, index) {
             final folder = _musicFolders[index];
-            return Card(
+            return CardSurface(
               child: ListTile(
                 dense: true,
                 leading: const Icon(Icons.folder),

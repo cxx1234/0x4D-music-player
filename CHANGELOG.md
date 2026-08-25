@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0] - 2026-08-25
+### Changed
+- Replace `Card` elevation shadows with a cheap 3-line drop shadow (`CardSurface`, `blurRadius: 0`) to avoid Impeller SDF shadow raster cost on weak GPUs (esp. Intel macOS)
+
 ## [0.1.0] - 2026-08-17
 ### Changed
 - Player page redesign: unified `SongInfoCard` and full-width bottom `PlayerBar` (progress + controls + volume slider); wide-mode breakpoint 760 → 1000

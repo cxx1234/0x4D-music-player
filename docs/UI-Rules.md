@@ -84,12 +84,20 @@
 ### 4.2 详情页「播放全部」按钮（PlayAllButton）
 
 - 组件：`lib/widgets/play_all_button.dart` —— 统一的**椭圆形文本按钮**（`FilledButton.icon` + `StadiumBorder`，▶ 播放全部）。
-- 位置：放在**详情块信息文本下方**（封面右侧那一列，文本之下）；详情块底部外包 `Material(elevation: 3)` 产生**阴影**分隔列表区。
+- 位置：放在**详情块信息文本下方**（封面右侧那一列，文本之下）；详情块（`DetailHeader`）底部用**底边线**（`Border(bottom: outlineVariant)`，`elevation: 0`）分隔列表区（2026-08-25 起弃用 elevation 阴影，见 4.3）。
 - 已用：专辑详情、播放列表详情、我的收藏（爱心占位详情块）、歌手「歌曲」区块标题右侧（同一组件）。
+
+### 4.3 卡片表面（CardSurface）— 弃用 Card elevation 阴影
+
+- 组件：`lib/widgets/card_surface.dart` —— `Container`（`surfaceContainerLow` 底色 + 圆角 12 + `boxShadow`）+ `Material(transparency)` + `InkWell`（水波保留）。
+- **阴影**：`bottomDropShadow()` 3 条 `blurRadius: 0` 实线（偏移 (0,1)/(0,2)/(0,3)、alpha .10/.07/.04、颜色 `scheme.shadow`）。`blurRadius: 0` = 纯色填充，**不触发 Impeller 的 SDF blur** —— 弱 GPU / Intel 上近零 raster 开销（perf 验证：关 elevation 阴影从 ~20ms 尖峰回到 60fps）。
+- **规范**：卡片一律用 `CardSurface`；**勿用 `Card(elevation:)`**（Material elevation 阴影在 Impeller macOS SDF 路径上开销高）。
+- 已覆盖：专辑/播放列表网格（`CoverCard`）、播放列表「我的收藏」卡、音乐库文件夹行；`DetailHeader` 用 `elevation: 0` + 底边线分隔。
+- 调参：改 `card_surface.dart` 一处即可（alpha / 偏移 / 底色）。
 
 ## 5. 二级页面待办
 
 - 已用 `DetailTopBar` 完成避让（2026-08-04）：专辑/歌手/播放列表详情、我的收藏、播放列表（队列）全屏页。
 - 播放页：保留其 `AppBar`，结构改为「顶部红绿灯预留 `playerTopBarTopReserve`（macOS 45）+ 下方 56 控件区」，控件固定在下方；标题字号与 `DetailTopBar` 一致（2026-08-05）。
 - 仍待处理：歌词全屏页（`LyricsPage`，M3 `AppBar`≈56 会与红绿灯重叠）；其窄窗歌词展示方案后续另行讨论。(页面已完全重做，没有这个问题了)
-- 详情页按钮回归（2026-08-05）：专辑/播放列表/我的收藏 详情的「播放全部」统一用 `PlayAllButton` 椭圆形文本按钮（▶ 播放全部），置于**详情块信息文本下方**，详情块底部 Material 阴影分隔列表；播放列表详情的「添加歌曲/更多」放回 `DetailTopBar` actions；歌手详情用「歌曲」区块标题右侧的同一 `PlayAllButton`。收藏页 `_playAll` unused 告警已清零。
+- 详情页按钮回归（2026-08-05）：专辑/播放列表/我的收藏 详情的「播放全部」统一用 `PlayAllButton` 椭圆形文本按钮（▶ 播放全部），置于**详情块信息文本下方**；详情块底部**底边线**分隔列表（2026-08-25 起，弃用 Material 阴影，见 4.3）；播放列表详情的「添加歌曲/更多」放回 `DetailTopBar` actions；歌手详情用「歌曲」区块标题右侧的同一 `PlayAllButton`。收藏页 `_playAll` unused 告警已清零。
