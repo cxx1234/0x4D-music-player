@@ -1,7 +1,7 @@
 # 性能与待优化项清单
 
 > 登记本仓库**尚未处理**的优化项。已完成项见 git 提交记录与 `docs/TODO.md`。
-> 最后更新：2026-08-20（基于 2026-08-19 三轮代码调研 + 性能优化四阶段收尾后复核）
+> 最后更新：2026-08-25（2026-08-20 建立；08-25 扫描 3.x 四项全部完成并清理本文件）
 
 ## 状态总览
 
@@ -10,6 +10,8 @@
   - P2 封面降采样解码（`cacheWidth` + `gaplessPlayback`）
   - P3 DB schema v6（7 索引）+ WAL + 队列恢复批量查询
   - P4 写盘防抖（队列 debounce + 串行写链 + 生命周期 flush、音量拖动结束落盘）
+  - P5 元数据解析迁移（2026-08-25，`metadata-reader-test` 合并入 dev）：`audio_metadata_reader` + 受限并发 worker 池（= 3.1）
+  - P6 扫描优化（2026-08-25）：3.2 变化检测移后台 isolate（含 unsendable 修复）、3.3 扫描事务查询去重、3.4 文件夹并行遍历
 - ⏳ **本文件登记以下剩余项**，按类别与优先级排列。
 
 ---
@@ -82,28 +84,28 @@
 
 ## 3. 扫描 / 元数据类（收益高，风险中-高，曲库量大时最明显）
 
-> ⚠️ **前置说明（2026-08-19 确认）**：`audio_metadata_reader` 切换在 **`metadata-reader-test` 分支**；当前 **`dev` 仍用 `metadata_god`**（原生 FFI、串行解析、0 处 `Isolate.run`）。以下 C1/C2 的改法应以 dev 现状为基线，或等 `metadata-reader-test` 合并后再做。
+> ✅ **本类已全部完成（2026-08-25）**：`metadata-reader-test` 已合并入 dev（dev 用 `audio_metadata_reader`，纯 Dart）；**3.1-3.4 四项全部落地**。3.1 解析并发、3.2 变化检测移 isolate、3.3 扫描事务去重、3.4 文件夹并行。
 
-### 3.1 元数据解析全串行、无 Isolate
-- **问题**：`parseAll` 逐文件 `await parse`；全项目 **0 处 `Isolate.run`**。
-- **位置**：`lib/core/services/metadata_service.dart:74`。
-- **收益**：大批量扫描提速（并发 + 移出 UI isolate）。
-- **改法**：并发解析（限制并发数）+ `Isolate.run`（metadata-reader-test 分支已有此思路）。
+### 3.1 元数据解析并发 + Isolate ✅ 已完成（2026-08-25，随 metadata-reader-test 合并）
+- **现状**（`lib/core/services/metadata_service.dart`，`audio_metadata_reader` 纯 Dart 同步 API）：
+  - `parseAll` = **受限并发 worker 池**：并发数 = min(CPU 核数, 8)，按并发数切 chunk，每个 chunk 一个**常驻 `Isolate.spawn` isolate** 顺序解析，经 `SendPort` 逐文件上报（避免每文件 spawn 的开销）；结果按下标归位（并发完成顺序无关）；失败降级为文件名兜底条目；
+  - 进度 **100ms 节流**推送（不再逐文件触发 UI rebuild）；
+  - `readEmbeddedLyrics` 也走 `Isolate.run`（`getImage: false` 更轻量）；
+  - `_parseFileInIsolate`/`_parseSync` 为顶层函数（规避 isolate 发送限制，注释有说明）。
+- **仍可调整**（收益小）：
+  - 并发上限固定 8（读大文件+封面内存考虑，已较保守，可接受）；如需可改按文件大小/内存自适应。
+  - 失败降级路径 `_fallbackSong` 在主 isolate 同步 `file.lengthSync()`/`existsSync()`（仅失败文件，量小）。
+  - worker 内是「per-chunk 顺序解析」，并发粒度是文件块而非文件——8 个 isolate 并行对当前曲库量级足够。
 
-### 3.2 变化检测用同步 `FileStat.statSync`
-- **问题**：全量扫描对每首已存在文件做同步磁盘 I/O，在 UI isolate 上会卡。
-- **位置**：`lib/core/services/library_scanner_service.dart:164`。
-- **改法**：改异步 `stat()` 或搬 isolate。
+### 3.2 变化检测 `FileStat.statSync` 移后台 isolate ✅ 已完成（2026-08-25）
+- 抽顶层纯函数 `detectChangedFiles` + 顶层辅助 `_detectChangedInIsolate`（`Isolate.run`），同步 stat 移出 UI isolate；stamp 缺失/stat 失败→视为变化（与原逻辑一致）；isolate 失败降级全量重解析并打日志。
+- ⚠️ **坑（真实环境已复现）**：`Isolate.run` 闭包若内联在 `scanFolders` 会连带捕获 `onProgress`（UI 回调→widget 树→binding）→ `object is unsendable`；必须用顶层函数只捕获数据参数（同 metadata_service 模式）。回归测试用不可发送哨兵守护。
 
-### 3.3 扫描事务内每歌 ~4 次查询
-- **问题**：`insertOrUpdateFromScan` 事务内每首歌约 4 次查询（artist/album 查找 + 按路径查 + insert）。
-- **位置**：`lib/core/services/song_repository.dart:200`。
-- **改法**：artist/album 先内存缓存去重。
+### 3.3 扫描事务每歌多次查询 → 内存缓存去重 ✅ 已完成（2026-08-25）
+- `insertOrUpdateFromScan` 批量级 artist/album 缓存 + `AppDatabase.getDateAddedByFilePaths` 批量（dateAdded 不过滤 is_available）；常见情形每歌 3-4 次查询 → 1 次 insert。
 
-### 3.4 文件夹串行遍历
-- **问题**：`dir.list(recursive: true)` 逐文件夹串行 await。
-- **位置**：`lib/core/services/library_scanner_service.dart:117`。
-- **改法**：文件夹之间可并行。
+### 3.4 文件夹并行遍历 ✅ 已完成（2026-08-25）
+- `scanFolders` 文件夹收集改 `Future.wait([...])` 并行（错误隔离在 `_collectAudioFiles` 内部）。
 
 ---
 
@@ -154,4 +156,4 @@
 
 1. **Release 前**：第 6 节发布前待办（尤其 F2 日志页接入、F4 窗口最小尺寸）；1.4 + 第 7 节底栏进度填充（顺带性能收益）。
 2. **低风险顺手**：1.1、1.2、1.3、2.4、2.5、2.6、4.1、4.2、5.2。
-3. **第二轮架构优化**（收益高、改动面大）：2.1、2.2、2.3、3.1、3.2、3.3、3.4、5.1——建议 Release 后专门一轮，且 3.x 等 `metadata-reader-test` 分支合并后再动。
+3. **第二轮架构优化**（收益高、改动面大）：2.1、2.2、2.3、5.1——建议 Release 后专门一轮（3.x 扫描四项已全部完成，不再此列）。

@@ -202,13 +202,27 @@ class SongRepository {
 
     // 本次批量内已比对过封面内容的 albumKey,避免每首歌重复读盘。
     final verifiedArtKeys = <String>{};
+
+    // 批量级内存缓存:同一歌手/专辑在本次扫描内只查/建一次,
+    // 避免每首歌都执行 artist/album 的 DB 查找。
+    final artistIdCache = <String, int>{};
+    final albumCache = <String, Album>{};
+
+    // 一次性查现有行的首次入库时间(保留 dateAdded),替代每歌一条 SELECT。
+    final dateAddedByPath = await _db.getDateAddedByFilePaths([
+      for (final s in scanned) s.filePath,
+    ]);
+
     var count = 0;
     await _db.transaction(() async {
       for (final song in scanned) {
         // ── Resolve artist ──────────────────────────────
         int? artistId;
         if (song.artist != null && song.artist!.trim().isNotEmpty) {
-          artistId = await _getOrCreateArtist(song.artist!.trim());
+          artistId = await _getOrCreateArtist(
+            song.artist!.trim(),
+            cache: artistIdCache,
+          );
         }
 
         // ── Resolve album + album art ───────────────────
@@ -220,6 +234,7 @@ class SongRepository {
             artistId,
             song,
             verifiedArtKeys,
+            albumCache: albumCache,
           );
           albumId = result.$1;
           albumArtPath = result.$2;
@@ -232,8 +247,7 @@ class SongRepository {
         // ── 保留首次入库时间 ────────────────────────────
         // 更新已存在歌曲时沿用原 dateAdded,避免全量扫描反复重置
         // "最近添加"排序(文件创建时间无法通过 dart:io 读取)。
-        final existing = await _db.getSongByFilePath(song.filePath);
-        final dateAdded = existing?.dateAdded ?? DateTime.now();
+        final dateAdded = dateAddedByPath[song.filePath] ?? DateTime.now();
 
         await _db.insertSongOnConflictReplace(
           _toCompanion(
@@ -272,16 +286,27 @@ class SongRepository {
 
   /// Finds an existing artist by name or creates a new one.
   /// Returns the artist's id.
-  Future<int> _getOrCreateArtist(String name) async {
-    final existing = await _db.getArtistByName(name);
-    if (existing != null) return existing.id;
+  ///
+  /// [cache] 为本次扫描批量内的内存缓存(名字 → id):同一歌手的多首歌
+  /// 只查/建一次,大幅减少扫描事务内的查询数。
+  Future<int> _getOrCreateArtist(String name, {Map<String, int>? cache}) async {
+    final cached = cache?[name];
+    if (cached != null) return cached;
 
-    return _db.insertArtist(
+    final existing = await _db.getArtistByName(name);
+    if (existing != null) {
+      cache?[name] = existing.id;
+      return existing.id;
+    }
+
+    final id = await _db.insertArtist(
       ArtistsCompanion(
         name: Value(name),
         nameSortKey: Value(buildSortKey(name)),
       ),
     );
+    cache?[name] = id;
+    return id;
   }
 
   // ─── Album helpers ─────────────────────────────────────
@@ -316,10 +341,26 @@ class SongRepository {
     String albumName,
     int? artistId,
     ScannedSong song,
-    Set<String> verifiedArtKeys,
-  ) async {
+    Set<String> verifiedArtKeys, {
+    Map<String, Album>? albumCache,
+  }) async {
     final albumArtist = song.albumArtist ?? song.artist;
     final albumKey = _buildAlbumKey(albumName, albumArtist);
+
+    // 0) 批量内存缓存命中:同一 albumKey(同专辑 + 同歌手/专辑艺术家)的后续
+    //    歌曲直接复用已解析的专辑——只做幂等的补写与封面确保,跳过两次 DB 查找。
+    final cachedAlbum = albumCache?[albumKey];
+    if (cachedAlbum != null) {
+      await _fillAlbumArtistIfEmpty(cachedAlbum, song);
+      await _fillYearIfEmpty(cachedAlbum, song);
+      final artPath = await _ensureAlbumArt(
+        cachedAlbum,
+        song,
+        albumKey,
+        verifiedArtKeys,
+      );
+      return (cachedAlbum.id, artPath);
+    }
 
     // 1) Exact match by name + song artist.
     if (artistId != null) {
@@ -333,6 +374,7 @@ class SongRepository {
           albumKey,
           verifiedArtKeys,
         );
+        albumCache?[albumKey] = existing;
         return (existing.id, artPath);
       }
     }
@@ -348,6 +390,7 @@ class SongRepository {
         albumKey,
         verifiedArtKeys,
       );
+      albumCache?[albumKey] = byName;
       return (byName.id, artPath);
     }
 
@@ -374,6 +417,19 @@ class SongRepository {
         albumArtFilePath: Value(albumArtPath),
         year: Value(song.year),
       ),
+    );
+
+    // 缓存新建的专辑,本次批量内同 albumKey 的后续歌曲直接命中。
+    albumCache?[albumKey] = Album(
+      id: albumId,
+      name: albumName,
+      artistId: artistId,
+      albumArtist: albumArtist,
+      albumArtFilePath: albumArtPath,
+      year: song.year,
+      genre: null,
+      songCount: 0,
+      nameSortKey: buildSortKey(albumName),
     );
 
     return (albumId, albumArtPath);

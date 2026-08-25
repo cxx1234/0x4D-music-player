@@ -166,6 +166,28 @@ class AppDatabase extends _$AppDatabase {
     ];
   }
 
+  /// 批量查询现有歌曲的首次入库时间（filePath → dateAdded）。
+  ///
+  /// 供扫描保留 dateAdded 用，替代每歌一条 SELECT。**不过滤 is_available**：
+  /// 已存在但当前不可用的行也应沿用原 dateAdded。
+  Future<Map<String, DateTime>> getDateAddedByFilePaths(
+    List<String> filePaths,
+  ) async {
+    if (filePaths.isEmpty) return const {};
+    final rows =
+        await (selectOnly(songs)
+              ..addColumns([songs.filePath, songs.dateAdded])
+              ..where(songs.filePath.isIn(filePaths)))
+            .get();
+    final result = <String, DateTime>{};
+    for (final r in rows) {
+      final fp = r.read(songs.filePath);
+      final added = r.read(songs.dateAdded);
+      if (fp != null && added != null) result[fp] = added;
+    }
+    return result;
+  }
+
   Future<int> getSongCount() async {
     final result = await customSelect('SELECT COUNT(*) FROM songs').getSingle();
     return result.read<int>('COUNT(*)');

@@ -47,6 +47,7 @@ class LibraryViewModel extends PageViewModel {
   bool get isIdle => _scanState == LibraryScanState.idle;
   bool get isScanning => _scanState == LibraryScanState.scanning;
   bool get isDone => _scanState == LibraryScanState.done;
+  bool get isError => _scanState == LibraryScanState.error;
 
   // ─── Player delegation ────────────────────────────────
 
@@ -147,7 +148,11 @@ class LibraryViewModel extends PageViewModel {
   /// Starts a full scan of all configured music folders.
   Future<void> startScan() async {
     final folders = ServiceLocator.settings.musicFolders;
-    if (folders.isEmpty) return;
+    if (folders.isEmpty) {
+      // 诊断「点刷新完全没反应」：未配置音乐文件夹时静默返回。
+      AppLogger.warning('Scan', 'startScan skipped: no music folders');
+      return;
+    }
     await _runScan(folders);
   }
 
@@ -158,6 +163,44 @@ class LibraryViewModel extends PageViewModel {
     if (folders.isEmpty) return;
     await _runScan(folders, force: true);
   }
+
+  /// 仅 debug：模拟一次慢速扫描，驱动进度/结果 UI 便于调试界面。
+  ///
+  /// 真实扫描常在几十 ms 内完成，进度条与结果横幅一闪而过看不到。
+  /// 已注释掉（2026-08-25）：调试扫描 UI 用完后禁用；需要时取消注释，
+  /// 并在 library_page 刷新按钮恢复「长按 → simulateScan」即可。
+  /*
+  Future<void> simulateScan() async {
+    if (!kDebugMode) return;
+    _scanState = LibraryScanState.scanning;
+    scanProgressNotifier.value = null;
+    _scanResult = null;
+    _errorMessage = null;
+    safeNotify();
+
+    const total = 8;
+    for (var i = 0; i <= total; i++) {
+      scanProgressNotifier.value = ScanProgress(
+        processed: i,
+        total: total,
+        currentFile: i == 0 ? '' : '示例歌曲 $i.mp3',
+        phase: i < 2 ? 'collecting' : 'parsing',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+    }
+
+    _scanResult = const ScanResult(
+      added: 3,
+      updated: 2,
+      markedMissing: 0,
+      skipped: 3,
+      errors: 0,
+      errorDetails: [],
+    );
+    _scanState = LibraryScanState.done;
+    safeNotify();
+  }
+  */
 
   /// Re-scans a specific folder.
   Future<void> rescanFolder(String folderPath) async {
@@ -200,7 +243,9 @@ class LibraryViewModel extends PageViewModel {
           ? LibraryScanState.error
           : LibraryScanState.done;
       _startWatching(folders);
-    } catch (e) {
+    } catch (e, s) {
+      // 记录真实异常（此前静默吞掉 → 「一闪而过、无任何提示」）。
+      AppLogger.error('Scan', 'Scan failed', e, s);
       _scanState = LibraryScanState.error;
       _errorMessage = e.toString();
     }

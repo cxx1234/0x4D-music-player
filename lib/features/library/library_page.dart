@@ -83,6 +83,27 @@ class _LibraryPageState extends State<LibraryPage> {
   void _onViewModelChanged() {
     if (mounted) setState(() {});
     _scheduleScanResultDismissIfNeeded();
+    _showScanErrorSnackIfNeeded();
+  }
+
+  /// 上次已提示过的扫描错误（避免同一条错误反复弹 SnackBar）。
+  String? _lastShownScanError;
+
+  /// 扫描抛异常时用全局 SnackBar 提示（与播放错误的底栏横幅同一机制）。
+  ///
+  /// 只在新进入错误态且错误内容变化时弹一次；离开错误态后重置，允许下次重弹。
+  void _showScanErrorSnackIfNeeded() {
+    if (!mounted) return;
+    final err = _viewModel.errorMessage;
+    if (!_viewModel.isError || err == null) {
+      _lastShownScanError = null;
+      return;
+    }
+    if (err == _lastShownScanError) return;
+    _lastShownScanError = err;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('扫描失败：$err')));
   }
 
   /// 扫描结果横幅出现 N 秒后自动收起。
@@ -159,6 +180,11 @@ class _LibraryPageState extends State<LibraryPage> {
     _query = '';
   });
 
+  /// 扫描状态条是否应显示（扫描中 / 有结果）。错误改走全局 SnackBar，
+  /// 不再占用状态条。
+  bool get _scanStatusActive =>
+      _viewModel.isScanning || _viewModel.scanResult != null;
+
   // ─── Build ──────────────────────────────────────────────
 
   @override
@@ -180,15 +206,29 @@ class _LibraryPageState extends State<LibraryPage> {
           visible: !_searchActive && ServiceLocator.sandboxRestoreFailures > 0,
           child: _buildSandboxWarning(theme),
         ),
-        // 进度条移出 AnimatedCollapse：进度刷新（每 100ms）不经过 AnimatedSize，
-        // 避免其尺寸动画把重排传播到下方歌曲列表，拖慢扫描主线程。
-        if (!_searchActive && _viewModel.isScanning) _buildScanProgress(theme),
+        // 统一扫描状态条：进度 / 结果 共用一个槽位。
+        // - 外层 AnimatedCollapse：整条出现/收起带动画（不再硬蹦）；
+        // - 内层 AnimatedSwitcher：扫描完成时 进度→结果 原位交叉淡入淡出。
+        // 扫描异常改走全局 SnackBar（_showScanErrorSnackIfNeeded），不占状态条。
+        // 进度刷新仍走 scanProgressNotifier（ValueListenableBuilder），只重建
+        // 进度条自身、不触发整页 setState；进度条固定高度 → AnimatedSize 在
+        // tick 期间尺寸不变，不会反复动画/向下传播重排。
         AnimatedCollapse(
-          visible:
-              !_searchActive &&
-              _viewModel.scanResult != null &&
-              !_viewModel.isScanning,
-          child: _buildScanResult(theme),
+          visible: !_searchActive && _scanStatusActive,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: _viewModel.isScanning
+                ? KeyedSubtree(
+                    key: const ValueKey('scan-progress'),
+                    child: _buildScanProgress(theme),
+                  )
+                : _viewModel.scanResult != null
+                ? KeyedSubtree(
+                    key: const ValueKey('scan-result'),
+                    child: _buildScanResult(theme),
+                  )
+                : const SizedBox.shrink(),
+          ),
         ),
         const Divider(height: 1),
         AnimatedCollapse(
@@ -436,7 +476,8 @@ class _LibraryPageState extends State<LibraryPage> {
     // 可见性条件依赖 scanResult != null，因此此处必须容忍 null 并返回空。
     if (result == null) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+      // 底部比顶部多留 5pt：给扫描结果文字与下方分隔线/文件夹列表之间留白。
+      padding: const EdgeInsets.fromLTRB(24, 4, 24, 9),
       child: Row(
         children: [
           Icon(
@@ -470,33 +511,37 @@ class _LibraryPageState extends State<LibraryPage> {
           itemCount: _musicFolders.length,
           itemBuilder: (context, index) {
             final folder = _musicFolders[index];
-            return CardSurface(
-              child: ListTile(
-                dense: true,
-                leading: const Icon(Icons.folder),
-                title: Text(
-                  folder,
-                  style: theme.textTheme.bodySmall,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                // 整个 trailing（刷新 + 移除）整体向右平移 2pt。
-                trailing: Transform.translate(
-                  offset: const Offset(3.1, 0),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (!_viewModel.isScanning)
+            // 每个卡片底部留 8pt 间距，避免多个卡片叠在一起。
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: CardSurface(
+                child: ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.folder),
+                  title: Text(
+                    folder,
+                    style: theme.textTheme.bodySmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  // 整个 trailing（刷新 + 移除）整体向左平移 1.5pt。
+                  trailing: Transform.translate(
+                    offset: const Offset(-1.5, 0),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!_viewModel.isScanning)
+                          IconButton(
+                            icon: const Icon(Icons.refresh, size: 18),
+                            tooltip: '重新扫描此文件夹',
+                            onPressed: () => _viewModel.rescanFolder(folder),
+                          ),
                         IconButton(
-                          icon: const Icon(Icons.refresh, size: 18),
-                          tooltip: '重新扫描此文件夹',
-                          onPressed: () => _viewModel.rescanFolder(folder),
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          tooltip: '移除',
+                          onPressed: () => _removeFolder(folder),
                         ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 18),
-                        tooltip: '移除',
-                        onPressed: () => _removeFolder(folder),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
