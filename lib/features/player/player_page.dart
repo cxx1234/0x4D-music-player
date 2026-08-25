@@ -287,9 +287,9 @@ class _PlayerPageState extends State<PlayerPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final cardWidth = constraints.maxWidth;
-        // 估算宽版纵排封面（与 SongInfoCard 内部一致：max(宽×0.8, 400)，
+        // 估算宽版纵排封面（与 SongInfoCard 内部一致：max(宽×0.8, _kMinCover=380)，
         // 宽取 padding 后的实际内容宽）。
-        final coverSize = math.max((cardWidth - 80) * 0.8, 400);
+        final coverSize = math.max((cardWidth - 80) * 0.8, 380);
         // 宽版纵排总高 ≈ 封面 + 文本区（间距28+title32+4+歌手24+4+meta16）
         // + 上下 padding 48。
         final wideNeeds = coverSize + 156;
@@ -339,9 +339,9 @@ class _PlayerPageState extends State<PlayerPage> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final cardWidth = constraints.maxWidth;
-              // 估算竖版封面（与 SongInfoCard 纵排一致：max(宽×0.8, 380)，
+              // 估算竖版封面（与 SongInfoCard 纵排一致：max(宽×0.8, _kMinCover=380)，
               // 宽取 padding 后的实际内容宽）+ 文本区 + padding。
-              final coverSize = math.max((cardWidth - 64) * 0.8, 280);
+              final coverSize = math.max((cardWidth - 64) * 0.8, 380);
               final verticalNeeds = coverSize + 156;
               // 高度足够 → 竖版；不足 → 横版。
               final useVertical = constraints.maxHeight >= verticalNeeds;

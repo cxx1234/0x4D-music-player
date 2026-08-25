@@ -46,7 +46,7 @@ packages:
     description:
       path: "."
       ref: "feat/album-artist"
-      resolved-ref: "40e0421d77a377aafd211ba63a93e7617add4668"
+      resolved-ref: "4a6f245413d8f0f11f4a8e7613a9ae9ee0681eae"
       url: "https://github.com/cxx1234/audio_metadata_reader.git"
     source: git
     version: "1.7.1"

@@ -1,13 +1,17 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+
+/// 解码尺寸防抖时长：窗口 resize 期间沿用上一次解码尺寸，停止后重解码一次。
+const Duration _kDecodeDebounce = Duration(milliseconds: 250);
 
 /// Displays cached album art for a song.
 ///
 /// Loads the image from [albumArtFilePath] (a local file written by
 /// [AlbumArtCacheService]).  If [hasEmbeddedArt] is false or the file
 /// cannot be loaded, a fallback icon is shown instead.
-class CachedAlbumArt extends StatelessWidget {
+class CachedAlbumArt extends StatefulWidget {
   /// Path to the cached album art file, or `null` if none was cached.
   final String? albumArtFilePath;
 
@@ -29,23 +33,60 @@ class CachedAlbumArt extends StatelessWidget {
   });
 
   @override
+  State<CachedAlbumArt> createState() => _CachedAlbumArtState();
+}
+
+class _CachedAlbumArtState extends State<CachedAlbumArt> {
+  /// 防抖计时器：尺寸连续变化时不断重置，停止 [_kDecodeDebounce] 后才重解码。
+  Timer? _debounce;
+
+  /// 用于解码的尺寸（防抖后的稳定值）；显示尺寸始终用 [CachedAlbumArt.size]。
+  late double _decodeSize;
+
+  @override
+  void initState() {
+    super.initState();
+    _decodeSize = widget.size;
+  }
+
+  @override
+  void didUpdateWidget(covariant CachedAlbumArt oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.size == widget.size) return;
+    _debounce?.cancel();
+    _debounce = Timer(_kDecodeDebounce, () {
+      if (!mounted || _decodeSize == widget.size) return;
+      setState(() => _decodeSize = widget.size);
+    });
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final size = widget.size;
 
     // 降采样解码：缓存封面是原始分辨率（常 1000~3000px），按显示尺寸×
     // 设备像素比解码即可——避免全尺寸位图占内存，以及 ImageCache 逐出后
     // 滚动回来反复全尺寸重解码（44px 行封面也解整张图）。
+    // 解码尺寸走防抖后的 [_decodeSize]：窗口 resize 期间沿用上一次解码
+    // 位图（拉伸/压缩显示），停止 250ms 后才按最终尺寸重解码一次。
     final decodeWidth = albumArtDecodeWidth(
-      size,
+      _decodeSize,
       MediaQuery.devicePixelRatioOf(context),
     );
 
     // Determine whether we have a valid cached file to display.
     Widget child;
-    if (hasEmbeddedArt && albumArtFilePath != null) {
-      final file = File(albumArtFilePath!);
+    if (widget.hasEmbeddedArt && widget.albumArtFilePath != null) {
+      final file = File(widget.albumArtFilePath!);
       child = ClipRRect(
-        borderRadius: BorderRadius.circular(borderRadius),
+        borderRadius: BorderRadius.circular(widget.borderRadius),
         child: Image.file(
           file,
           width: size,
