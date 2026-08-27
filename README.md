@@ -10,20 +10,25 @@ A local music player built with **Flutter**.
 
 ## Features
 
-- **Local music library** — pick a folder, scan your files, and parse embedded metadata (title, artist, album, track, disc, duration, year, genre, cover art). A file watcher keeps the library in sync when files change.
-- **Albums & Artists** — browse by grid, open dedicated detail pages, and hit "play all".
-- **Playlists** — create / rename / delete playlists, add songs from the library, drag to reorder, plus a built-in **Favorites** view.
-- **Playback queue** — play next, reorder, repeat modes and shuffle, with the queue persisted across restarts.
+- **Local music library** — pick a folder, scan your files, and parse embedded metadata (title, artist, album artist, album, track, disc, duration, year, genre, bitrate, sample rate, cover art). A file watcher keeps the library in sync when files change; removing a folder also cleans up orphaned albums and artists.
+- **Albums & Artists** — browse by grid, open dedicated detail pages (album pages group tracks by disc), and hit "play all".
+- **Playlists** — create / rename / delete playlists, add songs from the library, drag to reorder, import / export **M3U8**, plus a built-in **Favorites** view.
+- **In-page search** — live filtering with match counts across Library, Albums, Artists and Playlists.
+- **Playback queue** — play next, reorder, repeat modes and shuffle, with the queue, repeat/shuffle state and playback position persisted across restarts.
 - **Hi-Res audio** — playback via `just_audio`, including lossless formats like FLAC.
-- **In-file lyrics** — lyrics panel on the Now Playing page.
-- **System media controls** (macOS) — lock-screen / media-key controls (play, pause, next, previous, seek) with Now Playing metadata and cover art.
+- **Lyrics** — synced `.lrc` lyrics on the Now Playing page, auto-detected next to the audio file, with bilingual (e.g. Chinese-Japanese) line splitting and adjustable text size.
+- **System media controls** (macOS) — lock-screen / media-key controls (play, pause, next, previous, seek) with Now Playing metadata and cover art; dock menu and window restore after close.
 - **Smart sorting** — pinyin and Japanese kana based sort keys for natural ordering in the library.
 - **Cover art caching** — album art is extracted once and cached for fast browsing.
+- **Volume & favorites** — persistent volume control and a favorites toggle on the player bar.
+- **Logging & error handling** — leveled file logs with a built-in viewer, a startup error page, and graceful playback-error handling (auto-skip with a retry limit).
 
 ### Planned
 
+- Multiple Display Language Support
 - Gapless playback
 - DSD support
+- Windows / Linux system media controls
 
 ## Getting Started
 
@@ -59,7 +64,8 @@ See [docs/Architecture.md](docs/Architecture.md) for the full architecture and [
 - **Flutter / Dart**
 - **drift** — SQLite ORM for the local library database
 - **just_audio** — audio playback
-- **audio_metadata_reader** — metadata & embedded cover art parsing (pure Dart)
+- **audio_metadata_reader** — metadata & embedded cover art parsing (pure Dart, fork version)
+- **flutter_lyric** — `.lrc` lyric rendering
 - **file_picker / watcher** — folder selection & library change watching
 - **lpinyin** — pinyin sort keys
 
