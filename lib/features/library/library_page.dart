@@ -7,9 +7,11 @@ import '../../core/database/database.dart';
 import '../../core/database/song_sort_order.dart';
 import '../../core/services/library_scanner_service.dart';
 import '../../core/services/service_locator.dart';
+import '../../core/utils/index_letters.dart';
 import '../../core/utils/search_util.dart';
 import '../../widgets/animated_collapse.dart';
 import '../../widgets/card_surface.dart';
+import '../../widgets/index_scrollbar.dart';
 import '../../widgets/page_toolbar.dart';
 import '../../widgets/search_empty_state.dart';
 import '../../widgets/song_tile.dart';
@@ -37,6 +39,7 @@ class _LibraryPageState extends State<LibraryPage> {
   static const _scanResultDismissDelay = Duration(seconds: 4);
   bool _searchActive = false;
   String _query = '';
+  final _songScrollController = ScrollController();
 
   @override
   void initState() {
@@ -50,6 +53,7 @@ class _LibraryPageState extends State<LibraryPage> {
   void dispose() {
     _readyTimer?.cancel();
     _scanResultDismissTimer?.cancel();
+    _songScrollController.dispose();
     _viewModel.removeListener(_onViewModelChanged);
     _viewModel.dispose();
     super.dispose();
@@ -552,29 +556,44 @@ class _LibraryPageState extends State<LibraryPage> {
     );
   }
 
+  /// 第 [index] 行的索引字母；仅按标题排序时有字母概念，其余排序返回
+  /// null（滑块照常，但拖动不弹字母）。
+  String? _letterForSong(Song song) {
+    if (_viewModel.sortOrder != SongSortOrder.title) return null;
+    return indexLetterFor(song.titleSortKey, song.title);
+  }
+
   Widget _buildSongList(ThemeData theme, List<Song> songs) {
     return Expanded(
-      child: Material(
-        type: MaterialType.transparency,
-        clipBehavior: Clip.hardEdge,
-        child: ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-          itemCount: songs.length,
-          itemBuilder: (context, index) {
-            final song = songs[index];
-            final isCurrentSong = song.id == _viewModel.currentSong?.id;
-            return SongTile(
-              song: song,
-              isCurrentSong: isCurrentSong,
-              isPlaying: isCurrentSong && _viewModel.isPlaying,
-              onTap: () => _viewModel.playSongsFromList(songs, index),
-              menuBuilder: (song) => songMenuItems(song),
-              onMenuSelected: (song, value) async {
-                await handleSongMenuAction(context, song, value);
-                await _viewModel.reloadSongs();
-              },
-            );
-          },
+      child: IndexScrollbar(
+        controller: _songScrollController,
+        itemCount: songs.length,
+        itemExtent: 72,
+        letterOfIndex: (i) => _letterForSong(songs[i]),
+        child: Material(
+          type: MaterialType.transparency,
+          clipBehavior: Clip.hardEdge,
+          child: ListView.builder(
+            controller: _songScrollController,
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+            itemExtent: 72,
+            itemCount: songs.length,
+            itemBuilder: (context, index) {
+              final song = songs[index];
+              final isCurrentSong = song.id == _viewModel.currentSong?.id;
+              return SongTile(
+                song: song,
+                isCurrentSong: isCurrentSong,
+                isPlaying: isCurrentSong && _viewModel.isPlaying,
+                onTap: () => _viewModel.playSongsFromList(songs, index),
+                menuBuilder: (song) => songMenuItems(song),
+                onMenuSelected: (song, value) async {
+                  await handleSongMenuAction(context, song, value);
+                  await _viewModel.reloadSongs();
+                },
+              );
+            },
+          ),
         ),
       ),
     );

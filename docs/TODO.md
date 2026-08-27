@@ -2,7 +2,7 @@
 
 本文件登记待办事项与后续优化计划。按日期登记，完成后标注 ✅。
 
-## macOS 音乐文件夹访问权限优化（2026-08-15 登记，后期处理）
+## 1. macOS 音乐文件夹访问权限优化（2026-08-15 登记，后期处理）
 
 ### 背景
 - app 是 macOS 沙盒应用，音乐文件夹默认在 `~/Music/Music`（macOS 音乐 App 资料库位置）。
@@ -21,10 +21,16 @@
    - 代价：需迁移现有 527 个文件（`~/Music/Music`）。
 3. **方案 C（最轻量）**：README / 文档补充一句「新环境需到系统设置 → 隐私与安全性 → 媒体与 Apple Music 添加本 App」。
 
+## 2. 发布前待办（非性能）
+
+- F4 Windows 窗口最小尺寸未做（`WM_GETMINMAXINFO`）。
+- 菜单栏项与键盘快捷键（如 Cmd+Shift+M）。
+- i18n 多语言支持。
+
 ## 其他已登记待办
 
 - ✅ **just_audio 0.10 迁移收尾**（2026-08-11 → 2026-08-13 完成）：`player_service.dart` 已改用 0.10 新 playlist API（`setAudioSources` / `addAudioSources` / `removeAudioSourceAt` / `insertAudioSources` / `moveAudioSource`），4 处 `ConcatenatingAudioSource` 弃用警告清零；`_rebuildSequence` 兜底逻辑保留。`dart analyze` 干净、`flutter test` 27/27 通过。
 - ✅ **歌词全屏页红绿灯避让**（2026-08-19 关闭）：`LyricsPage` 已随 2026-08-15 播放页 6a 重构删除（歌词并入播放页右栏/窄版 tab），用户已重新设计界面方案，不再存在独立全屏歌词页的避让问题。
-- **日志查看页接入导航**（2026-08-11）：`LogPage` / `LogDetailPage` 已实现未接入，设置页 TODO。
+- **日志查看页接入导航**（2026-08-11）：`LogPage` / `LogDetailPage` 已实现接入，设置页。
 - ✅ **播放页 10px 溢出**（2026-08-19 关闭）：原 `_LeftPanel` 已随 2026-08-17 播放页重构（SongInfoCard + PlayerBar）删除；现信息区包在 `SingleChildScrollView` + `Expanded` 内、底部播放条固定，结构上不再有该溢出，实际运行未复现。
 - ✅ **清理 `measureTrafficLights()` 诊断打印**（2026-08-19 关闭）：用户决定改用 macOS 11+ 特定窗口栏实现效果，原红绿灯测量方案被取代。
