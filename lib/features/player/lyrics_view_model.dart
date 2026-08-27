@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show PlatformDispatcher;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_lyric/core/lyric_model.dart';
 import 'package:flutter_lyric/flutter_lyric.dart';
 import 'package:path/path.dart' as p;
@@ -90,6 +91,10 @@ class LyricsViewModel {
   /// 是否显示翻译副行（由歌词菜单栏开关控制）。
   bool _showTranslation = true;
 
+  /// 当前歌词是否含翻译副行（内容事实，与用户翻译开关/界面语言无关）。
+  /// 无歌词、纯文本降级、或拆分后无翻译时均为 false；UI 据此禁用翻译开关。
+  final ValueNotifier<bool> hasTranslationNotifier = ValueNotifier(false);
+
   /// 切换翻译副行显隐（重新加载当前歌词）。
   void setShowTranslation(bool show) {
     if (show == _showTranslation) return;
@@ -116,6 +121,7 @@ class LyricsViewModel {
 
     if (song == null) {
       // 无歌词：清空上次歌词（LyricView 据此显示"暂无歌词"占位）。
+      hasTranslationNotifier.value = false;
       controller.loadLyric('');
       return;
     }
@@ -141,6 +147,7 @@ class LyricsViewModel {
     if (_loadingForId != songId) return;
 
     if (content == null || content.trim().isEmpty) {
+      hasTranslationNotifier.value = false;
       controller.loadLyric('');
       return;
     }
@@ -160,6 +167,7 @@ class LyricsViewModel {
     final isLrc = RegExp(r'^\[\d{1,}:\d{2}', multiLine: true).hasMatch(content);
     if (!isLrc) {
       // 纯文本降级：单行静态歌词（不跟随进度高亮/滚动，仅展示全文）。
+      hasTranslationNotifier.value = false;
       controller.loadLyricModel(
         LyricModel(
           lines: [LyricLine(start: Duration.zero, text: content.trim())],
@@ -168,6 +176,8 @@ class LyricsViewModel {
       return;
     }
     final split = splitBilingualLrc(content);
+    // 歌词是否含翻译副行（内容事实，不随用户翻译开关/界面语言变化）。
+    hasTranslationNotifier.value = split.translationLyric.isNotEmpty;
     controller.loadLyric(
       split.mainLyric,
       // 翻译副行：翻译开关开启 且 界面语言为中文 才显示（英文界面暂未提供
@@ -207,5 +217,6 @@ class LyricsViewModel {
     _player.currentSongNotifier.removeListener(_onSongChanged);
     _positionSub?.cancel();
     controller.dispose();
+    hasTranslationNotifier.dispose();
   }
 }

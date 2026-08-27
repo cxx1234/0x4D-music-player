@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 // LyricModel 未从 flutter_lyric.dart 主入口导出，需单独导入。
 import 'package:flutter_lyric/core/lyric_model.dart';
@@ -28,12 +29,17 @@ class LyricsView extends StatefulWidget {
   /// 歌词字号档位变化回调（页面级，负责写盘持久化）。
   final ValueChanged<LyricTextSize>? onTextSizeChanged;
 
+  /// 当前歌词是否含翻译副行（内容事实，来自 [LyricsViewModel]）。
+  /// 为 null 时不限制（按钮始终可点）；非 null 且为 false 时翻译按钮禁用。
+  final ValueListenable<bool>? hasTranslation;
+
   const LyricsView({
     super.key,
     required this.controller,
     required this.theme,
     required this.uiState,
     this.isNarrow = false,
+    this.hasTranslation,
     this.onToggleTranslation,
     this.onTextSizeChanged,
   });
@@ -141,24 +147,8 @@ class _LyricsViewState extends State<LyricsView> {
               ),
             ),
             const Spacer(),
-            // 翻译显示开关（开启时主题色，关闭时淡色）。
-            IconButton(
-              icon: Icon(
-                Icons.translate_rounded,
-                size: 20,
-                color: widget.uiState.showTranslation
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurfaceVariant,
-              ),
-              tooltip: widget.uiState.showTranslation ? '关闭翻译' : '显示翻译',
-              onPressed: () {
-                setState(() {
-                  widget.uiState.showTranslation =
-                      !widget.uiState.showTranslation;
-                });
-                widget.onToggleTranslation?.call();
-              },
-            ),
+            // 翻译显示开关（开启时主题色，关闭时淡色；歌词无翻译时禁用）。
+            _buildTranslationButton(theme),
             // 用 Builder 取按钮自身 RenderBox，菜单从按钮附近弹出。
             Builder(
               builder: (anchor) => IconButton(
@@ -170,6 +160,42 @@ class _LyricsViewState extends State<LyricsView> {
           ],
         ),
       ),
+    );
+  }
+
+  /// 翻译显示开关：歌词无翻译副行时禁用（避免"点了没反应"）。
+  Widget _buildTranslationButton(ThemeData theme) {
+    final listenable = widget.hasTranslation;
+    if (listenable == null) {
+      // 未提供有无翻译信息（如测试环境）：保持原行为，始终可点。
+      return _translationButton(theme, enabled: true);
+    }
+    return ValueListenableBuilder<bool>(
+      valueListenable: listenable,
+      builder: (context, hasTranslation, _) =>
+          _translationButton(theme, enabled: hasTranslation),
+    );
+  }
+
+  Widget _translationButton(ThemeData theme, {required bool enabled}) {
+    final active = widget.uiState.showTranslation;
+    final color = !enabled
+        ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)
+        : active
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
+    return IconButton(
+      icon: Icon(Icons.translate_rounded, size: 20, color: color),
+      tooltip: active ? '关闭翻译' : '显示翻译',
+      onPressed: enabled
+          ? () {
+              setState(() {
+                widget.uiState.showTranslation =
+                    !widget.uiState.showTranslation;
+              });
+              widget.onToggleTranslation?.call();
+            }
+          : null,
     );
   }
 

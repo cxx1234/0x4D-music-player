@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_lyric/flutter_lyric.dart';
 
@@ -259,6 +260,7 @@ class _PlayerPageState extends State<PlayerPage> {
                             showQueue: _showQueue,
                             uiState: widget.uiState,
                             lyricsController: _lyrics.controller,
+                            hasTranslation: _lyrics.hasTranslationNotifier,
                             onToggleTranslation: _toggleTranslation,
                             onTextSizeChanged: _onTextSizeChanged,
                           ),
@@ -395,6 +397,7 @@ class _PlayerPageState extends State<PlayerPage> {
             tab: _narrowTab,
             uiState: widget.uiState,
             lyricsController: _lyrics.controller,
+            hasTranslation: _lyrics.hasTranslationNotifier,
             onToggleTranslation: _toggleTranslation,
             onTextSizeChanged: _onTextSizeChanged,
           ),
@@ -529,6 +532,9 @@ class _NarrowLyricsQueue extends StatefulWidget {
   /// 歌词控制器（页面级共享，宽/窄两处同一实例）。
   final LyricController lyricsController;
 
+  /// 当前歌词是否含翻译副行（无翻译时禁用翻译开关）。
+  final ValueListenable<bool>? hasTranslation;
+
   /// 翻译显示开关变化回调（页面级，触发歌词重载）。
   final VoidCallback? onToggleTranslation;
 
@@ -541,6 +547,7 @@ class _NarrowLyricsQueue extends StatefulWidget {
     required this.tab,
     required this.uiState,
     required this.lyricsController,
+    this.hasTranslation,
     this.onToggleTranslation,
     this.onTextSizeChanged,
   });
@@ -592,6 +599,7 @@ class _NarrowLyricsQueueState extends State<_NarrowLyricsQueue> {
                 theme: widget.theme,
                 uiState: widget.uiState,
                 isNarrow: true,
+                hasTranslation: widget.hasTranslation,
                 onToggleTranslation: widget.onToggleTranslation,
                 onTextSizeChanged: widget.onTextSizeChanged,
               ),
@@ -638,6 +646,9 @@ class _RightPanel extends StatefulWidget {
   /// 歌词控制器（页面级共享，宽/窄两处同一实例）。
   final LyricController lyricsController;
 
+  /// 当前歌词是否含翻译副行（无翻译时禁用翻译开关）。
+  final ValueListenable<bool>? hasTranslation;
+
   /// 翻译显示开关变化回调（页面级，触发歌词重载）。
   final VoidCallback? onToggleTranslation;
 
@@ -650,6 +661,7 @@ class _RightPanel extends StatefulWidget {
     required this.showQueue,
     required this.uiState,
     required this.lyricsController,
+    this.hasTranslation,
     this.onToggleTranslation,
     this.onTextSizeChanged,
   });
@@ -701,6 +713,7 @@ class _RightPanelState extends State<_RightPanel> {
                       controller: widget.lyricsController,
                       theme: widget.theme,
                       uiState: widget.uiState,
+                      hasTranslation: widget.hasTranslation,
                       onToggleTranslation: widget.onToggleTranslation,
                       onTextSizeChanged: widget.onTextSizeChanged,
                     ),
