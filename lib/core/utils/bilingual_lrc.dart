@@ -23,6 +23,20 @@ final RegExp _cnPunct = RegExp(
   r'\uFF01\uFF1F\u2026\u2018\u2019\u201C\u201D\u00B7]',
 );
 
+/// Unicode 空白（含全角空格 U+3000、thin space U+2009 等）。
+///
+/// 原文与翻译之间通常以空白分隔；而日文原文句尾的汉字名词前是假名助词
+/// （如「の所持量」「う督促状」），据此可排除误判。
+final RegExp _blank = RegExp(
+  r'[\u0009-\u000D\u0020\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]',
+);
+
+/// 「空白 + 连续 ≥2 汉字段」：翻译片段内部出现该结构，说明翻译起点选得
+/// 太早（起点后面还有别的汉字段），真正的一整段翻译应在更靠后。
+final RegExp _blankThenHanzi = RegExp(
+  r'[\u0009-\u000D\u0020\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000][\u4e00-\u9fff]{2,}',
+);
+
 /// 行首时间戳/标签：`[00:13.45]` 或 `[ti:Even if..]`。
 final RegExp _lineHeader = RegExp(r'^\[([^\[\]]*)\]\s*(.*)$');
 
@@ -38,21 +52,31 @@ final RegExp _timestampTag = RegExp(r'^\d');
 /// 找不到这样的片段 → 整行视为无翻译。
 ({String main, String translation}) splitBilingualLine(String content) {
   for (final m in _hanziRun.allMatches(content)) {
-    if (!_kana.hasMatch(content.substring(m.start))) {
-      // 切分点前移：把紧邻翻译的中文标点（左引号等）归入翻译。
-      var start = m.start;
-      while (start > 0 && _cnPunct.hasMatch(content[start - 1])) {
-        start--;
-      }
-      // 翻译起点在行首：整行即中文主歌词（如中文歌），无原文可拆。
-      if (start == 0) {
-        return (main: content.trimRight(), translation: '');
-      }
-      return (
-        main: content.substring(0, start).trimRight(),
-        translation: content.substring(start),
-      );
+    // 翻译起点后（含后续）不得再有假名——翻译是中文。
+    if (_kana.hasMatch(content.substring(m.start))) continue;
+
+    // 切分点前移：把紧邻翻译的中文标点（左引号等）归入翻译。
+    var start = m.start;
+    while (start > 0 && _cnPunct.hasMatch(content[start - 1])) {
+      start--;
     }
+    // 翻译起点前必须是行首或空白（原文/翻译通常以空格分隔）；否则是日文
+    // 原文句尾的汉字名词（如「の所持量」「う督促状」），并非翻译。
+    if (start > 0 && !_blank.hasMatch(content[start - 1])) continue;
+
+    final translation = content.substring(start);
+    // 翻译片段内部不得再出现「空白 + 汉字段」：那说明起点选得太早（如
+    // 「快感」后面还有「体感即是快感」），真正的翻译是一整段连续中文。
+    if (_blankThenHanzi.hasMatch(translation)) continue;
+
+    // 翻译起点在行首：整行即中文主歌词（如中文歌），无原文可拆。
+    if (start == 0) {
+      return (main: content.trimRight(), translation: '');
+    }
+    return (
+      main: content.substring(0, start).trimRight(),
+      translation: translation,
+    );
   }
   return (main: content.trimRight(), translation: '');
 }

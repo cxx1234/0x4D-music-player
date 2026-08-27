@@ -119,4 +119,29 @@ void main() {
     final songs = await db.getAllSongs();
     expect(songs, hasLength(2));
   });
+
+  test('getDateAddedByFilePaths 批量返回 dateAdded 且包含不可用行', () async {
+    await repo.insertOrUpdateFromScan([
+      song(title: 'A', path: '/music/a.mp3'),
+      song(title: 'B', path: '/music/b.mp3'),
+    ]);
+
+    final byPath = await db.getDateAddedByFilePaths([
+      '/music/a.mp3',
+      '/music/b.mp3',
+      '/music/nonexistent.mp3',
+    ]);
+
+    // 已存在的两行都有 dateAdded；不存在的路径不在结果里。
+    expect(byPath, hasLength(2));
+    expect(byPath['/music/a.mp3'], isNotNull);
+
+    // 标记不可用后仍应返回其 dateAdded（扫描需沿用原值，而非重置为 now）。
+    final b = (await db.getAllSongs()).firstWhere(
+      (s) => s.filePath == '/music/b.mp3',
+    );
+    await db.markAsUnavailable(['/music/b.mp3']);
+    final after = await db.getDateAddedByFilePaths(['/music/b.mp3']);
+    expect(after['/music/b.mp3'], b.dateAdded);
+  });
 }

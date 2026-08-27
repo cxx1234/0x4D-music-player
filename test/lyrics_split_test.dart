@@ -53,6 +53,30 @@ void main() {
       expect(r.main, '空にきえるLove Songs');
       expect(r.translation, '消逝在天空中的Love Songs');
     });
+
+    test('Bug 2：日文歌词句尾汉字名词（无翻译）不误拆', () {
+      // 用户反馈：`…の所持量`、`…督促状` 被误掐成翻译副行。
+      final r = splitBilingualLine('あたしたち秤の上でシーソー 測られるの幸運の所持量');
+      expect(r.main, 'あたしたち秤の上でシーソー 測られるの幸運の所持量');
+      expect(r.translation, '');
+
+      final r2 = splitBilingualLine('終わりが近づく音、ドクドク鼓動がからかう督促状');
+      expect(r2.main, '終わりが近づく音、ドクドク鼓動がからかう督促状');
+      expect(r2.translation, '');
+    });
+
+    test('Bug 1：纯汉字「原文 翻译」同行（thin space 分隔）可拆分', () {
+      // 用户反馈：`体感 即 快感 体感即是快感` 分词失败。
+      final r = splitBilingualLine('体感 即 快感\u2009体感即是快感');
+      expect(r.main, '体感 即 快感');
+      expect(r.translation, '体感即是快感');
+    });
+
+    test('日文句尾汉字名词 + 后接翻译：只拆翻译、不误伤名词', () {
+      final r = splitBilingualLine('残酷な世界 残酷的世界');
+      expect(r.main, '残酷な世界');
+      expect(r.translation, '残酷的世界');
+    });
   });
 
   group('splitBilingualLrc（整首拆分）', () {

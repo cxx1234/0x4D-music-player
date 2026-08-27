@@ -141,7 +141,7 @@ class SongInfoCard extends StatelessWidget {
 
   /// 窄/迷你共用：封面左 + 信息右 + 动作最右（垂直居中）。
   ///
-  /// 窄版（非 compact）封面 = 卡片宽 × [_kNarrowCoverFactor]（30%），
+  /// 窄版（非 compact）封面 = 卡片宽 × [_kNarrowCoverFactor]（40%），
   /// 信息占剩余；迷你条封面固定 48。
   Widget _buildHorizontal() {
     return LayoutBuilder(
@@ -154,8 +154,6 @@ class SongInfoCard extends StatelessWidget {
             _buildCover(size: coverSize),
             SizedBox(width: compact ? 12 : 20),
             Expanded(child: _buildInfoColumn()),
-            const SizedBox(width: 4),
-            _buildActions(),
           ],
         );
       },
@@ -188,14 +186,18 @@ class SongInfoCard extends StatelessWidget {
           const SizedBox(height: 4),
           _buildArtistAlbum(style: subtitleStyle),
         ],
-        if (!compact && _metaText.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(
-            _metaText,
-            style: _metaStyle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+        if (!compact) ...[
+          if (_metaText.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              _metaText,
+              style: _metaStyle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          const SizedBox(height: 12),
+          _buildActions(),
         ],
       ],
     );
@@ -218,7 +220,7 @@ class SongInfoCard extends StatelessWidget {
     }
 
     // 宽版纵排：封面与下方文本同宽（coverSize），整体居中；
-    // 封面尺寸随信息卡宽度变化（coverSize = max(cardWidth × 0.8, 400)）。
+    // 封面尺寸随信息卡宽度变化（coverSize = max(cardWidth × 0.8, _kMinCover)）。
     return LayoutBuilder(
       builder: (context, constraints) {
         final coverSize = math.max(
@@ -242,17 +244,14 @@ class SongInfoCard extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (song.artist?.trim().isNotEmpty == true ||
-                    song.album?.trim().isNotEmpty == true) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Expanded(child: _buildArtistAlbum()),
-                      const SizedBox(width: 8),
-                      _buildActions(),
-                    ],
-                  ),
-                ],
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(child: _buildArtistAlbum()),
+                    const SizedBox(width: 8),
+                    _buildActions(),
+                  ],
+                ),
                 if (_metaText.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(

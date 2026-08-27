@@ -48,7 +48,10 @@ class DetailHeader extends StatelessWidget {
     final theme = Theme.of(context);
     return Material(
       color: theme.colorScheme.surface,
-      elevation: 3,
+      elevation: 0,
+      shape: Border(
+        bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
         child: Row(

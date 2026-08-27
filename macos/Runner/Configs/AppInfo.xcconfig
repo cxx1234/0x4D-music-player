@@ -8,6 +8,9 @@
 PRODUCT_NAME = 0x4D
 
 // The application's bundle identifier
+// 注意：macOS 沙盒容器按 bundle id 划分（~/Library/Containers/<bundle-id>/Data/...）。
+// 正式 bundle id；如需要测试/正式并行安装，请用 xcconfig 后缀或构建配置区分，
+// 勿在此处固定 beta 后缀。
 PRODUCT_BUNDLE_IDENTIFIER = com.jerryc.txvziwm
 
 // The copyright displayed in application information

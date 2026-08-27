@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
+import '../../core/utils/index_letters.dart';
 import '../../core/utils/search_util.dart';
 import '../../widgets/cached_album_art.dart';
 import '../../widgets/detail_top_bar.dart';
+import '../../widgets/index_scrollbar.dart';
 import '../../widgets/list_item_tile.dart';
 import '../../widgets/page_toolbar.dart';
 import '../../widgets/play_all_button.dart';
@@ -30,6 +32,7 @@ class _ArtistsPageState extends State<ArtistsPage> {
   final _viewModel = ArtistsViewModel();
   bool _searchActive = false;
   String _query = '';
+  final _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -48,6 +51,7 @@ class _ArtistsPageState extends State<ArtistsPage> {
 
   @override
   void dispose() {
+    _scrollController.dispose();
     _viewModel.removeListener(_onChanged);
     _viewModel.dispose();
     super.dispose();
@@ -143,37 +147,46 @@ class _ArtistsPageState extends State<ArtistsPage> {
   }
 
   Widget _buildList(ThemeData theme, List<Artist> artists) {
-    return Material(
-      type: MaterialType.transparency,
-      clipBehavior: Clip.hardEdge,
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-        itemCount: artists.length,
-        itemBuilder: (context, index) {
-          final artist = artists[index];
-          final stats = _viewModel.statsFor(artist);
-          final albumCount = stats.albumCount;
-          final songCount = stats.songCount;
-          return ListItemTile(
-            leading: CircleAvatar(
-              // 44 直径，与 SongTile 默认封面同宽，保证标题位置一致
-              radius: 22,
-              backgroundColor: theme.colorScheme.primaryContainer,
-              child: Text(
-                artist.name.isNotEmpty ? artist.name[0].toUpperCase() : '?',
-                style: TextStyle(
-                  color: theme.colorScheme.onPrimaryContainer,
-                  fontWeight: FontWeight.bold,
+    return IndexScrollbar(
+      controller: _scrollController,
+      itemCount: artists.length,
+      itemExtent: 72,
+      letterOfIndex: (i) =>
+          indexLetterFor(artists[i].nameSortKey, artists[i].name),
+      child: Material(
+        type: MaterialType.transparency,
+        clipBehavior: Clip.hardEdge,
+        child: ListView.builder(
+          controller: _scrollController,
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          itemExtent: 72,
+          itemCount: artists.length,
+          itemBuilder: (context, index) {
+            final artist = artists[index];
+            final stats = _viewModel.statsFor(artist);
+            final albumCount = stats.albumCount;
+            final songCount = stats.songCount;
+            return ListItemTile(
+              leading: CircleAvatar(
+                // 44 直径，与 SongTile 默认封面同宽，保证标题位置一致
+                radius: 22,
+                backgroundColor: theme.colorScheme.primaryContainer,
+                child: Text(
+                  artist.name.isNotEmpty ? artist.name[0].toUpperCase() : '?',
+                  style: TextStyle(
+                    color: theme.colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-            ),
-            title: artist.name,
-            subtitle:
-                '$songCount 首歌曲${albumCount > 0 ? ' · $albumCount 张专辑' : ''}',
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => _openArtistDetail(context, artist),
-          );
-        },
+              title: artist.name,
+              subtitle:
+                  '$songCount 首歌曲${albumCount > 0 ? ' · $albumCount 张专辑' : ''}',
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _openArtistDetail(context, artist),
+            );
+          },
+        ),
       ),
     );
   }

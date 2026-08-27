@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show PlatformDispatcher;
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter_lyric/core/lyric_model.dart';
 import 'package:flutter_lyric/flutter_lyric.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/database/database.dart';
+import '../../core/services/metadata_service.dart';
 import '../../core/services/player_service.dart';
 import '../../core/utils/bilingual_lrc.dart';
 import '../../core/utils/logger.dart';
@@ -46,9 +49,13 @@ class LyricsViewModel {
     return lang == 'zh';
   }
 
-  LyricsViewModel(PlayerService player, {bool Function()? isChineseUi})
-    : _player = player,
-      _isChineseUi = isChineseUi ?? _defaultIsChineseUi {
+  LyricsViewModel(
+    PlayerService player, {
+    bool Function()? isChineseUi,
+    MetadataService? metadataService,
+  }) : _player = player,
+       _isChineseUi = isChineseUi ?? _defaultIsChineseUi,
+       _metadata = metadataService ?? MetadataService() {
     // 高亮/滚动提前一点切换（跟唱更顺）。
     controller.lyricOffset = _kLyricOffsetMs;
     _player.currentSongNotifier.addListener(_onSongChanged);
@@ -66,6 +73,13 @@ class LyricsViewModel {
   /// 可注入以便测试；默认取平台 locale。
   final bool Function() _isChineseUi;
 
+  /// 元数据服务（读内嵌歌词）。可注入以便测试。
+  final MetadataService _metadata;
+
+  /// 内嵌歌词内存缓存（按文件路径），带文件修改时间时效：文件变化自动失效。
+  final Map<String, ({String content, int modifiedMs})> _embeddedLyricsCache =
+      {};
+
   /// flutter_lyric 控制器（[LyricsView] 直接消费）。
   final LyricController controller = LyricController();
 
@@ -76,6 +90,10 @@ class LyricsViewModel {
 
   /// 是否显示翻译副行（由歌词菜单栏开关控制）。
   bool _showTranslation = true;
+
+  /// 当前歌词是否含翻译副行（内容事实，与用户翻译开关/界面语言无关）。
+  /// 无歌词、纯文本降级、或拆分后无翻译时均为 false；UI 据此禁用翻译开关。
+  final ValueNotifier<bool> hasTranslationNotifier = ValueNotifier(false);
 
   /// 切换翻译副行显隐（重新加载当前歌词）。
   void setShowTranslation(bool show) {
@@ -101,34 +119,97 @@ class LyricsViewModel {
     final songId = song?.id;
     _loadingForId = songId;
 
-    final path = song == null ? null : resolveLrcPath(song);
-    if (path == null) {
+    if (song == null) {
       // 无歌词：清空上次歌词（LyricView 据此显示"暂无歌词"占位）。
+      hasTranslationNotifier.value = false;
       controller.loadLyric('');
       return;
     }
 
-    try {
-      final content = await File(path).readAsString();
-      // 竞态校验：读取期间切了歌则丢弃本次结果。
-      if (_loadingForId != songId) return;
-      // 同行双语（原文 翻译）自动拆成主歌词 + 翻译两条时间轴；
-      // 无翻译时 translationLyric 为空串，flutter_lyric 按无翻译处理。
-      final split = splitBilingualLrc(content);
-      controller.loadLyric(
-        split.mainLyric,
-        // 翻译副行：翻译开关开启 且 界面语言为中文 才显示（英文界面暂未提供
-        // 英文翻译源，隐藏中文翻译副行）；否则传空串按无翻译渲染。
-        translationLyric: _showTranslation && _isChineseUi()
-            ? split.translationLyric
-            : '',
-      );
-      // 歌词就绪后再对齐一次位置（防御 positionStream 先发 0 的时序）。
-      _syncPosition();
-    } catch (e, s) {
-      AppLogger.warning('Lyric', 'Failed to load lyrics: $path', e, s);
-      if (_loadingForId != songId) return;
+    // 歌词来源优先级：内嵌歌词优先，外部 `.lrc` 兜底。
+    String? content;
+    if (song.hasEmbeddedLyrics == 1) {
+      content = await _readEmbeddedLyrics(song);
+    }
+    if (content == null) {
+      final path = resolveLrcPath(song);
+      if (path != null) {
+        try {
+          content = await File(path).readAsString();
+        } catch (e, s) {
+          AppLogger.warning('Lyric', 'Failed to read lyrics: $path', e, s);
+          content = null;
+        }
+      }
+    }
+
+    // 竞态校验：读取期间切了歌则丢弃本次结果。
+    if (_loadingForId != songId) return;
+
+    if (content == null || content.trim().isEmpty) {
+      hasTranslationNotifier.value = false;
       controller.loadLyric('');
+      return;
+    }
+
+    _loadLyricText(content);
+    // 歌词就绪后再对齐一次位置（防御 positionStream 先发 0 的时序）。
+    _syncPosition();
+  }
+
+  /// 把歌词文本加载进 flutter_lyric。
+  ///
+  /// - 带时间轴的（LRC/QRC）走 [splitBilingualLrc] 拆主歌词 + 翻译副行；
+  /// - 纯文本（无时间轴）flutter_lyric 解析后是空行，降级为静态单行显示全文。
+  void _loadLyricText(String content) {
+    // 同行双语（原文 翻译）自动拆成主歌词 + 翻译两条时间轴；
+    // 无翻译时 translationLyric 为空串，flutter_lyric 按无翻译处理。
+    final isLrc = RegExp(r'^\[\d{1,}:\d{2}', multiLine: true).hasMatch(content);
+    if (!isLrc) {
+      // 纯文本降级：单行静态歌词（不跟随进度高亮/滚动，仅展示全文）。
+      hasTranslationNotifier.value = false;
+      controller.loadLyricModel(
+        LyricModel(
+          lines: [LyricLine(start: Duration.zero, text: content.trim())],
+        ),
+      );
+      return;
+    }
+    final split = splitBilingualLrc(content);
+    // 歌词是否含翻译副行（内容事实，不随用户翻译开关/界面语言变化）。
+    hasTranslationNotifier.value = split.translationLyric.isNotEmpty;
+    controller.loadLyric(
+      split.mainLyric,
+      // 翻译副行：翻译开关开启 且 界面语言为中文 才显示（英文界面暂未提供
+      // 英文翻译源，隐藏中文翻译副行）；否则传空串按无翻译渲染。
+      translationLyric: _showTranslation && _isChineseUi()
+          ? split.translationLyric
+          : '',
+    );
+  }
+
+  /// 读取内嵌歌词，带内存缓存 + 文件修改时间时效。
+  Future<String?> _readEmbeddedLyrics(Song song) async {
+    final key = song.filePath;
+    // 时效判断：文件修改时间变化则缓存失效（外部工具改了标签后重读）。
+    final modifiedMs = await _fileModifiedMs(song.filePath);
+    final cached = _embeddedLyricsCache[key];
+    if (cached != null && cached.modifiedMs == modifiedMs) {
+      return cached.content.isEmpty ? null : cached.content;
+    }
+    final content = await _metadata.readEmbeddedLyrics(song.filePath);
+    _embeddedLyricsCache[key] = (
+      content: content ?? '',
+      modifiedMs: modifiedMs,
+    );
+    return content;
+  }
+
+  Future<int> _fileModifiedMs(String path) async {
+    try {
+      return (await File(path).stat()).modified.millisecondsSinceEpoch;
+    } catch (_) {
+      return 0;
     }
   }
 
@@ -136,5 +217,6 @@ class LyricsViewModel {
     _player.currentSongNotifier.removeListener(_onSongChanged);
     _positionSub?.cancel();
     controller.dispose();
+    hasTranslationNotifier.dispose();
   }
 }

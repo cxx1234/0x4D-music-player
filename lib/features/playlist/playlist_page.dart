@@ -8,6 +8,7 @@ import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
 import '../../core/utils/search_util.dart';
+import '../../widgets/card_surface.dart';
 import '../../widgets/cover_card.dart';
 import '../../widgets/page_toolbar.dart';
 import '../../widgets/search_empty_state.dart';
@@ -522,10 +523,9 @@ class _PlaylistPageState extends State<PlaylistPage> {
   }
 
   Widget _buildFavoritesCard(ThemeData theme) {
-    return Card(
-      clipBehavior: Clip.hardEdge,
-      margin: const EdgeInsets.all(16),
-      child: InkWell(
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: CardSurface(
         onTap: _openFavorites,
         child: Padding(
           padding: const EdgeInsets.all(12),

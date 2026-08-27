@@ -1,0 +1,133 @@
+# 0x4D Music Player — macOS 打包 / 签名 / 公证 / 发布
+#
+# 分支策略：
+#   dev    分支：每次 push 只做「构建验证」（ad-hoc 签名，无公证），
+#               产物以 artifact 上传，可下载验证 Gatekeeper 行为
+#   main   分支打 tag v*：若已配置签名 Secrets → Developer ID 签名 + 公证 + 装订 + 发布；
+#                          若未配置（当前状态）→ 只构建并上传 artifact，不发布未签名 Release
+#
+# ⚠️ 当前还没有证书，所以签名/公证/发布步骤都用 Secrets 是否存在来 gate：
+#   没配置 → 自动跳过；以后办了 Apple Developer Program 再填上下面 6 个 Secrets 即可启用。
+#
+# 需要的仓库 Secrets（Settings → Secrets and variables → Actions）：
+#   MACOS_CERT_P12_B64      开发者证书 p12 的 base64（Xcode 导出 .p12 后 base64 -i cert.p12）
+#   MACOS_CERT_PASSWORD     p12 密码
+#   MACOS_CERT_IDENTITY     证书 SHA-1 或 "Developer ID Application: 名字 (TEAMID)"
+#                           （security find-identity -v -p codesigning 可查）
+#   APPLE_ID                开发者账号邮箱
+#   APPLE_TEAM_ID           Team ID
+#   APPLE_APP_PASSWORD      开发者账号的 App 专用密码（不是登录密码）
+
+name: Build macOS
+
+on:
+  push:
+    branches: [dev]
+    tags: ['v*']
+  workflow_dispatch:
+
+env:
+  APP_NAME: 0x4D
+  APP_PATH: build/macos/Build/Products/Release/0x4D.app
+
+jobs:
+  build-macos:
+    name: Build macOS app
+    runs-on: macos-15   # Apple Silicon runner，arm64 原生 + x86_64 交叉
+    timeout-minutes: 60
+    # ⚠️ GitHub 不允许在 `if:` 条件里直接用 `secrets` 上下文（官方 Context availability 表）。
+    #    所以先把 secrets 是否已配置算成布尔字符串放到 job 级 env，步骤的 if 再读 env。
+    env:
+      HAS_CERT: ${{ secrets.MACOS_CERT_P12_B64 != '' }}
+      HAS_APPLE_ID: ${{ secrets.APPLE_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: pub get
+        run: flutter pub get
+
+      # ---------------- 构建（所有运行统一走这里，产物为 ad-hoc） ----------------
+      # 注：本机 Flutter 的 `flutter build macos` 已无 --codesign-identity 参数，
+      #     统一先 ad-hoc 构建，再用 codesign 手动重签（有证书时）。
+      - name: Build (ad-hoc)
+        run: flutter build macos --release
+
+      # ---------------- tag + 已配置证书：Developer ID 签名 ----------------
+      - name: Import Developer ID certificate
+        if: ${{ startsWith(github.ref, 'refs/tags/') && env.HAS_CERT == 'true' }}
+        env:
+          CERT_B64: ${{ secrets.MACOS_CERT_P12_B64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN=build.keychain
+          security create-keychain -p temp "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          echo "$CERT_B64" | base64 --decode > cert.p12
+          security import cert.p12 -k "$KEYCHAIN" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -d user -s "$KEYCHAIN"
+          security unlock-keychain -p temp "$KEYCHAIN"
+          security default-keychain -s "$KEYCHAIN"
+
+      - name: Re-sign with Developer ID (hardened runtime)
+        if: ${{ startsWith(github.ref, 'refs/tags/') && env.HAS_CERT == 'true' }}
+        env:
+          IDENTITY: ${{ secrets.MACOS_CERT_IDENTITY }}
+        run: |
+          # --deep：把 bundle 内已 ad-hoc 签名的嵌套 framework 一起重签成 Developer ID（公证必需）
+          # --options runtime + --timestamp：硬化运行时 + 安全时间戳（公证必需）
+          codesign --force --options runtime --timestamp --deep --sign "$IDENTITY" "$APP_PATH"
+
+      - name: Verify signature
+        if: ${{ startsWith(github.ref, 'refs/tags/') && env.HAS_CERT == 'true' }}
+        run: codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+      # ---------------- tag + 已配置公证凭据：公证 + 装订 ----------------
+      - name: Notarize
+        if: ${{ startsWith(github.ref, 'refs/tags/') && env.HAS_APPLE_ID == 'true' }}
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          ditto -c -k --keepParent "$APP_PATH" "$APP_NAME-notarize.zip"
+          xcrun notarytool submit "$APP_NAME-notarize.zip" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --wait
+
+      - name: Staple ticket
+        if: ${{ startsWith(github.ref, 'refs/tags/') && env.HAS_APPLE_ID == 'true' }}
+        run: xcrun stapler staple "$APP_PATH"
+
+      # ---------------- 产物 ----------------
+      - name: Upload artifact (all runs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-macos-${{ github.ref_name }}
+          path: ${{ env.APP_PATH }}
+          if-no-files-found: error
+
+      - name: Package zip
+        if: startsWith(github.ref, 'refs/tags/')
+        run: ditto -c -k --keepParent "$APP_PATH" "$APP_NAME-macos.zip"
+
+      # 只有「tag + 已配置证书」才发布正式 Release；否则不发布，避免放出未签名的“正式版”
+      - name: Publish Release (signed)
+        if: ${{ startsWith(github.ref, 'refs/tags/') && env.HAS_CERT == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.APP_NAME }}-macos.zip
+          generate_release_notes: true
+
+      - name: "Warn: release skipped (no cert)"
+        if: ${{ startsWith(github.ref, 'refs/tags/') && env.HAS_CERT != 'true' }}
+        run: |
+          echo "::warning::已打 tag 但未配置 MACOS_CERT_P12_B64，未发布 Release。"
+          echo "下载构建产物会触发 Gatekeeper 拦截（ad-hoc 签名）。配置好证书 Secrets 后再打 tag。"

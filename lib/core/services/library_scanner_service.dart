@@ -1,9 +1,53 @@
 import 'dart:io';
+import 'dart:isolate';
 
 import '../constants/audio_extensions.dart';
 import '../utils/logger.dart';
 import 'metadata_service.dart';
 import 'song_repository.dart';
+
+/// 全量扫描的变化检测：对每个已存在文件比较 mtime/大小，返回有变化的文件。
+///
+/// 顶层函数以便 [Isolate.run] 直接调用（捕获的参数均为可跨 isolate 发送的
+/// 纯数据：`List<String>` + record Map）。逻辑与旧的内联 where 完全一致：
+/// stamp 缺失（旧数据无时间戳）或 stat 失败 → 视为变化（交给解析阶段容错）。
+List<String> detectChangedFiles(
+  List<String> existingFiles,
+  Map<String, ({int? lastModifiedMs, int? fileSize})> stamps,
+) {
+  final changed = <String>[];
+  for (final path in existingFiles) {
+    final stamp = stamps[path];
+    if (stamp == null) {
+      changed.add(path);
+      continue;
+    }
+    try {
+      final stat = FileStat.statSync(path);
+      if (stat.modified.millisecondsSinceEpoch != stamp.lastModifiedMs ||
+          stat.size != stamp.fileSize) {
+        changed.add(path);
+      }
+    } catch (_) {
+      changed.add(path);
+    }
+  }
+  return changed;
+}
+
+/// 在后台 isolate 里执行变化检测。
+///
+/// **必须是顶层函数**：`[Isolate.run]` 的闭包只捕获本函数的两个可发送参数。
+/// 若把闭包内联在 `scanFolders` 里，会连带捕获调用点的 UI 回调（onProgress →
+/// LibraryViewModel → widget 树 → WidgetsFlutterBinding._firstFrameCompleter），
+/// 抛 `Illegal argument in isolate message: object is unsendable`（真实环境已复现；
+/// 测试因 onProgress 为 null 而通过，故回归测试须用不可发送对象模拟）。
+Future<List<String>> _detectChangedInIsolate(
+  List<String> existingFiles,
+  Map<String, ({int? lastModifiedMs, int? fileSize})> stamps,
+) {
+  return Isolate.run(() => detectChangedFiles(existingFiles, stamps));
+}
 
 /// Progress information emitted during a scan.
 class ScanProgress {
@@ -56,8 +100,15 @@ class ScanResult {
 /// 2. **Diff** — compare with database to find new / missing / existing files
 /// 3. **Persist** — parse metadata for new files, mark missing files
 class LibraryScannerService {
-  final _metadataService = MetadataService();
-  final _songRepository = SongRepository();
+  final MetadataService _metadataService;
+  final SongRepository _songRepository;
+
+  /// [metadataService]/[songRepository] 可选注入，便于测试；默认走全局。
+  LibraryScannerService({
+    MetadataService? metadataService,
+    SongRepository? songRepository,
+  }) : _metadataService = metadataService ?? MetadataService(),
+       _songRepository = songRepository ?? SongRepository();
 
   /// Scans one or more [folderPaths] and syncs results to the database.
   ///
@@ -109,9 +160,12 @@ class LibraryScannerService {
     );
 
     final errorDetails = <String>[];
+    // 多文件夹并行收集（各自独立，Future.wait 叠加磁盘 I/O 等待）。
+    final collected = await Future.wait([
+      for (final folder in folderPaths) _collectAudioFiles(folder),
+    ]);
     final diskFiles = <String>{};
-    for (final folder in folderPaths) {
-      final (files, dirErrors) = await _collectAudioFiles(folder);
+    for (final (files, dirErrors) in collected) {
       diskFiles.addAll(files);
       errorDetails.addAll(dirErrors);
     }
@@ -132,22 +186,31 @@ class LibraryScannerService {
     // 变化检测:全量扫描只重解析「mtime 或大小」与上次不同的已存在文件,
     // 未变化的直接跳过(计入 skipped),避免每次全量重写整库。
     // force=true 时(强制刷新)忽略变化检测,全部已存在文件都重解析。
-    final changedExistingFiles = updateExisting
-        ? (force
-              ? existingFiles
-              : existingFiles.where((path) {
-                  final stamp = existingStamps[path];
-                  if (stamp == null) return true; // 旧数据无时间戳 → 视为变化
-                  try {
-                    final stat = FileStat.statSync(path);
-                    return stat.modified.millisecondsSinceEpoch !=
-                            stamp.lastModifiedMs ||
-                        stat.size != stamp.fileSize;
-                  } catch (_) {
-                    return true; // 读不到 stat → 交给解析阶段容错
-                  }
-                }).toList())
-        : <String>[];
+    // 检测里的 FileStat.statSync 是同步磁盘 I/O,搬进后台 isolate 不阻塞 UI。
+    List<String> changedExistingFiles;
+    if (!updateExisting) {
+      changedExistingFiles = <String>[];
+    } else if (force) {
+      changedExistingFiles = existingFiles;
+    } else {
+      // 变化检测搬进后台 isolate（顶层辅助函数，闭包只捕获数据参数，见
+      // [_detectChangedInIsolate]）。万一 isolate 仍失败则降级为「全部视为
+      // 变化」重解析，不让整个扫描失败，并打日志暴露原因。
+      try {
+        changedExistingFiles = await _detectChangedInIsolate(
+          existingFiles,
+          existingStamps,
+        );
+      } catch (e, s) {
+        AppLogger.warning(
+          'Scan',
+          'Change detection isolate failed; re-parse all existing files',
+          e,
+          s,
+        );
+        changedExistingFiles = existingFiles;
+      }
+    }
     final skippedCount = existingFiles.length - changedExistingFiles.length;
 
     // Determine which files to parse: new files + changed existing ones.
