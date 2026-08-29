@@ -81,36 +81,114 @@ final RegExp _timestampTag = RegExp(r'^\d');
   return (main: content.trimRight(), translation: '');
 }
 
+/// 解析后的一行：原始文本（trim 后）+ 时间戳标签 + 内容 + 是否时间戳行。
+typedef _LrcEntry = ({
+  String raw,
+  String tag,
+  String content,
+  bool isTimestamp,
+});
+
 /// 整首双语 .lrc 拆成「主歌词文本 + 翻译文本」两条时间轴。
 ///
+/// 优先识别「两段式 LRC」（QQ 音乐等来源）：前半段原文、后半段翻译各带
+/// 一条完整时间轴（翻译段从同一首个时间戳重新开始）。命中时按段整体分配，
+/// **不再做单行拆分**（否则中文翻译行会被再次拆开而撕裂）。
+///
+/// 非两段式时走单行拆分：
 /// - 标签行（[ti:]/[ar:] 等）保留在主歌词；
 /// - 每行 `[mm:ss]原文 翻译` → 主歌词 `[mm:ss]原文` + 翻译 `[mm:ss]翻译`；
 /// - 无翻译的行只进主歌词。
 ({String mainLyric, String translationLyric}) splitBilingualLrc(String lrc) {
-  final main = StringBuffer();
-  final trans = StringBuffer();
+  final entries = <_LrcEntry>[];
   for (final rawLine in lrc.split('\n')) {
     final line = rawLine.trim();
     if (line.isEmpty) continue;
 
     final header = _lineHeader.firstMatch(line);
     if (header == null) {
-      // 非时间戳/标签行，原样进主歌词。
-      main.writeln(line);
+      // 非时间戳/标签行。
+      entries.add((raw: line, tag: '', content: '', isTimestamp: false));
       continue;
     }
     final tag = header.group(1)!;
     final content = header.group(2)!;
-    if (!_timestampTag.hasMatch(tag)) {
-      // 标签行（[ti:...] 等）。
-      main.writeln(line);
+    entries.add((
+      raw: line,
+      tag: tag,
+      content: content,
+      isTimestamp: _timestampTag.hasMatch(tag),
+    ));
+  }
+
+  // 两段式：翻译段从「首个时间戳」重新开始（该时间戳在文件后部第二次出现）。
+  final twoPass = _trySplitTwoPass(entries);
+  if (twoPass != null) return twoPass;
+
+  // 单行内嵌双语：逐行拆分。
+  final main = StringBuffer();
+  final trans = StringBuffer();
+  for (final e in entries) {
+    if (!e.isTimestamp) {
+      // 标签行/普通行：原样进主歌词。
+      main.writeln(e.raw);
       continue;
     }
-    final split = splitBilingualLine(content);
-    main.writeln('[$tag]${split.main}');
+    final split = splitBilingualLine(e.content);
+    main.writeln('[${e.tag}]${split.main}');
     if (split.translation.isNotEmpty) {
-      trans.writeln('[$tag]${split.translation}');
+      trans.writeln('[${e.tag}]${split.translation}');
     }
+  }
+  return (mainLyric: main.toString(), translationLyric: trans.toString());
+}
+
+/// 尝试识别「两段式 LRC」并拆分；不是两段式返回 null。
+///
+/// 两段式特征：文件后部再次出现「首个时间戳」（翻译段从同一起点重新
+/// 开始）。命中时 [0, splitAt) 为主歌词、[splitAt, end) 为翻译时间轴。
+({String mainLyric, String translationLyric})? _trySplitTwoPass(
+  List<_LrcEntry> entries,
+) {
+  String? firstTag;
+  var foundFirst = false;
+  for (var i = 0; i < entries.length; i++) {
+    final e = entries[i];
+    if (!e.isTimestamp) continue;
+    if (!foundFirst) {
+      firstTag = e.tag;
+      foundFirst = true;
+      continue;
+    }
+    if (e.tag == firstTag) {
+      // 翻译段至少要有几行时间戳，防「单行重复」噪声误判。
+      final transCount = entries.skip(i).where((x) => x.isTimestamp).length;
+      if (transCount >= 3) {
+        return _splitTwoPass(entries, i);
+      }
+      break;
+    }
+  }
+  return null;
+}
+
+/// 两段式拆分：前半段 → 主歌词（含标签），后半段 → 翻译时间轴
+/// （跳过标签行与空内容行，不再做单行拆分）。
+({String mainLyric, String translationLyric}) _splitTwoPass(
+  List<_LrcEntry> entries,
+  int splitAt,
+) {
+  final main = StringBuffer();
+  final trans = StringBuffer();
+  for (var i = 0; i < entries.length; i++) {
+    final e = entries[i];
+    if (i < splitAt) {
+      main.writeln(e.raw);
+      continue;
+    }
+    // 翻译段：跳过标签行与空内容行。
+    if (!e.isTimestamp || e.content.trim().isEmpty) continue;
+    trans.writeln(e.raw);
   }
   return (mainLyric: main.toString(), translationLyric: trans.toString());
 }

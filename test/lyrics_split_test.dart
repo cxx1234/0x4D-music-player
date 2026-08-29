@@ -116,5 +116,32 @@ void main() {
       expect(r.mainLyric, contains('[00:20.00]是一首老歌'));
       expect(r.translationLyric, isEmpty);
     });
+
+    test('两段式 LRC（原文段 + 翻译段各自时间轴）按段整体拆分，翻译行不被撕裂', () {
+      // QQ 音乐格式：前半英文原文、后半中文翻译，翻译段从首个时间戳重新开始。
+      const lrc = '''
+[ti:Demo]
+[ar:Artist]
+[00:00.00]Hello world
+[00:02.00]Goodbye world
+[00:04.00]Again
+[ti:Demo]
+[ar:Artist]
+[00:00.00]你好世界 你好世界
+[00:02.00]再见世界 再见世界
+[00:04.00]再来一次 再来一次
+''';
+      final r = splitBilingualLrc(lrc);
+      // 主歌词 = 原文段（含标签），不含中文翻译。
+      expect(r.mainLyric, contains('[00:00.00]Hello world'));
+      expect(r.mainLyric, contains('[00:02.00]Goodbye world'));
+      expect(r.mainLyric, isNot(contains('你好')));
+      // 翻译轴 = 翻译段整体（中文行不再被单行拆分撕裂），标签行被跳过。
+      expect(r.translationLyric, contains('[00:00.00]你好世界 你好世界'));
+      expect(r.translationLyric, contains('[00:02.00]再见世界 再见世界'));
+      expect(r.translationLyric, contains('[00:04.00]再来一次 再来一次'));
+      expect(r.translationLyric, isNot(contains('Hello')));
+      expect(r.translationLyric, isNot(contains('[ti:Demo]')));
+    });
   });
 }
