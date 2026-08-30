@@ -14,6 +14,9 @@ library;
 /// 平假名/片假名（含长音符号「ー」U+30FC）。
 final RegExp _kana = RegExp(r'[\u3040-\u30ff]');
 
+/// 拉丁字母（英文原文行，如 Michael Jackson 的歌）。
+final RegExp _latin = RegExp(r'[a-zA-Z]');
+
 /// 连续 CJK 汉字串（中日韩统一表意文字；日文汉字也在此区间，如「幾億」）。
 final RegExp _hanziRun = RegExp(r'[\u4e00-\u9fff]{2,}');
 
@@ -65,9 +68,15 @@ final RegExp _timestampTag = RegExp(r'^\d');
     if (start > 0 && !_blank.hasMatch(content[start - 1])) continue;
 
     final translation = content.substring(start);
-    // 翻译片段内部不得再出现「空白 + 汉字段」：那说明起点选得太早（如
-    // 「快感」后面还有「体感即是快感」），真正的翻译是一整段连续中文。
-    if (_blankThenHanzi.hasMatch(translation)) continue;
+    // 「翻译内部不得再出现 空白+汉字段」的防误切，仅对「原文为纯中文」的行
+    // 有意义（如「体感 即 快感 体感即是快感」中的「快感」）。日文原文（含
+    // 假名）或英文原文（含拉丁字母）的翻译内部常带空格分段（如「夜风拂过
+    // 暗夜飘摇 …」「她走进来所踩的步伐 那时那刻我就察觉」），起点应停在
+    // 第一个翻译段，不能推到最后一个汉字段。
+    final mainPart = content.substring(0, start);
+    final mainIsPureChinese =
+        !_kana.hasMatch(mainPart) && !_latin.hasMatch(mainPart);
+    if (mainIsPureChinese && _blankThenHanzi.hasMatch(translation)) continue;
 
     // 翻译起点在行首：整行即中文主歌词（如中文歌），无原文可拆。
     if (start == 0) {
