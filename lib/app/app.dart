@@ -8,6 +8,7 @@ import 'router.dart';
 import 'startup_error_page.dart';
 import 'theme.dart';
 import '../core/constants/layout.dart';
+import '../core/navigation/route_observer.dart';
 import '../core/services/player_service.dart';
 import '../core/services/service_locator.dart';
 import '../core/utils/logger.dart';
@@ -195,7 +196,10 @@ class _AppState extends State<App> with WidgetsBindingObserver {
               ),
         onGenerateRoute: AppRouter.generateRoute,
         navigatorKey: _navKey,
-        navigatorObservers: [_NowPlayingBarVisibilityObserver(_showBar)],
+        navigatorObservers: [
+          _NowPlayingBarVisibilityObserver(_showBar),
+          routeObserver,
+        ],
         debugShowCheckedModeBanner: false,
         builder: (context, child) {
           // 根 Overlay 包裹整个应用：底栏位于 Navigator（含 Overlay）之外，
