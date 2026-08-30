@@ -65,6 +65,27 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       // 歌词 UI 状态（字号/翻译）从持久化设置恢复（设置页不展示，跨重启保留）。
       _playerUiState.lyricTextSize = ServiceLocator.settings.lyricTextSize;
       _playerUiState.showTranslation = ServiceLocator.settings.showTranslation;
+      // 注入菜单动作 → 切 tab（仅 macOS 有菜单服务）。
+      if (defaultTargetPlatform == TargetPlatform.macOS) {
+        final menu = ServiceLocator.menu;
+        menu.openSettings = _openSettingsFromMenu;
+        menu.openPlaylists = () => _shellController.request(
+          NavigationItem.playlists,
+          action: ShellAction.newPlaylist,
+        );
+        menu.openLibrary = () => _shellController.request(
+          NavigationItem.library,
+          action: ShellAction.importFolder,
+        );
+        menu.openImportPlaylist = () => _shellController.request(
+          NavigationItem.playlists,
+          action: ShellAction.importPlaylist,
+        );
+        menu.openExportPlaylist = () => _shellController.request(
+          NavigationItem.playlists,
+          action: ShellAction.exportPlaylist,
+        );
+      }
       setState(() => _initialized = true);
     }
   }
@@ -110,6 +131,17 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     } catch (e) {
       AppLogger.warning('App', 'Failed to sync top bar height to native', e);
     }
+  }
+
+  /// 菜单「偏好设置…」(⌘,) 动作：先关闭「正在播放」等子页回到主界面，
+  /// 再切到设置 tab。
+  void _openSettingsFromMenu() {
+    final nav = _navKey.currentState;
+    if (nav != null) {
+      // 播放页/详情页是 push 的子路由，切 tab 前先退回主页面（Shell）。
+      nav.popUntil((route) => route.isFirst);
+    }
+    _shellController.tab.value = NavigationItem.settings;
   }
 
   void _openPlayer() {

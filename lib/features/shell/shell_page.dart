@@ -6,30 +6,9 @@ import '../artist/artist_page.dart';
 import '../library/library_page.dart';
 import '../playlist/playlist_page.dart';
 import '../settings/settings_page.dart';
+import 'shell_controller.dart';
 
-enum NavigationItem {
-  library('音乐库', Icons.library_music),
-  albums('专辑', Icons.album),
-  artists('歌手', Icons.person),
-  playlists('播放列表', Icons.playlist_play),
-  settings('设置', Icons.settings);
-
-  final String label;
-  final IconData icon;
-
-  const NavigationItem(this.label, this.icon);
-}
-
-/// 允许外部（App/播放页）切换 Shell tab 的控制器。
-///
-/// Shell 自身点击也写回 [tab] 保持双向同步；ValueNotifier 同值不 notify，无循环。
-class ShellController {
-  final ValueNotifier<NavigationItem> tab = ValueNotifier(
-    NavigationItem.library,
-  );
-
-  void dispose() => tab.dispose();
-}
+export 'shell_controller.dart';
 
 class ShellPage extends StatefulWidget {
   final bool isInitialized;
@@ -88,13 +67,16 @@ class _ShellPageState extends State<ShellPage> {
     final active = _selected == item;
     switch (item) {
       case NavigationItem.library:
-        return LibraryPage(isInitialized: widget.isInitialized);
+        return LibraryPage(
+          isInitialized: widget.isInitialized,
+          controller: widget.controller,
+        );
       case NavigationItem.albums:
         return AlbumsPage(active: active);
       case NavigationItem.artists:
         return ArtistsPage(active: active);
       case NavigationItem.playlists:
-        return PlaylistPage(active: active);
+        return PlaylistPage(active: active, controller: widget.controller);
       case NavigationItem.settings:
         return const SettingsPage();
     }

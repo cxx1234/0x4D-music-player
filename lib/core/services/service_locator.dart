@@ -7,6 +7,7 @@ import '../database/database.dart';
 import '../utils/logger.dart';
 import 'folder_watcher_service.dart';
 import 'media_control_service.dart';
+import 'menu_service.dart';
 import 'play_queue.dart';
 import 'player_service.dart';
 import 'sandbox_service.dart';
@@ -27,6 +28,7 @@ class ServiceLocator {
   static PlayerService? _player;
   static SandboxService? _sandbox;
   static MediaControlService? _mediaControls;
+  static MenuService? _menuService;
 
   /// 启动时恢复沙箱权限失败的文件夹数量（0 = 全部成功）。
   static int _sandboxRestoreFailures = 0;
@@ -103,6 +105,16 @@ class ServiceLocator {
     return _mediaControls!;
   }
 
+  /// 菜单桥接服务（仅 macOS，Dart↔原生菜单通道）。
+  static MenuService get menu {
+    if (_menuService == null) {
+      throw StateError(
+        'MenuService not initialized. Call ServiceLocator.initialize() first.',
+      );
+    }
+    return _menuService!;
+  }
+
   /// Whether [initialize] has completed.
   static bool get isReady => _player != null;
 
@@ -177,6 +189,12 @@ class ServiceLocator {
       PlatformMediaControls.create(),
     );
     await _mediaControls!.initialize();
+
+    // macOS 菜单桥接：Dart 侧接收原生菜单动作、推送播放状态。
+    // 其他平台无原生菜单，不创建（避免通道噪音）。
+    if (Platform.isMacOS) {
+      _menuService = MenuService.attach(_player!);
+    }
   }
 
   /// 恢复 macOS security-scoped bookmarks，让音乐文件夹在重启后仍可读。

@@ -17,12 +17,16 @@ import '../../widgets/search_empty_state.dart';
 import '../../widgets/song_tile.dart';
 import '../../widgets/toolbar_search_field.dart';
 import '../playlist/song_actions.dart';
+import '../shell/shell_controller.dart';
 import 'library_view_model.dart';
 
 class LibraryPage extends StatefulWidget {
   final bool isInitialized;
 
-  const LibraryPage({super.key, this.isInitialized = false});
+  /// Shell 控制器（macOS 菜单「导入文件夹」动作由此到达本页）。
+  final ShellController? controller;
+
+  const LibraryPage({super.key, this.isInitialized = false, this.controller});
 
   @override
   State<LibraryPage> createState() => _LibraryPageState();
@@ -40,6 +44,7 @@ class _LibraryPageState extends State<LibraryPage> {
   bool _searchActive = false;
   String _query = '';
   final _songScrollController = ScrollController();
+  StreamSubscription<ShellAction>? _actionSub;
 
   @override
   void initState() {
@@ -47,10 +52,19 @@ class _LibraryPageState extends State<LibraryPage> {
     _viewModel.addListener(_onViewModelChanged);
     _loadFolders();
     _scheduleReadyRetry();
+    _actionSub = widget.controller?.actions.listen(_onShellAction);
+  }
+
+  /// macOS 菜单「导入文件夹」动作：直接弹文件夹选择器。
+  void _onShellAction(ShellAction action) {
+    if (action == ShellAction.importFolder) {
+      _pickFolder();
+    }
   }
 
   @override
   void dispose() {
+    _actionSub?.cancel();
     _readyTimer?.cancel();
     _scanResultDismissTimer?.cancel();
     _songScrollController.dispose();
