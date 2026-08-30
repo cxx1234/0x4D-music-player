@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// 页面标题栏内的搜索框组件（配合 `PageToolbar.actions` 使用）。
 ///
@@ -95,52 +96,70 @@ class _ToolbarSearchFieldState extends State<ToolbarSearchField> {
       child: Row(
         children: [
           Expanded(
-            child: ValueListenableBuilder<TextEditingValue>(
-              valueListenable: _controller,
-              builder: (context, value, _) {
-                final hasText = value.text.isNotEmpty;
-                final theme = Theme.of(context);
-                final radius = BorderRadius.circular(20);
-                return TextField(
-                  controller: _controller,
-                  autofocus: true,
-                  onChanged: widget.onChanged,
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText: widget.hintText,
-                    isDense: true,
-                    filled: true,
-                    fillColor: theme.colorScheme.surfaceContainerHigh,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    suffixIcon: hasText
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, size: 18),
-                            tooltip: '清空',
-                            onPressed: _clear,
-                          )
-                        : null,
-                    border: OutlineInputBorder(
-                      borderRadius: radius,
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: radius,
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: radius,
-                      borderSide: BorderSide(
-                        color: theme.colorScheme.primary.withValues(alpha: 0.5),
-                        width: 1.5,
+            // 焦点在本搜索框内时按 Esc：有搜索词先清空（回到全部），
+            // 无搜索词再退出搜索（折叠动画结束后回调 onClose）。
+            child: Focus(
+              onKeyEvent: (node, event) {
+                if (event is KeyDownEvent &&
+                    event.logicalKey == LogicalKeyboardKey.escape) {
+                  if (_controller.text.isNotEmpty) {
+                    _clear();
+                  } else {
+                    _close();
+                  }
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: _controller,
+                builder: (context, value, _) {
+                  final hasText = value.text.isNotEmpty;
+                  final theme = Theme.of(context);
+                  final radius = BorderRadius.circular(20);
+                  return TextField(
+                    controller: _controller,
+                    autofocus: true,
+                    onChanged: widget.onChanged,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: widget.hintText,
+                      isDense: true,
+                      filled: true,
+                      fillColor: theme.colorScheme.surfaceContainerHigh,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      prefixIcon: const Icon(Icons.search, size: 20),
+                      suffixIcon: hasText
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              tooltip: '清空',
+                              onPressed: _clear,
+                            )
+                          : null,
+                      border: OutlineInputBorder(
+                        borderRadius: radius,
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: radius,
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: radius,
+                        borderSide: BorderSide(
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.5,
+                          ),
+                          width: 1.5,
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
           const SizedBox(width: 4),

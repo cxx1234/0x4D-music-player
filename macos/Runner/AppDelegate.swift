@@ -18,6 +18,7 @@ class AppDelegate: FlutterAppDelegate {
   private var menuChannel: FlutterMethodChannel?
   private var windowMenu: NSMenu?
   private var servicesMenu: NSMenu?
+  private var keyMonitor: Any?
 
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     // Keep running in the background after the window is closed so playback
@@ -103,12 +104,45 @@ class AppDelegate: FlutterAppDelegate {
     channel.invokeMethod("menuAction", arguments: ["action": action, "value": value ?? NSNull()])
   }
 
+  // ⌘. 停止快捷键：由 installKeyShortcutMonitor 按 keyCode（47 = 句点键）+ ⌘ 捕获，
+  // 并优先转交菜单系统 performKeyEquivalent 匹配（有菜单栏高亮反馈），失败才直接触发。
+
   // MARK: - 菜单动作（target = self → 转发 Dart）
 
   @objc private func playPauseTapped(_ sender: Any?) { sendMenuAction("playPause") }
   @objc private func previousTapped(_ sender: Any?) { sendMenuAction("previous") }
   @objc private func nextTapped(_ sender: Any?) { sendMenuAction("next") }
   @objc private func stopTapped(_ sender: Any?) { sendMenuAction("stop") }
+
+  /// ⌘. 停止快捷键（local monitor 按 keyCode 捕获，任何输入法生效）。
+  ///
+  /// 背景（2026-08-31 多层探针实测）：Flutter macOS embedder 会在 `NSWindow.
+  /// sendEvent` 之前把 `⌘.`（Command-Period）当"取消/停止"（等价 Escape）拦截，
+  /// 菜单系统根本收不到 `⌘.` 组合键，所以 `keyEquivalent: "."` 匹配不上、菜单栏
+  /// 无高亮。这里在**更早**的 local monitor 层按 keyCode（47 = 句点键）+ ⌘ 截住，
+  /// 然后**优先转交 `NSApp.mainMenu?.performKeyEquivalent` 让菜单系统走标准匹配
+  /// 路径**——实测成功：菜单系统能匹配 `keyEquivalent: "."`，AppKit 会自己高亮
+  /// 菜单栏并触发「停止」action（借用菜单系统的原生反馈）；匹配失败才直接触发，
+  /// 保证任何输入法下 ⌘. 都生效。
+  ///
+  /// ⚠️ 不要用 override NSWindow.performKeyEquivalent 兜底——会打断 AppKit 事件
+  /// 链，导致 Esc 等键无限递归卡死。
+  private func installKeyShortcutMonitor() {
+    keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+      guard let self = self else { return event }
+      // 只关心 ⌘ + 句点键（keyCode 47）。Flutter 引擎会在 sendEvent 之前把 ⌘. 当
+      // "取消"(Escape) 拦截，这里在更早的 local monitor 层截住它。
+      guard event.modifierFlags.contains(.command), event.keyCode == 47 else { return event }
+      // 先让菜单系统走标准匹配路径（performKeyEquivalent）：匹配成功时 AppKit 会
+      // 自己高亮菜单栏并触发「停止」action（借用菜单系统的原生反馈）；失败再回退。
+      if NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
+        return nil // 菜单系统已消费并触发 action
+      }
+      self.sendMenuAction("stop")
+      return nil // 消费事件，避免继续派发给 Flutter
+    }
+  }
+
   @objc private func volumeUpTapped(_ sender: Any?) { sendMenuAction("volumeUp") }
   @objc private func volumeDownTapped(_ sender: Any?) { sendMenuAction("volumeDown") }
   @objc private func singleRepeatTapped(_ sender: Any?) { sendMenuAction("toggleSingleRepeat") }
@@ -311,7 +345,7 @@ class AppDelegate: FlutterAppDelegate {
     let stop = NSMenuItem(
       title: NSLocalizedString("menu.stop", comment: "Stop"),
       action: #selector(stopTapped(_:)),
-      keyEquivalent: "."
+      keyEquivalent: "." // ⌘. 停止（由 installKeyShortcutMonitor 拦截后优先走菜单系统匹配）
     )
     stop.target = self
     menu.addItem(stop)
@@ -535,6 +569,8 @@ class AppDelegate: FlutterAppDelegate {
     // 程序化主菜单（文案见 en/zh-Hans.lproj/Localizable.strings）+ 菜单通道。
     configureMenuChannel(binaryMessenger: controller.engine.binaryMessenger)
     configureMainMenu()
+    // ⌘. 停止快捷键：local monitor 拦截并优先转交菜单系统匹配（含菜单栏高亮）。
+    installKeyShortcutMonitor()
 
     let channel = FlutterMethodChannel(
       name: "com.jerryc.txvziwm/sandbox",

@@ -529,11 +529,23 @@ class PlayerService extends ChangeNotifier {
 
   /// 停止播放但保留队列与当前曲目（菜单「停止」⌘. 用）。
   ///
-  /// 与 [stop]（停止并清空队列）不同：这里只停引擎、保留队列与当前位置，
-  /// 再点播放会从当前曲目开头继续。
+  /// 与 [stop]（停止并清空队列）不同：这里只停引擎、保留队列与当前曲目，
+  /// 并把播放位置归零——再点播放会从当前曲目**开头**继续。
+  ///
+  /// ⚠️ just_audio 的 [AudioPlayer.stop] 语义是「暂停 + 释放解码器、保留位置
+  /// 可恢复」：内部把停止时的 position 存下来，下次 [AudioPlayer.play] 恢复
+  /// （_setPlatformActive 用保存的 position 重新 _load）。直接用它会让菜单
+  /// 「停止」表现得像「暂停」（音乐停、位置保留、再播放从原处继续）。
+  /// 要真正"从头开始"必须：
+  /// 1. [_resumePosition] 置零 → 下次 [play] 走 [_rebuildSequence] 时
+  ///    initialPosition 用 0（而不是引擎残留的旧位置）；
+  /// 2. 序列标记未加载 → 下次 [play] 触发 [_rebuildSequence] 重建；
+  /// 3. 保存的进度清零 → 未加载期间 [position] getter 回退到 0，进度条归零。
   Future<void> stopPlayback() async {
-    _resumePosition = null;
+    _resumePosition = Duration.zero;
     await _player.stop();
+    _sequenceLoaded = false;
+    _playQueue.setPlaybackState(Duration.zero, Duration.zero);
     notifyListeners();
   }
 
