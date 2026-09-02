@@ -429,16 +429,20 @@ class _PlayerPageState extends State<PlayerPage> {
     required bool isNarrow,
     required bool compact,
   }) {
-    return SongInfoCard(
-      song: song,
-      theme: theme,
-      isNarrow: isNarrow,
-      compact: compact,
-      onLike: _toggleLike,
-      onOpenArtist: () => _openArtist(context, song),
-      onOpenAlbum: () => _openAlbum(context, song),
-      menuBuilder: songMenuItems,
-      onMenuSelected: (s, v) => handleSongMenuAction(context, s, v),
+    // 封面信息卡自成一合成层：封面绘制/涟漪等不波及播放页其它区域
+    // （宽信息卡、窄竖/横版、迷你信息条共用此处）。
+    return RepaintBoundary(
+      child: SongInfoCard(
+        song: song,
+        theme: theme,
+        isNarrow: isNarrow,
+        compact: compact,
+        onLike: _toggleLike,
+        onOpenArtist: () => _openArtist(context, song),
+        onOpenAlbum: () => _openAlbum(context, song),
+        menuBuilder: songMenuItems,
+        onMenuSelected: (s, v) => handleSongMenuAction(context, s, v),
+      ),
     );
   }
 

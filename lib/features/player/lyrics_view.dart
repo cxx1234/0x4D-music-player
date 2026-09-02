@@ -223,27 +223,30 @@ class _LyricsViewState extends State<LyricsView> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _buildToolbar(),
-        Expanded(
-          // 宽模式仅内容区右侧留白 10（顶栏保持与队列一致，窄模式不额外加）。
-          child: Padding(
-            padding: EdgeInsets.only(right: widget.isNarrow ? 0 : 20),
-            child: ValueListenableBuilder<LyricModel?>(
-              valueListenable: widget.controller.lyricNotifier,
-              builder: (context, model, _) {
-                final hasLyrics = model != null && model.lines.isNotEmpty;
-                if (!hasLyrics) return _buildEmpty();
-                return LyricView(
-                  controller: widget.controller,
-                  style: _buildStyle(),
-                );
-              },
+    // 歌词区自成一合成层：当前行高亮/滚动刷新不波及相邻面板。
+    return RepaintBoundary(
+      child: Column(
+        children: [
+          _buildToolbar(),
+          Expanded(
+            // 宽模式仅内容区右侧留白 10（顶栏保持与队列一致，窄模式不额外加）。
+            child: Padding(
+              padding: EdgeInsets.only(right: widget.isNarrow ? 0 : 20),
+              child: ValueListenableBuilder<LyricModel?>(
+                valueListenable: widget.controller.lyricNotifier,
+                builder: (context, model, _) {
+                  final hasLyrics = model != null && model.lines.isNotEmpty;
+                  if (!hasLyrics) return _buildEmpty();
+                  return LyricView(
+                    controller: widget.controller,
+                    style: _buildStyle(),
+                  );
+                },
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
