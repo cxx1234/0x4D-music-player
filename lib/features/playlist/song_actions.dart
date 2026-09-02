@@ -5,13 +5,33 @@ import '../../core/services/service_locator.dart';
 import 'playlist_picker_sheet.dart';
 
 /// 歌曲"更多"菜单项。
-List<PopupMenuEntry<String>> songMenuItems(Song song) => [
-  const PopupMenuItem(value: 'playlist', child: Text('添加到播放列表')),
-  PopupMenuItem(
-    value: 'favorite',
-    child: Text(song.isFavorite == 1 ? '取消喜欢' : '喜欢'),
-  ),
-];
+///
+/// 队列相关操作依赖实时播放状态（本函数在菜单打开时求值）：
+/// - 目标歌曲已在队列任意位置（含正在播放的当前曲）→ 队列操作置灰禁用（彻底去重）；
+/// - 随机播放开启时，「播放下一首」无法保证精确的"下一首"语义 → 隐藏该项。
+List<PopupMenuEntry<String>> songMenuItems(Song song) {
+  final player = ServiceLocator.player;
+  final inQueue = player.queue.any((s) => s.id == song.id);
+  final shuffled = player.isShuffled;
+  return [
+    if (!shuffled)
+      PopupMenuItem(
+        value: 'playNext',
+        enabled: !inQueue,
+        child: const Text('播放下一首'),
+      ),
+    PopupMenuItem(
+      value: 'addQueue',
+      enabled: !inQueue,
+      child: const Text('添加到播放队列'),
+    ),
+    const PopupMenuItem(value: 'playlist', child: Text('添加到播放列表')),
+    PopupMenuItem(
+      value: 'favorite',
+      child: Text(song.isFavorite == 1 ? '取消喜欢' : '喜欢'),
+    ),
+  ];
+}
 
 /// 处理歌曲"更多"菜单点击。
 Future<void> handleSongMenuAction(
@@ -23,5 +43,30 @@ Future<void> handleSongMenuAction(
     await ServiceLocator.songRepo.toggleFavorite(song.id);
   } else if (value == 'playlist') {
     await showPlaylistPicker(context, [song]);
+  } else if (value == 'playNext') {
+    await _addToQueue(context, song, next: true);
+  } else if (value == 'addQueue') {
+    await _addToQueue(context, song, next: false);
   }
+}
+
+/// 「播放下一首 / 添加到播放队列」公共实现。
+///
+/// 空队列时 playNext / addToQueue 都会自动开始播放，因此提示文案需区分：
+/// 空队列（自动开播）→「已开始播放」，否则按操作分别提示
+/// 「已加入下一首播放」/「已添加到播放队列」。
+Future<void> _addToQueue(
+  BuildContext context,
+  Song song, {
+  required bool next,
+}) async {
+  final wasEmpty = ServiceLocator.player.queue.isEmpty;
+  if (next) {
+    await ServiceLocator.player.playNext([song]);
+  } else {
+    await ServiceLocator.player.addToQueue([song]);
+  }
+  if (!context.mounted) return;
+  final message = wasEmpty ? '已开始播放' : (next ? '已加入下一首播放' : '已添加到播放队列');
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
