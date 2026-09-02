@@ -51,6 +51,9 @@ class AppSettings {
   /// 歌词是否显示翻译副行。
   final bool showTranslation;
 
+  /// 底栏是否显示「按播放进度填充」背景效果。
+  final bool nowPlayingBarFill;
+
   const AppSettings({
     this.musicFolders = const [],
     this.themeMode = 'system',
@@ -59,6 +62,7 @@ class AppSettings {
     this.volume = 1.0,
     this.lyricTextSize = 'medium',
     this.showTranslation = true,
+    this.nowPlayingBarFill = true,
   });
 
   /// The raw folder paths (convenience getter).
@@ -72,6 +76,7 @@ class AppSettings {
     'volume': volume,
     'lyricTextSize': lyricTextSize,
     'showTranslation': showTranslation,
+    'nowPlayingBarFill': nowPlayingBarFill,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -98,6 +103,7 @@ class AppSettings {
       volume: (json['volume'] as num?)?.toDouble() ?? 1.0,
       lyricTextSize: json['lyricTextSize'] as String? ?? 'medium',
       showTranslation: json['showTranslation'] as bool? ?? true,
+      nowPlayingBarFill: json['nowPlayingBarFill'] as bool? ?? true,
     );
   }
 
@@ -109,6 +115,7 @@ class AppSettings {
     double? volume,
     String? lyricTextSize,
     bool? showTranslation,
+    bool? nowPlayingBarFill,
   }) {
     return AppSettings(
       musicFolders: musicFolders ?? this.musicFolders,
@@ -119,6 +126,7 @@ class AppSettings {
       volume: volume ?? this.volume,
       lyricTextSize: lyricTextSize ?? this.lyricTextSize,
       showTranslation: showTranslation ?? this.showTranslation,
+      nowPlayingBarFill: nowPlayingBarFill ?? this.nowPlayingBarFill,
     );
   }
 
@@ -195,6 +203,21 @@ class SettingsService {
     await _save();
   }
 
+  /// 底栏「按播放进度填充」效果是否开启（默认开）。
+  bool get nowPlayingBarFill => _settings.nowPlayingBarFill;
+
+  /// 底栏填充开关变化通知（`NowPlayingBar._PlaybackFill` 监听，开/关即时生效）。
+  final ValueNotifier<bool> nowPlayingBarFillNotifier = ValueNotifier<bool>(
+    true,
+  );
+
+  /// 持久化底栏填充开关并广播变化。
+  Future<void> setNowPlayingBarFill(bool value) async {
+    _settings = _settings.copyWith(nowPlayingBarFill: value);
+    nowPlayingBarFillNotifier.value = value;
+    await _save();
+  }
+
   Future<void> initialize() async {
     if (_initialized) return;
 
@@ -213,6 +236,9 @@ class SettingsService {
 
     // 同步主题模式：启动读取持久化值并通知 MaterialApp。
     themeModeNotifier.value = _themeModeFromName(_settings.themeMode);
+
+    // 同步底栏填充开关（默认开；老配置文件缺失该键时保持 true）。
+    nowPlayingBarFillNotifier.value = _settings.nowPlayingBarFill;
 
     _initialized = true;
   }

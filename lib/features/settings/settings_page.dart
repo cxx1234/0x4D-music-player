@@ -21,6 +21,9 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 主题模式（启动时从设置读取，默认跟随系统）。
   ThemeMode _themeMode = ThemeMode.system;
 
+  /// 底栏播放进度填充开关（启动时从设置读取，默认开）。
+  bool _nowPlayingBarFill = true;
+
   /// 封面缓存大小（字节）；null = 尚未加载成功。
   int? _cacheSizeBytes;
 
@@ -32,6 +35,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (ServiceLocator.isReady) {
       _resumePlayback = ServiceLocator.settings.resumePlaybackPosition;
       _themeMode = ServiceLocator.settings.themeMode;
+      _nowPlayingBarFill = ServiceLocator.settings.nowPlayingBarFill;
     }
     _loadCacheSize();
   }
@@ -114,8 +118,17 @@ class _SettingsPageState extends State<SettingsPage> {
     ServiceLocator.settings.setResumePlaybackPosition(value);
   }
 
+  /// 切换底栏播放进度填充开关（UI 状态 + 写盘 + 通知底栏即时生效）。
+  void _setNowPlayingBarFill(bool value) {
+    setState(() => _nowPlayingBarFill = value);
+    ServiceLocator.settings.setNowPlayingBarFill(value);
+  }
+
   /// 44×26 紧凑开关：M3 Switch 默认 52×32，非等比缩放（视觉+命中区同步）。
-  Widget _buildCompactSwitch() {
+  Widget _buildCompactSwitch({
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
     const targetW = 44.0, targetH = 26.0;
     const defaultW = 52.0, defaultH = 32.0;
     return SizedBox(
@@ -128,10 +141,7 @@ class _SettingsPageState extends State<SettingsPage> {
           targetH / defaultH,
           1,
         ),
-        child: Switch(
-          value: _resumePlayback,
-          onChanged: (value) => _setResumePlayback(value),
-        ),
+        child: Switch(value: value, onChanged: onChanged),
       ),
     );
   }
@@ -150,7 +160,10 @@ class _SettingsPageState extends State<SettingsPage> {
         leading: const Icon(Icons.replay_rounded),
         title: _buildOptionText(theme, '续播上次播放位置', '启动后恢复上次播放进度'),
         subtitle: null,
-        trailing: _buildCompactSwitch(),
+        trailing: _buildCompactSwitch(
+          value: _resumePlayback,
+          onChanged: _setResumePlayback,
+        ),
         onTap: () => _setResumePlayback(!_resumePlayback),
       ),
     );
@@ -165,59 +178,75 @@ class _SettingsPageState extends State<SettingsPage> {
       surfaceTintColor: Colors.transparent,
       shadowColor: Colors.transparent,
       clipBehavior: Clip.antiAlias,
-      child: SizedBox(
-        height: 72,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              // 宽度不足以容纳文字版三按钮时，收成图标版 + tooltip。
-              final compact = constraints.maxWidth < 550;
-              return Row(
-                children: [
-                  // 跟随当前主题亮度：深色显示月亮、浅色显示太阳。
-                  Icon(_themeIndicatorIcon(theme)),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('主题模式', style: theme.textTheme.titleMedium),
-                        Text('选择应用的明暗外观', style: _subtitleStyle(theme)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SegmentedButton<ThemeMode>(
-                    showSelectedIcon: false,
-                    segments: [
-                      for (final mode in ThemeMode.values)
-                        if (compact)
-                          ButtonSegment(
-                            value: mode,
-                            icon: Icon(_themeModeIcon(mode)),
-                            tooltip: _themeModeLabel(mode),
-                          )
-                        else
-                          ButtonSegment(
-                            value: mode,
-                            icon: Icon(_themeModeIcon(mode)),
-                            label: Text(_themeModeLabel(mode)),
-                          ),
-                    ],
-                    selected: {_themeMode},
-                    onSelectionChanged: (selection) {
-                      final mode = selection.first;
-                      setState(() => _themeMode = mode);
-                      ServiceLocator.settings.setThemeMode(mode);
-                    },
-                  ),
-                ],
-              );
-            },
+      child: Column(
+        children: [
+          // 底栏播放进度填充开关（「外观」分组）。
+          ListTile(
+            // 与其它设置行一致的行高（续播/通用各行均为 16）。
+            minVerticalPadding: 16,
+            leading: const Icon(Icons.timeline_rounded),
+            title: _buildOptionText(theme, '底栏播放进度填充', '播放时底栏背景从左向右显示进度'),
+            trailing: _buildCompactSwitch(
+              value: _nowPlayingBarFill,
+              onChanged: _setNowPlayingBarFill,
+            ),
+            onTap: () => _setNowPlayingBarFill(!_nowPlayingBarFill),
           ),
-        ),
+          SizedBox(
+            height: 72,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // 宽度不足以容纳文字版三按钮时，收成图标版 + tooltip。
+                  final compact = constraints.maxWidth < 550;
+                  return Row(
+                    children: [
+                      // 跟随当前主题亮度：深色显示月亮、浅色显示太阳。
+                      Icon(_themeIndicatorIcon(theme)),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('主题模式', style: theme.textTheme.titleMedium),
+                            Text('选择应用的明暗外观', style: _subtitleStyle(theme)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SegmentedButton<ThemeMode>(
+                        showSelectedIcon: false,
+                        segments: [
+                          for (final mode in ThemeMode.values)
+                            if (compact)
+                              ButtonSegment(
+                                value: mode,
+                                icon: Icon(_themeModeIcon(mode)),
+                                tooltip: _themeModeLabel(mode),
+                              )
+                            else
+                              ButtonSegment(
+                                value: mode,
+                                icon: Icon(_themeModeIcon(mode)),
+                                label: Text(_themeModeLabel(mode)),
+                              ),
+                        ],
+                        selected: {_themeMode},
+                        onSelectionChanged: (selection) {
+                          final mode = selection.first;
+                          setState(() => _themeMode = mode);
+                          ServiceLocator.settings.setThemeMode(mode);
+                        },
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

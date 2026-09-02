@@ -158,29 +158,38 @@ class _PlaybackFill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settings = ServiceLocator.settings;
     // LayoutBuilder 放外层：widthFactor 变化只调整自身宽度，无需重建布局。
     return LayoutBuilder(
       builder: (context, constraints) {
-        final fillColor = Theme.of(
-          context,
-        ).colorScheme.primary.withValues(alpha: 0.10);
-        return ListenableBuilder(
-          listenable: ServiceLocator.player,
-          builder: (context, _) {
-            final player = ServiceLocator.player;
-            final durMs = player.duration.inMilliseconds;
-            if (durMs <= 0) return const SizedBox.shrink();
-            final fraction = (player.position.inMilliseconds / durMs)
-                .clamp(0.0, 1.0)
-                .toDouble();
-            if (fraction <= 0) return const SizedBox.shrink();
-            return Align(
-              alignment: Alignment.centerLeft,
-              child: FractionallySizedBox(
-                widthFactor: fraction,
-                heightFactor: 1,
-                child: ColoredBox(color: fillColor),
-              ),
+        // 开关在设置页「外观」：关闭时直接不绘制、也不再订阅播放进度
+        // （ValueListenableBuilder 之下不会挂高频监听，零开销）。
+        return ValueListenableBuilder<bool>(
+          valueListenable: settings.nowPlayingBarFillNotifier,
+          builder: (context, enabled, _) {
+            if (!enabled) return const SizedBox.shrink();
+            final fillColor = Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.10);
+            return ListenableBuilder(
+              listenable: ServiceLocator.player,
+              builder: (context, _) {
+                final player = ServiceLocator.player;
+                final durMs = player.duration.inMilliseconds;
+                if (durMs <= 0) return const SizedBox.shrink();
+                final fraction = (player.position.inMilliseconds / durMs)
+                    .clamp(0.0, 1.0)
+                    .toDouble();
+                if (fraction <= 0) return const SizedBox.shrink();
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: FractionallySizedBox(
+                    widthFactor: fraction,
+                    heightFactor: 1,
+                    child: ColoredBox(color: fillColor),
+                  ),
+                );
+              },
             );
           },
         );
