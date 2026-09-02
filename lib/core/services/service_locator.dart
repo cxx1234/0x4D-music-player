@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:just_audio_platform_interface/just_audio_platform_interface.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../audio/platform_media_controls.dart';
 import '../database/database.dart';
@@ -31,6 +32,26 @@ class ServiceLocator {
   static MediaControlService? _mediaControls;
   static MenuService? _menuService;
   static SystemAccentService? _systemAccent;
+
+  /// 应用版本号（来自 pubspec.yaml 的 `version`，如 `0.2.2`）。
+  ///
+  /// 启动时经 package_info_plus 读取一次并缓存，作为设置页/关于页版本号的
+  /// **唯一来源**；读取失败时为 null（UI 端自行兜底）。
+  static String? _appVersion;
+
+  static String? get appVersion => _appVersion;
+
+  /// 启动时读取应用版本号；失败仅记日志，不阻塞初始化（测试环境无插件时
+  /// PackageInfo.fromPlatform 会抛 MissingPluginException）。
+  static Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      _appVersion = info.version;
+      AppLogger.info('Startup', 'App version: ${info.version}');
+    } catch (e) {
+      AppLogger.warning('Startup', 'Failed to read app version', e);
+    }
+  }
 
   /// 启动时恢复沙箱权限失败的文件夹数量（0 = 全部成功）。
   static int _sandboxRestoreFailures = 0;
@@ -169,6 +190,9 @@ class ServiceLocator {
     } catch (e) {
       AppLogger.warning('Startup', 'disposeAllPlayers failed', e);
     }
+    // 读取应用版本号（设置页/关于页唯一来源）。置于 initialize() 内并 await，
+    // 保证 UI 仅在 isReady 后渲染时一定能读到非空值。
+    await _loadAppVersion();
     _settings = SettingsService();
     await _settings!.initialize();
     _database = await AppDatabase.create();

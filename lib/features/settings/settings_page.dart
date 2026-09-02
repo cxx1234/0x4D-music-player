@@ -475,7 +475,11 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             minVerticalPadding: 16,
             leading: const Icon(Icons.info_outline),
-            title: _buildOptionText(theme, '关于', '版本 · 开源许可'),
+            title: _buildOptionText(
+              theme,
+              '关于',
+              '版本 ${ServiceLocator.appVersion ?? ''} · 开源许可',
+            ),
             subtitle: null,
             trailing: Icon(Icons.chevron_right, color: chevronColor),
             onTap: () => Navigator.of(
