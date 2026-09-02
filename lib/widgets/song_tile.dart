@@ -209,7 +209,11 @@ class SongTile extends StatelessWidget {
               tooltip: '更多',
               icon: const Icon(Icons.more_vert),
               onSelected: (value) => onMenuSelected?.call(song, value),
-              itemBuilder: (context) => menu,
+              // 菜单项依赖实时播放状态（随机开关/是否已在队列），必须在每次
+              // 打开时重新求值，不能复用 build 时捕获的 [menu]——列表页只
+              // 订阅切歌/播放态，切循环/随机模式不会触发本行重建。
+              itemBuilder: (context) =>
+                  menuBuilder?.call(song) ?? const <PopupMenuEntry<String>>[],
             ),
           ],
         ],
