@@ -8,6 +8,7 @@ import 'package:flutter_lyric/flutter_lyric.dart';
 import '../../core/constants/layout.dart';
 import '../../core/database/database.dart';
 import '../../core/models/lyric_text_size.dart';
+import '../../core/services/lyrics_view_model.dart';
 import '../../core/services/service_locator.dart';
 import '../../widgets/player_bar.dart';
 import '../../widgets/song_info_card.dart';
@@ -16,7 +17,6 @@ import '../artist/artist_page.dart';
 import '../playlist/song_actions.dart';
 import '../shell/shell_page.dart';
 import 'lyrics_view.dart';
-import 'lyrics_view_model.dart';
 import 'player_ui_state.dart';
 import 'player_view_model.dart';
 import 'queue_view.dart';
@@ -59,8 +59,11 @@ double wideInfoCardWidth(double windowWidth) {
 
 class _PlayerPageState extends State<PlayerPage> {
   final _viewModel = PlayerViewModel();
-  // 歌词视图模型：驱动 flutter_lyric 控制器（读 .lrc + 进度跟随）。
-  final _lyrics = LyricsViewModel(ServiceLocator.player);
+
+  /// 歌词视图模型：ServiceLocator 注册的常驻服务（与 PlayerService 同生命周期，
+  /// 播放页关闭再打开不重新读盘/解析；播放页外切歌也持续跟踪）。
+  /// 页面只消费 controller / hasTranslationNotifier / 翻译开关，不负责销毁。
+  LyricsViewModel get _lyrics => ServiceLocator.lyrics;
 
   // 宽模式下右栏显示队列(true)还是歌词(false)（外置于 uiState，重开保留）。
   bool get _showQueue => widget.uiState.showQueue;
@@ -75,13 +78,16 @@ class _PlayerPageState extends State<PlayerPage> {
     _lyrics.controller.setOnTapLineCallback((duration) {
       ServiceLocator.player.seek(duration);
     });
+    // 常驻 VM 的翻译开关与跨会话 uiState 对齐（仅值不同才重载，幂等兜底）。
+    _lyrics.setShowTranslation(widget.uiState.showTranslation);
     // 打开播放页即对账：把状态对齐到引擎真实值（兜住卡死/热重载失同步）。
     WidgetsBinding.instance.addPostFrameCallback((_) => _viewModel.resync());
   }
 
   @override
   void dispose() {
-    _lyrics.dispose();
+    // 注意：歌词 VM 是 ServiceLocator 常驻服务，不在此 dispose（否则关闭播放页
+    // 又会销毁歌词内容，重开重新加载的问题会回来）。
     _viewModel.dispose();
     super.dispose();
   }
