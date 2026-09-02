@@ -29,12 +29,14 @@ class AppTheme {
     final bool dark = brightness == Brightness.dark;
 
     // 明暗两套灰阶（数值对齐 M3 neutral 的大致 tone，全等 RGB 保证零色相）。
-    final int surface = dark ? 0x14 : 0xF7;
-    final int surfaceLowest = dark ? 0x0D : 0xFF;
-    final int surfaceLow = dark ? 0x1A : 0xF5;
-    final int surfaceContainer = dark ? 0x1F : 0xF0;
-    final int surfaceHigh = dark ? 0x2A : 0xEB;
-    final int surfaceHighest = dark ? 0x36 : 0xE6;
+    // 页面背景(surface)稍灰；容器灰阶逐级加深——surfaceContainerLow 承载
+    // 底栏/播放条/卡片(CardSurface)/文件夹条，须明显高于背景一档才看得出分层。
+    final int surface = dark ? 0x14 : 0xF0;
+    final int surfaceLowest = dark ? 0x0F : 0xFA;
+    final int surfaceLow = dark ? 0x23 : 0xE9;
+    final int surfaceContainer = dark ? 0x2B : 0xE3;
+    final int surfaceHigh = dark ? 0x35 : 0xDB;
+    final int surfaceHighest = dark ? 0x40 : 0xD2;
     final int onSurface = dark ? 0xE0 : 0x1A;
     final int onSurfaceVariant = dark ? 0xC4 : 0x4A;
     // 强调灰（选中/激活/高亮仍走 primary 语义，只是无彩色）。
@@ -95,8 +97,8 @@ class AppTheme {
       surfaceContainer: g(surfaceContainer),
       surfaceContainerHigh: g(surfaceHigh),
       surfaceContainerHighest: g(surfaceHighest),
-      surfaceDim: g(dark ? 0x10 : 0xDE),
-      surfaceBright: g(dark ? 0x2E : 0xFD),
+      surfaceDim: g(dark ? 0x10 : 0xCC),
+      surfaceBright: g(dark ? 0x2E : 0xF8),
       outline: g(outline),
       outlineVariant: g(outlineVariant),
       shadow: Colors.black,
