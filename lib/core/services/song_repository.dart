@@ -49,6 +49,9 @@ class SongRepository {
 
   Future<List<Album>> getAllAlbums() => _db.getAllAlbums();
 
+  Future<List<Album>> getAlbumsByIds(Iterable<int> ids) =>
+      _db.getAlbumsByIds(ids);
+
   Stream<List<Album>> watchAllAlbums() => _db.watchAllAlbums();
 
   Future<Album?> getAlbumById(int id) => _db.getAlbumById(id);

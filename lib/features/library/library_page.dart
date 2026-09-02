@@ -8,6 +8,7 @@ import '../../core/database/song_sort_order.dart';
 import '../../core/services/library_scanner_service.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/index_letters.dart';
+import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
 import '../../widgets/animated_collapse.dart';
 import '../../widgets/card_surface.dart';
@@ -17,12 +18,16 @@ import '../../widgets/search_empty_state.dart';
 import '../../widgets/song_tile.dart';
 import '../../widgets/toolbar_search_field.dart';
 import '../playlist/song_actions.dart';
+import '../shell/shell_controller.dart';
 import 'library_view_model.dart';
 
 class LibraryPage extends StatefulWidget {
   final bool isInitialized;
 
-  const LibraryPage({super.key, this.isInitialized = false});
+  /// Shell 控制器（macOS 菜单「导入文件夹」动作由此到达本页）。
+  final ShellController? controller;
+
+  const LibraryPage({super.key, this.isInitialized = false, this.controller});
 
   @override
   State<LibraryPage> createState() => _LibraryPageState();
@@ -39,7 +44,9 @@ class _LibraryPageState extends State<LibraryPage> {
   static const _scanResultDismissDelay = Duration(seconds: 4);
   bool _searchActive = false;
   String _query = '';
+  final _songFilterCache = QueryFilterCache<Song>();
   final _songScrollController = ScrollController();
+  StreamSubscription<ShellAction>? _actionSub;
 
   @override
   void initState() {
@@ -47,10 +54,19 @@ class _LibraryPageState extends State<LibraryPage> {
     _viewModel.addListener(_onViewModelChanged);
     _loadFolders();
     _scheduleReadyRetry();
+    _actionSub = widget.controller?.actions.listen(_onShellAction);
+  }
+
+  /// macOS 菜单「导入文件夹」动作：直接弹文件夹选择器。
+  void _onShellAction(ShellAction action) {
+    if (action == ShellAction.importFolder) {
+      _pickFolder();
+    }
   }
 
   @override
   void dispose() {
+    _actionSub?.cancel();
     _readyTimer?.cancel();
     _scanResultDismissTimer?.cancel();
     _songScrollController.dispose();
@@ -164,18 +180,20 @@ class _LibraryPageState extends State<LibraryPage> {
   // ─── Search ─────────────────────────────────────────────
 
   /// 搜索模式下的过滤结果；查询为空时返回全量歌曲。
-  List<Song> get _filteredSongs {
-    final q = normalizeQuery(_query);
-    if (q.isEmpty) return _viewModel.songs;
-    return _viewModel.songs
+  /// 经 QueryFilterCache 缓存：query / 源列表均未变时不重复 O(n) 过滤
+  /// （页面常因数据刷新、播放态等无关原因重建）。
+  List<Song> get _filteredSongs => _songFilterCache.get(
+    normalizeQuery(_query),
+    _viewModel.songs,
+    (q, source) => source
         .where(
           (s) =>
               containsIgnoreCase(s.title, q) ||
               containsIgnoreCase(s.artist, q) ||
               containsIgnoreCase(s.album, q),
         )
-        .toList();
-  }
+        .toList(),
+  );
 
   void _enterSearch() => setState(() => _searchActive = true);
 

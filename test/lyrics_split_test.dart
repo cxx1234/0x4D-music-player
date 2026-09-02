@@ -77,6 +77,51 @@ void main() {
       expect(r.main, '残酷な世界');
       expect(r.translation, '残酷的世界');
     });
+
+    test('日文原文 + 翻译内部带空格分段 → 拆到第一个翻译段', () {
+      // 用户反馈：翻译用空格分段（如「夜风拂过 暗夜飘摇 轻奏音色 飘舞静寂」），
+      // 修复前起点被推到最后一个汉字段，主歌词混入翻译前几段。
+      final r = splitBilingualLine(
+        '風に触った闇は揺れて 奏でた音色 静けさを舞う 夜风拂过 暗夜飘摇 轻奏音色 飘舞静寂',
+      );
+      expect(r.main, '風に触った闇は揺れて 奏でた音色 静けさを舞う');
+      expect(r.translation, '夜风拂过 暗夜飘摇 轻奏音色 飘舞静寂');
+
+      final r2 = splitBilingualLine('そうさ 僕らもがき続けてゆくモンスター 没错 我们就是挣扎着活下去的怪物');
+      expect(r2.main, 'そうさ 僕らもがき続けてゆくモンスター');
+      expect(r2.translation, '没错 我们就是挣扎着活下去的怪物');
+
+      final r3 = splitBilingualLine('浮かぶ月 見つめる僕の目は何色なんだ？ 凝望漂浮的夜月 我的双眼');
+      expect(r3.main, '浮かぶ月 見つめる僕の目は何色なんだ？');
+      expect(r3.translation, '凝望漂浮的夜月 我的双眼');
+    });
+
+    test('英文原文 + 翻译内部带空格分段 → 拆到第一个翻译段', () {
+      // 用户反馈：英文歌（如 Dangerous）翻译用空格分段，修复前同被约束误切。
+      final r = splitBilingualLine(
+        'The way she came into the place I knew right then and there 她走进来所踩的步伐 那时那刻我就察觉',
+      );
+      expect(
+        r.main,
+        'The way she came into the place I knew right then and there',
+      );
+      expect(r.translation, '她走进来所踩的步伐 那时那刻我就察觉');
+
+      final r2 = splitBilingualLine(
+        "My baby cried she left me standing alone She's so dangerous. 我的爱人泪下而去 留我一人孑立 她太危险",
+      );
+      expect(
+        r2.main,
+        "My baby cried she left me standing alone She's so dangerous.",
+      );
+      expect(r2.translation, '我的爱人泪下而去 留我一人孑立 她太危险');
+
+      final r3 = splitBilingualLine(
+        'DANGEROUS The girl is so dangerous. 危险 这女孩太危险',
+      );
+      expect(r3.main, 'DANGEROUS The girl is so dangerous.');
+      expect(r3.translation, '危险 这女孩太危险');
+    });
   });
 
   group('splitBilingualLrc（整首拆分）', () {
@@ -115,6 +160,33 @@ void main() {
       expect(r.mainLyric, contains('[00:10.00]我的爱情故事'));
       expect(r.mainLyric, contains('[00:20.00]是一首老歌'));
       expect(r.translationLyric, isEmpty);
+    });
+
+    test('两段式 LRC（原文段 + 翻译段各自时间轴）按段整体拆分，翻译行不被撕裂', () {
+      // QQ 音乐格式：前半英文原文、后半中文翻译，翻译段从首个时间戳重新开始。
+      const lrc = '''
+[ti:Demo]
+[ar:Artist]
+[00:00.00]Hello world
+[00:02.00]Goodbye world
+[00:04.00]Again
+[ti:Demo]
+[ar:Artist]
+[00:00.00]你好世界 你好世界
+[00:02.00]再见世界 再见世界
+[00:04.00]再来一次 再来一次
+''';
+      final r = splitBilingualLrc(lrc);
+      // 主歌词 = 原文段（含标签），不含中文翻译。
+      expect(r.mainLyric, contains('[00:00.00]Hello world'));
+      expect(r.mainLyric, contains('[00:02.00]Goodbye world'));
+      expect(r.mainLyric, isNot(contains('你好')));
+      // 翻译轴 = 翻译段整体（中文行不再被单行拆分撕裂），标签行被跳过。
+      expect(r.translationLyric, contains('[00:00.00]你好世界 你好世界'));
+      expect(r.translationLyric, contains('[00:02.00]再见世界 再见世界'));
+      expect(r.translationLyric, contains('[00:04.00]再来一次 再来一次'));
+      expect(r.translationLyric, isNot(contains('Hello')));
+      expect(r.translationLyric, isNot(contains('[ti:Demo]')));
     });
   });
 }

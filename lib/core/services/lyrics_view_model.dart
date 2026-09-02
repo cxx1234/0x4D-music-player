@@ -1,17 +1,16 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_lyric/core/lyric_model.dart';
 import 'package:flutter_lyric/flutter_lyric.dart';
 import 'package:path/path.dart' as p;
 
-import '../../core/database/database.dart';
-import '../../core/services/metadata_service.dart';
-import '../../core/services/player_service.dart';
-import '../../core/utils/bilingual_lrc.dart';
-import '../../core/utils/logger.dart';
+import '../database/database.dart';
+import 'metadata_service.dart';
+import 'player_service.dart';
+import '../utils/bilingual_lrc.dart';
+import '../utils/logger.dart';
 
 /// 歌词路径解析：数据库的 [Song.lyricsFilePath] 优先；否则实时按音频文件找
 /// 同名 `.lrc`/`.LRC`（与 `MetadataService._findLrcFile` 一致）。
@@ -38,6 +37,10 @@ String? resolveLrcPath(Song song) {
 ///
 /// 歌词路径解析：[Song.lyricsFilePath]（数据库扫描时记录）优先；不存在时
 /// 实时按音频文件找同名 `.lrc`/`.LRC` 兜底，因此新放的歌词文件无需重新扫描。
+///
+/// 自 2026-09-03 起为 [ServiceLocator] 注册的**常驻服务**，与 [PlayerService]
+/// 同生命周期（不再随播放页 pop 销毁）——播放页关闭再打开不会重新读盘/解析歌词；
+/// 播放页之外切歌也能持续跟踪。播放页只消费 [controller]/[hasTranslationNotifier]。
 class LyricsViewModel {
   /// 高亮/滚动切换到下一行的提前量（毫秒）：正值让歌词高亮比实际时间戳
   /// 早一点切换，跟唱更顺；不影响点击歌词 seek（其回调用原始时间戳）。
@@ -53,9 +56,13 @@ class LyricsViewModel {
     PlayerService player, {
     bool Function()? isChineseUi,
     MetadataService? metadataService,
+    bool initialShowTranslation = true,
   }) : _player = player,
        _isChineseUi = isChineseUi ?? _defaultIsChineseUi,
        _metadata = metadataService ?? MetadataService() {
+    // 翻译副行初值（常驻服务场景：ServiceLocator 用持久化设置传入；
+    // 页面级新实例场景保持默认 true）。须在首次 _onSongChanged() 前生效。
+    _showTranslation = initialShowTranslation;
     // 高亮/滚动提前一点切换（跟唱更顺）。
     controller.lyricOffset = _kLyricOffsetMs;
     _player.currentSongNotifier.addListener(_onSongChanged);

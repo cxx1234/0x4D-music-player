@@ -23,9 +23,9 @@
 
 ## 2. 发布前待办（非性能）
 
-- F4 Windows 窗口最小尺寸未做（`WM_GETMINMAXINFO`）。
-- 菜单栏项与键盘快捷键（如 Cmd+Shift+M）。
-- i18n 多语言支持。
+- F4 Windows 窗口最小尺寸（`WM_GETMINMAXINFO`）→ 已纳入本文件 §3 Phase 4。
+- 菜单栏项与键盘快捷键 → 已纳入计划（macOS 原生菜单 + Dart 桥接，见 `/memories/session/plan.md` Phase 2/3）。
+- i18n 多语言支持 → 已纳入本文件 §3 Phase 1（只搭基建，暂不迁移现有字符串）。
 
 ## 其他已登记待办
 
@@ -34,3 +34,30 @@
 - **日志查看页接入导航**（2026-08-11）：`LogPage` / `LogDetailPage` 已实现接入，设置页。
 - ✅ **播放页 10px 溢出**（2026-08-19 关闭）：原 `_LeftPanel` 已随 2026-08-17 播放页重构（SongInfoCard + PlayerBar）删除；现信息区包在 `SingleChildScrollView` + `Expanded` 内、底部播放条固定，结构上不再有该溢出，实际运行未复现。
 - ✅ **清理 `measureTrafficLights()` 诊断打印**（2026-08-19 关闭）：用户决定改用 macOS 11+ 特定窗口栏实现效果，原红绿灯测量方案被取代。
+
+## 3. macOS 菜单栏 & Windows 适配 — 后续阶段（2026-08-30 登记）
+
+> 当前在做 macOS 菜单栏 Phase 2/3（原生菜单 + Dart 桥接，计划见 `/memories/session/plan.md`）。
+> 以下 Phase 1/4/5 为后续阶段，实施时再展开。
+
+### Phase 1 — Flutter i18n 基建（只搭基建，不迁移）
+- `pubspec.yaml` 加 `flutter_localizations`(sdk) + `intl`
+- 新建 `l10n.yaml` + `lib/l10n/app_en.arb` + `app_zh.arb`（先放最少字符串，如 appTitle）
+- `flutter gen-l10n` 生成 `AppLocalizations`
+- `app.dart` MaterialApp 接 `localizationsDelegates`/`supportedLocales`；`title` 改用 AppLocalizations
+- 现有页面硬编码中文**本轮不迁移**（后续分阶段）
+- 验证：`flutter analyze` 0 告警；gen-l10n 正常
+
+### Phase 4 — Windows 最小集
+- `windows/runner/win32_window.cpp` `MessageHandler` 处理 `WM_GETMINMAXINFO` → `ptMinTrackSize = (640,520)×DPI`（对齐 macOS `contentMinSize`）
+- `windows/runner/Runner.rc` 显示名保持英文 `flutter_music`（不改）
+- `lib/core/constants/layout.dart` `_default` 核验 `pageToolbarHeight=62` vs `topInset32+content80=112` 不一致（预存问题，Windows 调试时按需调整）
+- 验证：Windows 机器 `flutter build windows` + 运行，窗口最小 640×520
+
+### Phase 5 — Windows SMTC（系统媒体控制，对标 macOS 媒体键/Now Playing）
+- 新建 `lib/core/audio/windows_media_controls.dart`（镜像 `MacOsMediaControls` 通道协议，`MediaControlService` 零改动）
+- 新建 `windows/runner/media_controls_plugin.{cpp,h}`（C++/WinRT `SystemMediaTransportControls` + `ButtonPressed` → EventChannel）
+- `windows/runner/CMakeLists.txt` 加源文件 + `flutter_window.cpp` 手动注册插件（非 pub 包，不进 generated registrant）
+- `lib/core/audio/platform_media_controls.dart` `create()` 加 Windows 分支
+- 验证：Windows 机器构建运行，任务栏媒体悬浮/系统媒体面板显示 Now Playing、媒体键控制播放
+- ⚠️ 风险：C++/WinRT 若 SDK 不含 `winrt` 头，改走 `cppwinrt` NuGet 或 `audio_service`

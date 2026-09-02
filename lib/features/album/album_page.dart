@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
+import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
 import '../../widgets/cached_album_art.dart';
 import '../../widgets/cover_card.dart';
@@ -37,6 +38,7 @@ class _AlbumsPageState extends State<AlbumsPage> {
   final _viewModel = AlbumsViewModel();
   bool _searchActive = false;
   String _query = '';
+  final _albumFilterCache = QueryFilterCache<Album>();
 
   @override
   void initState() {
@@ -66,17 +68,17 @@ class _AlbumsPageState extends State<AlbumsPage> {
 
   // ─── Search ─────────────────────────────────────────────
 
-  List<Album> get _filteredAlbums {
-    final q = normalizeQuery(_query);
-    if (q.isEmpty) return _viewModel.albums;
-    return _viewModel.albums
+  List<Album> get _filteredAlbums => _albumFilterCache.get(
+    normalizeQuery(_query),
+    _viewModel.albums,
+    (q, source) => source
         .where(
           (a) =>
               containsIgnoreCase(a.name, q) ||
               containsIgnoreCase(a.albumArtist, q),
         )
-        .toList();
-  }
+        .toList(),
+  );
 
   void _enterSearch() => setState(() => _searchActive = true);
 

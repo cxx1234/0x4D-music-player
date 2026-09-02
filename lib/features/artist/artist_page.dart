@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/index_letters.dart';
+import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
 import '../../widgets/cached_album_art.dart';
 import '../../widgets/detail_top_bar.dart';
@@ -32,6 +33,7 @@ class _ArtistsPageState extends State<ArtistsPage> {
   final _viewModel = ArtistsViewModel();
   bool _searchActive = false;
   String _query = '';
+  final _artistFilterCache = QueryFilterCache<Artist>();
   final _scrollController = ScrollController();
 
   @override
@@ -63,13 +65,11 @@ class _ArtistsPageState extends State<ArtistsPage> {
 
   // ─── Search ─────────────────────────────────────────────
 
-  List<Artist> get _filteredArtists {
-    final q = normalizeQuery(_query);
-    if (q.isEmpty) return _viewModel.artists;
-    return _viewModel.artists
-        .where((a) => containsIgnoreCase(a.name, q))
-        .toList();
-  }
+  List<Artist> get _filteredArtists => _artistFilterCache.get(
+    normalizeQuery(_query),
+    _viewModel.artists,
+    (q, source) => source.where((a) => containsIgnoreCase(a.name, q)).toList(),
+  );
 
   void _enterSearch() => setState(() => _searchActive = true);
 
@@ -240,15 +240,19 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
   }
 
   Future<void> _load() async {
-    final results = await Future.wait([
-      ServiceLocator.songRepo.getAllAlbums(),
-      ServiceLocator.songRepo.getSongsByArtist(widget.artist.id),
-    ]);
-    final allAlbums = results[0] as List<Album>;
-    final songs = results[1] as List<Song>;
+    // 只取该歌手歌曲，再按 songs 的 albumId 集合定向查专辑——
+    // 不再无谓地全表拉取所有专辑再内存过滤（旧实现 getAllAlbums）。
+    final songs = await ServiceLocator.songRepo.getSongsByArtist(
+      widget.artist.id,
+    );
+    final ids = <int>{
+      for (final s in songs)
+        if (s.albumId != null) s.albumId!,
+    };
+    final fetched = await ServiceLocator.songRepo.getAlbumsByIds(ids);
 
     // 专辑按该歌手歌曲的 albumId 派生：合集/多歌手专辑每位参与歌手都能看到。
-    final albumById = {for (final a in allAlbums) a.id: a};
+    final albumById = {for (final a in fetched) a.id: a};
     final albumsById = <int, Album>{};
     for (final s in songs) {
       final albumId = s.albumId;

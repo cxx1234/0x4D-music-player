@@ -1,0 +1,50 @@
+/* App 菜单 */
+"menu.about" = "关于 %@";
+"menu.preferences" = "偏好设置…";
+"menu.services" = "服务";
+"menu.hide" = "隐藏 %@";
+"menu.hideOthers" = "隐藏其他";
+"menu.showAll" = "全部显示";
+"menu.quit" = "退出 %@";
+
+/* 文件菜单 */
+"menu.file" = "文件";
+"menu.importFolder" = "导入文件夹…";
+"menu.newPlaylist" = "新建播放列表…";
+"menu.importPlaylist" = "导入播放列表…";
+"menu.exportPlaylist" = "导出播放列表…";
+
+/* 播放菜单 */
+"menu.playback" = "播放";
+"menu.previous" = "上一首";
+"menu.play" = "播放";
+"menu.pause" = "暂停";
+"menu.next" = "下一首";
+"menu.stop" = "停止";
+"menu.volumeUp" = "增大音量";
+"menu.volumeDown" = "减小音量";
+"menu.singleRepeat" = "单曲循环";
+"menu.playMode" = "播放模式";
+"menu.modeSequential" = "顺序播放";
+"menu.modeRepeatAll" = "列表循环";
+"menu.modeShuffleAll" = "随机循环";
+
+/* 编辑菜单 */
+"menu.edit" = "编辑";
+"menu.undo" = "撤销";
+"menu.redo" = "重做";
+"menu.cut" = "剪切";
+"menu.copy" = "复制";
+"menu.paste" = "粘贴";
+"menu.delete" = "删除";
+"menu.selectAll" = "全选";
+
+/* 窗口菜单 */
+"menu.window" = "窗口";
+"menu.minimize" = "最小化";
+"menu.zoom" = "缩放";
+"menu.closeWindow" = "关闭窗口";
+"menu.bringAllToFront" = "前置全部窗口";
+
+/* 帮助菜单 */
+"menu.help" = "帮助";

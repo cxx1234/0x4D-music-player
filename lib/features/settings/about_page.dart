@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/services/service_locator.dart';
 import '../../widgets/detail_top_bar.dart';
 
 /// 关于页：应用信息 + 开源许可 + 项目主页。
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
-
-  /// 版本号（暂时硬编码；后续如引入 package_info_plus 可自动读取）。
-  static const String version = '0.1.0+37';
 
   /// 开源项目主页。
   static const String repoUrl = 'https://github.com/cxx1234/0x4D-music-player';
@@ -48,6 +46,9 @@ class AboutPage extends StatelessWidget {
     final muted = theme.textTheme.bodyMedium?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
+    // 版本号唯一来源：启动时由 package_info_plus 读取 pubspec.yaml 并缓存于
+    // ServiceLocator.appVersion（读取失败时显示 …）。
+    final version = ServiceLocator.appVersion ?? '…';
 
     return Scaffold(
       appBar: DetailTopBar(title: '关于'),

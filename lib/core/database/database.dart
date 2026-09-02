@@ -372,6 +372,16 @@ class AppDatabase extends _$AppDatabase {
           ]))
           .watch();
 
+  /// Returns the albums whose ids are in [ids].
+  ///
+  /// 供歌手详情等按 id 集合定向查询，避免无谓地全表拉取所有专辑。
+  /// 空集合直接返回空列表（drift 的 `IN ()` 不合法，须短路）。
+  Future<List<Album>> getAlbumsByIds(Iterable<int> ids) async {
+    final list = ids.toList();
+    if (list.isEmpty) return const [];
+    return (select(albums)..where((t) => t.id.isIn(list))).get();
+  }
+
   Future<Album?> getAlbumById(int id) =>
       (select(albums)..where((t) => t.id.equals(id))).getSingleOrNull();
 

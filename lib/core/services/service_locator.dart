@@ -1,17 +1,21 @@
 import 'dart:io';
 
 import 'package:just_audio_platform_interface/just_audio_platform_interface.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../audio/platform_media_controls.dart';
 import '../database/database.dart';
 import '../utils/logger.dart';
 import 'folder_watcher_service.dart';
+import 'lyrics_view_model.dart';
 import 'media_control_service.dart';
+import 'menu_service.dart';
 import 'play_queue.dart';
 import 'player_service.dart';
 import 'sandbox_service.dart';
 import 'settings_service.dart';
 import 'song_repository.dart';
+import 'system_accent_service.dart';
 
 /// 简单的服务定位器，用于全局访问各项服务。
 ///
@@ -27,6 +31,34 @@ class ServiceLocator {
   static PlayerService? _player;
   static SandboxService? _sandbox;
   static MediaControlService? _mediaControls;
+  static MenuService? _menuService;
+  static SystemAccentService? _systemAccent;
+
+  /// 歌词视图模型（常驻，2026-09-03 起）：与 [PlayerService] 同生命周期。
+  ///
+  /// 不在播放页内创建——播放页是 push/pop 路由，若 VM 绑在页面上会随关闭销毁、
+  /// 重开时重新读盘/解析歌词。提升为全局服务后播放页只消费其 controller。
+  static LyricsViewModel? _lyrics;
+
+  /// 应用版本号（来自 pubspec.yaml 的 `version`，如 `0.2.2`）。
+  ///
+  /// 启动时经 package_info_plus 读取一次并缓存，作为设置页/关于页版本号的
+  /// **唯一来源**；读取失败时为 null（UI 端自行兜底）。
+  static String? _appVersion;
+
+  static String? get appVersion => _appVersion;
+
+  /// 启动时读取应用版本号；失败仅记日志，不阻塞初始化（测试环境无插件时
+  /// PackageInfo.fromPlatform 会抛 MissingPluginException）。
+  static Future<void> _loadAppVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      _appVersion = info.version;
+      AppLogger.info('Startup', 'App version: ${info.version}');
+    } catch (e) {
+      AppLogger.warning('Startup', 'Failed to read app version', e);
+    }
+  }
 
   /// 启动时恢复沙箱权限失败的文件夹数量（0 = 全部成功）。
   static int _sandboxRestoreFailures = 0;
@@ -103,6 +135,29 @@ class ServiceLocator {
     return _mediaControls!;
   }
 
+  /// 菜单桥接服务（仅 macOS，Dart↔原生菜单通道）。
+  static MenuService get menu {
+    if (_menuService == null) {
+      throw StateError(
+        'MenuService not initialized. Call ServiceLocator.initialize() first.',
+      );
+    }
+    return _menuService!;
+  }
+
+  /// 系统强调色桥接服务（仅 macOS；其他平台为 null，跟随系统回退默认色）。
+  static SystemAccentService? get systemAccent => _systemAccent;
+
+  /// 常驻歌词视图模型（驱动 flutter_lyric controller，含歌词内容/内嵌缓存）。
+  static LyricsViewModel get lyrics {
+    if (_lyrics == null) {
+      throw StateError(
+        'Lyrics not initialized. Call ServiceLocator.initialize() first.',
+      );
+    }
+    return _lyrics!;
+  }
+
   /// Whether [initialize] has completed.
   static bool get isReady => _player != null;
 
@@ -152,6 +207,9 @@ class ServiceLocator {
     } catch (e) {
       AppLogger.warning('Startup', 'disposeAllPlayers failed', e);
     }
+    // 读取应用版本号（设置页/关于页唯一来源）。置于 initialize() 内并 await，
+    // 保证 UI 仅在 isReady 后渲染时一定能读到非空值。
+    await _loadAppVersion();
     _settings = SettingsService();
     await _settings!.initialize();
     _database = await AppDatabase.create();
@@ -177,6 +235,26 @@ class ServiceLocator {
       PlatformMediaControls.create(),
     );
     await _mediaControls!.initialize();
+
+    // 歌词视图模型（常驻，播放页只消费不持有）。创建时机放在沙箱权限恢复
+    // （_restoreSandboxAccess）之后——读内嵌/.lrc 歌词需要文件可读。翻译副行
+    // 初值取持久化设置，避免启动后用默认 true 与用户上次设置不一致。
+    _lyrics = LyricsViewModel(
+      _player!,
+      initialShowTranslation: _settings!.settings.showTranslation,
+    );
+
+    // macOS 菜单桥接：Dart 侧接收原生菜单动作、推送播放状态。
+    // 其他平台无原生菜单，不创建（避免通道噪音）。
+    if (Platform.isMacOS) {
+      _menuService = MenuService.attach(_player!);
+    }
+
+    // 系统强调色桥接（仅 macOS；attach 内触发首次读取，失败不抛）。
+    // 其他平台保持 null → 「跟随系统」回退默认石墨灰。
+    if (Platform.isMacOS) {
+      _systemAccent = SystemAccentService.attach();
+    }
   }
 
   /// 恢复 macOS security-scoped bookmarks，让音乐文件夹在重启后仍可读。

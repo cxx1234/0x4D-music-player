@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:txvziwm/core/database/database.dart';
-import 'package:txvziwm/features/player/lyrics_view_model.dart';
+import 'package:txvziwm/core/services/lyrics_view_model.dart';
 
 Song _song(String filePath, {String? lyricsFilePath}) => Song(
   id: 1,

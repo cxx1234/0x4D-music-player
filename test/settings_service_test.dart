@@ -50,6 +50,32 @@ void main() {
     });
   });
 
+  group('AppSettings accentColor', () {
+    test('默认 graphite（石墨灰）', () {
+      const s = AppSettings();
+      expect(s.accentColor, 'graphite');
+    });
+
+    test('toJson/fromJson 往返保留字段', () {
+      for (final name in ['system', 'graphite', 'deepPurple']) {
+        final s = AppSettings(accentColor: name);
+        final restored = AppSettings.fromJson(s.toJson());
+        expect(restored.accentColor, name);
+        expect(restored.toJson()['accentColor'], name);
+      }
+    });
+
+    test('旧 JSON 缺键回退默认 graphite（向后兼容）', () {
+      final restored = AppSettings.fromJson(const {});
+      expect(restored.accentColor, 'graphite');
+    });
+
+    test('fromJson 读取字段（含 system 哨兵）', () {
+      final s = AppSettings.fromJson(const {'accentColor': 'system'});
+      expect(s.accentColor, 'system');
+    });
+  });
+
   group('LyricTextSize', () {
     test('fromName 解析 + 未知值/空回退 medium', () {
       expect(LyricTextSize.fromName('small'), LyricTextSize.small);

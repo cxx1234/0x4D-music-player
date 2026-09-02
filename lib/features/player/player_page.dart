@@ -8,6 +8,7 @@ import 'package:flutter_lyric/flutter_lyric.dart';
 import '../../core/constants/layout.dart';
 import '../../core/database/database.dart';
 import '../../core/models/lyric_text_size.dart';
+import '../../core/services/lyrics_view_model.dart';
 import '../../core/services/service_locator.dart';
 import '../../widgets/player_bar.dart';
 import '../../widgets/song_info_card.dart';
@@ -16,7 +17,6 @@ import '../artist/artist_page.dart';
 import '../playlist/song_actions.dart';
 import '../shell/shell_page.dart';
 import 'lyrics_view.dart';
-import 'lyrics_view_model.dart';
 import 'player_ui_state.dart';
 import 'player_view_model.dart';
 import 'queue_view.dart';
@@ -59,8 +59,11 @@ double wideInfoCardWidth(double windowWidth) {
 
 class _PlayerPageState extends State<PlayerPage> {
   final _viewModel = PlayerViewModel();
-  // 歌词视图模型：驱动 flutter_lyric 控制器（读 .lrc + 进度跟随）。
-  final _lyrics = LyricsViewModel(ServiceLocator.player);
+
+  /// 歌词视图模型：ServiceLocator 注册的常驻服务（与 PlayerService 同生命周期，
+  /// 播放页关闭再打开不重新读盘/解析；播放页外切歌也持续跟踪）。
+  /// 页面只消费 controller / hasTranslationNotifier / 翻译开关，不负责销毁。
+  LyricsViewModel get _lyrics => ServiceLocator.lyrics;
 
   // 宽模式下右栏显示队列(true)还是歌词(false)（外置于 uiState，重开保留）。
   bool get _showQueue => widget.uiState.showQueue;
@@ -75,13 +78,16 @@ class _PlayerPageState extends State<PlayerPage> {
     _lyrics.controller.setOnTapLineCallback((duration) {
       ServiceLocator.player.seek(duration);
     });
+    // 常驻 VM 的翻译开关与跨会话 uiState 对齐（仅值不同才重载，幂等兜底）。
+    _lyrics.setShowTranslation(widget.uiState.showTranslation);
     // 打开播放页即对账：把状态对齐到引擎真实值（兜住卡死/热重载失同步）。
     WidgetsBinding.instance.addPostFrameCallback((_) => _viewModel.resync());
   }
 
   @override
   void dispose() {
-    _lyrics.dispose();
+    // 注意：歌词 VM 是 ServiceLocator 常驻服务，不在此 dispose（否则关闭播放页
+    // 又会销毁歌词内容，重开重新加载的问题会回来）。
     _viewModel.dispose();
     super.dispose();
   }
@@ -242,38 +248,45 @@ class _PlayerPageState extends State<PlayerPage> {
                 );
               }
 
-              // ── 宽模式：信息卡（纵排）| 队列/歌词 + 底部全宽播放条 ──
-              return Column(
+              // ── 宽模式：信息卡（纵排）| 队列/歌词。底部全宽播放条已抽到
+              //    Scaffold.bottomNavigationBar（SnackBar 会自动顶到其上方）。──
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  SizedBox(
+                    width: wideInfoCardWidth(constraints.maxWidth),
+                    child: _buildWideInfo(context, theme, song),
+                  ),
                   Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(
-                          width: wideInfoCardWidth(constraints.maxWidth),
-                          child: _buildWideInfo(context, theme, song),
-                        ),
-                        Expanded(
-                          child: _RightPanel(
-                            viewModel: _viewModel,
-                            theme: theme,
-                            showQueue: _showQueue,
-                            uiState: widget.uiState,
-                            lyricsController: _lyrics.controller,
-                            hasTranslation: _lyrics.hasTranslationNotifier,
-                            onToggleTranslation: _toggleTranslation,
-                            onTextSizeChanged: _onTextSizeChanged,
-                          ),
-                        ),
-                      ],
+                    child: _RightPanel(
+                      viewModel: _viewModel,
+                      theme: theme,
+                      showQueue: _showQueue,
+                      uiState: widget.uiState,
+                      lyricsController: _lyrics.controller,
+                      hasTranslation: _lyrics.hasTranslationNotifier,
+                      onToggleTranslation: _toggleTranslation,
+                      onTextSizeChanged: _onTextSizeChanged,
                     ),
                   ),
-                  PlayerBar(
-                    player: ServiceLocator.player,
-                    theme: theme,
-                    onSeek: _viewModel.seek,
-                  ),
                 ],
+              );
+            },
+          ),
+          // 底部全宽播放条挂在 Scaffold.bottomNavigationBar：SnackBar(fixed)
+          // 会被自动顶到播放条上方，不再遮挡播放控制/进度/音量。
+          bottomNavigationBar: ListenableBuilder(
+            listenable: _viewModel,
+            builder: (context, _) {
+              // 空态（无可播歌曲）不显示播放条。
+              if (_viewModel.currentSong == null) {
+                return const SizedBox.shrink();
+              }
+              return PlayerBar(
+                player: ServiceLocator.player,
+                theme: theme,
+                onSeek: _viewModel.seek,
+                compact: narrow,
               );
             },
           ),
@@ -333,7 +346,7 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   /// 窄模式播放器：信息卡（高度够 → 竖版封面在上，不够 → 横版封面在左；
-  /// 矮窗可滚动）+ 底部播放条。
+  /// 矮窗可滚动）。底部播放条由 Scaffold.bottomNavigationBar 承载。
   Widget _buildNarrowPlayer(BuildContext context, ThemeData theme, Song song) {
     return Column(
       children: [
@@ -372,17 +385,12 @@ class _PlayerPageState extends State<PlayerPage> {
             },
           ),
         ),
-        PlayerBar(
-          player: ServiceLocator.player,
-          theme: theme,
-          onSeek: _viewModel.seek,
-          compact: true,
-        ),
       ],
     );
   }
 
-  /// 窄模式歌词/队列：内容块 + 迷你信息条 + 底部播放条。
+  /// 窄模式歌词/队列：内容块 + 迷你信息条。底部播放条由
+  /// Scaffold.bottomNavigationBar 承载。
   Widget _buildNarrowLyricsQueue(
     BuildContext context,
     ThemeData theme,
@@ -411,12 +419,6 @@ class _PlayerPageState extends State<PlayerPage> {
             compact: true,
           ),
         ),
-        PlayerBar(
-          player: ServiceLocator.player,
-          theme: theme,
-          onSeek: _viewModel.seek,
-          compact: true,
-        ),
       ],
     );
   }
@@ -429,16 +431,20 @@ class _PlayerPageState extends State<PlayerPage> {
     required bool isNarrow,
     required bool compact,
   }) {
-    return SongInfoCard(
-      song: song,
-      theme: theme,
-      isNarrow: isNarrow,
-      compact: compact,
-      onLike: _toggleLike,
-      onOpenArtist: () => _openArtist(context, song),
-      onOpenAlbum: () => _openAlbum(context, song),
-      menuBuilder: songMenuItems,
-      onMenuSelected: (s, v) => handleSongMenuAction(context, s, v),
+    // 封面信息卡自成一合成层：封面绘制/涟漪等不波及播放页其它区域
+    // （宽信息卡、窄竖/横版、迷你信息条共用此处）。
+    return RepaintBoundary(
+      child: SongInfoCard(
+        song: song,
+        theme: theme,
+        isNarrow: isNarrow,
+        compact: compact,
+        onLike: _toggleLike,
+        onOpenArtist: () => _openArtist(context, song),
+        onOpenAlbum: () => _openAlbum(context, song),
+        menuBuilder: songMenuItems,
+        onMenuSelected: (s, v) => handleSongMenuAction(context, s, v),
+      ),
     );
   }
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -7,12 +8,14 @@ import 'package:path/path.dart' as p;
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
+import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
 import '../../widgets/card_surface.dart';
 import '../../widgets/cover_card.dart';
 import '../../widgets/page_toolbar.dart';
 import '../../widgets/search_empty_state.dart';
 import '../../widgets/toolbar_search_field.dart';
+import '../shell/shell_controller.dart';
 import 'favorites_page.dart';
 import 'playlist_cover.dart';
 import 'playlist_detail_page.dart';
@@ -24,7 +27,10 @@ class PlaylistPage extends StatefulWidget {
   /// 跨页数据新鲜度：扫描/删文件夹等变更后切回本页能看到最新数据）。
   final bool active;
 
-  const PlaylistPage({super.key, this.active = true});
+  /// Shell 控制器（macOS 菜单「新建播放列表」动作由此到达本页）。
+  final ShellController? controller;
+
+  const PlaylistPage({super.key, this.active = true, this.controller});
 
   @override
   State<PlaylistPage> createState() => _PlaylistPageState();
@@ -34,12 +40,15 @@ class _PlaylistPageState extends State<PlaylistPage> {
   final _viewModel = PlaylistsViewModel();
   bool _searchActive = false;
   String _query = '';
+  final _playlistFilterCache = QueryFilterCache<Playlist>();
+  StreamSubscription<ShellAction>? _actionSub;
 
   @override
   void initState() {
     super.initState();
     _viewModel.addListener(_onChanged);
     _viewModel.load();
+    _actionSub = widget.controller?.actions.listen(_onShellAction);
   }
 
   @override
@@ -52,9 +61,24 @@ class _PlaylistPageState extends State<PlaylistPage> {
 
   @override
   void dispose() {
+    _actionSub?.cancel();
     _viewModel.removeListener(_onChanged);
     _viewModel.dispose();
     super.dispose();
+  }
+
+  /// macOS 菜单动作：新建/导入/导出播放列表。
+  void _onShellAction(ShellAction action) {
+    switch (action) {
+      case ShellAction.newPlaylist:
+        _createPlaylist();
+      case ShellAction.importPlaylist:
+        _importM3u();
+      case ShellAction.exportPlaylist:
+        _exportPlaylistFromMenu();
+      case ShellAction.importFolder:
+        break; // 文件夹动作属于音乐库页。
+    }
   }
 
   void _onChanged() {
@@ -137,6 +161,11 @@ class _PlaylistPageState extends State<PlaylistPage> {
     }
     if (!mounted) return;
 
+    // 与导出同理：等播放列表数据就绪再展示「选择目标列表」，否则冷启动
+    // 立即导入时已有列表不会出现在可选目标里。
+    await _viewModel.ensureLoaded();
+    if (!mounted) return;
+
     final defaultName = p.basenameWithoutExtension(filePath);
     final targetId = await showModalBottomSheet<int>(
       context: context,
@@ -175,6 +204,80 @@ class _PlaylistPageState extends State<PlaylistPage> {
         ),
       ),
     );
+  }
+
+  /// macOS 菜单「导出播放列表」：先选要导出的播放列表，再存为 M3U8。
+  Future<void> _exportPlaylistFromMenu() async {
+    // 冷启动首次构建时数据可能尚未加载完成（playlists 为空不等于真没有），
+    // 先等数据就绪再判断，避免误报「没有可导出的播放列表」。
+    await _viewModel.ensureLoaded();
+    if (!mounted) return;
+    final playlists = _viewModel.playlists;
+    if (playlists.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('没有可导出的播放列表')));
+      return;
+    }
+
+    final selected = await showModalBottomSheet<Playlist>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 24, 12),
+              child: Text(
+                '选择要导出的播放列表',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final pl in playlists)
+                    ListTile(
+                      leading: const Icon(Icons.playlist_play),
+                      title: Text(pl.name),
+                      onTap: () => Navigator.pop(context, pl),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null || !mounted) return;
+
+    final ({Uint8List bytes, int count}) content;
+    try {
+      content = await buildPlaylistM3u8(selected.id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('导出失败：无法生成播放列表内容')));
+      return;
+    }
+
+    final uri = await FilePicker.saveFile(
+      dialogTitle: '导出播放列表',
+      fileName: '${selected.name}.m3u8',
+      bytes: content.bytes,
+      type: FileType.custom,
+      allowedExtensions: const ['m3u8', 'm3u'],
+    );
+    if (uri == null || !mounted) return;
+    // saveFile 已把 bytes 写入所选位置，uri 非空即成功。
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已导出 ${content.count} 首歌曲')));
   }
 
   String? _nameOf(int id) {
@@ -334,13 +437,11 @@ class _PlaylistPageState extends State<PlaylistPage> {
 
   // ─── Search ─────────────────────────────────────────────
 
-  List<Playlist> get _filteredPlaylists {
-    final q = normalizeQuery(_query);
-    if (q.isEmpty) return _viewModel.playlists;
-    return _viewModel.playlists
-        .where((p) => containsIgnoreCase(p.name, q))
-        .toList();
-  }
+  List<Playlist> get _filteredPlaylists => _playlistFilterCache.get(
+    normalizeQuery(_query),
+    _viewModel.playlists,
+    (q, source) => source.where((p) => containsIgnoreCase(p.name, q)).toList(),
+  );
 
   void _enterSearch() => setState(() => _searchActive = true);
 

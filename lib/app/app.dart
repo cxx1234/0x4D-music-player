@@ -8,6 +8,8 @@ import 'router.dart';
 import 'startup_error_page.dart';
 import 'theme.dart';
 import '../core/constants/layout.dart';
+import '../core/models/accent_color.dart';
+import '../core/navigation/route_observer.dart';
 import '../core/services/player_service.dart';
 import '../core/services/service_locator.dart';
 import '../core/utils/logger.dart';
@@ -65,6 +67,27 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       // 歌词 UI 状态（字号/翻译）从持久化设置恢复（设置页不展示，跨重启保留）。
       _playerUiState.lyricTextSize = ServiceLocator.settings.lyricTextSize;
       _playerUiState.showTranslation = ServiceLocator.settings.showTranslation;
+      // 注入菜单动作 → 切 tab（仅 macOS 有菜单服务）。
+      if (defaultTargetPlatform == TargetPlatform.macOS) {
+        final menu = ServiceLocator.menu;
+        menu.openSettings = _openSettingsFromMenu;
+        menu.openPlaylists = () => _shellController.request(
+          NavigationItem.playlists,
+          action: ShellAction.newPlaylist,
+        );
+        menu.openLibrary = () => _shellController.request(
+          NavigationItem.library,
+          action: ShellAction.importFolder,
+        );
+        menu.openImportPlaylist = () => _shellController.request(
+          NavigationItem.playlists,
+          action: ShellAction.importPlaylist,
+        );
+        menu.openExportPlaylist = () => _shellController.request(
+          NavigationItem.playlists,
+          action: ShellAction.exportPlaylist,
+        );
+      }
       setState(() => _initialized = true);
     }
   }
@@ -112,6 +135,17 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     }
   }
 
+  /// 菜单「偏好设置…」(⌘,) 动作：先关闭「正在播放」等子页回到主界面，
+  /// 再切到设置 tab。
+  void _openSettingsFromMenu() {
+    final nav = _navKey.currentState;
+    if (nav != null) {
+      // 播放页/详情页是 push 的子路由，切 tab 前先退回主页面（Shell）。
+      nav.popUntil((route) => route.isFirst);
+    }
+    _shellController.tab.value = NavigationItem.settings;
+  }
+
   void _openPlayer() {
     // 点按迷你底栏进入播放页前先对账，确保首屏即引擎真相。
     if (ServiceLocator.isReady) {
@@ -138,64 +172,102 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     );
   }
 
-  /// 主题模式兜底 notifier：ServiceLocator 就绪前 MaterialApp 也能稳定监听。
+  /// 主题兜底 notifier：ServiceLocator 就绪前 MaterialApp 也能稳定监听。
   static final _fallbackThemeMode = ValueNotifier<ThemeMode>(ThemeMode.system);
+  static final _fallbackAccent = ValueNotifier<AccentColor>(
+    AccentColor.graphite,
+  );
+  static final _fallbackSystemAccent = ValueNotifier<Color?>(null);
 
   @override
   Widget build(BuildContext context) {
-    // 主题模式由 SettingsService 广播：初始化前用静态兜底，就绪后切真实源。
-    final themeModeListenable = ServiceLocator.isReady
-        ? ServiceLocator.settings.themeModeNotifier
-        : _fallbackThemeMode;
+    // 主题外观（明暗模式 + 主题色 + 跟随系统的强调色）由 SettingsService /
+    // SystemAccentService 广播：任一变化都触发 MaterialApp 重建换肤。
+    // ServiceLocator 就绪前用静态兜底 notifier，就绪后切到真实服务源。
+    final settings = ServiceLocator.isReady ? ServiceLocator.settings : null;
+    final systemAccent = ServiceLocator.isReady
+        ? ServiceLocator.systemAccent
+        : null;
 
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: themeModeListenable,
-      builder: (context, themeMode, _) => MaterialApp(
-        title: '0x4D',
-        theme: AppTheme.light,
-        darkTheme: AppTheme.dark,
-        themeMode: themeMode,
-        home: _startupError != null
-            ? StartupErrorPage(error: _startupError!, onRetry: _retry)
-            : ShellPage(
-                isInitialized: _initialized,
-                controller: _shellController,
-              ),
-        onGenerateRoute: AppRouter.generateRoute,
-        navigatorKey: _navKey,
-        navigatorObservers: [_NowPlayingBarVisibilityObserver(_showBar)],
-        debugShowCheckedModeBanner: false,
-        builder: (context, child) {
-          // 根 Overlay 包裹整个应用：底栏位于 Navigator（含 Overlay）之外，
-          // 没有这个根 Overlay，底栏里的 Tooltip 等依赖 Overlay 的组件
-          // 会报 "No Overlay widgets found"。
-          return Overlay(
-            initialEntries: [
-              OverlayEntry(
-                builder: (context) => Scaffold(
-                  // 所有页面（Shell + 子页面 + 播放页）都渲染在底栏上方，底栏不被
-                  // 子页面盖住。顶部不再有全局顶栏，改由各页面自行避让（左侧边栏
-                  // 顶部预留 45 给红绿灯，右侧内容区用统一高度的 PageToolbar）。
-                  body: _PlaybackErrorConsumer(
-                    child: child ?? const SizedBox.shrink(),
-                  ),
-                  bottomNavigationBar: ValueListenableBuilder<bool>(
-                    valueListenable: _showBar,
-                    builder: (context, show, _) {
-                      // 全屏“正在播放”打开时隐藏底栏，关闭后恢复。
-                      // 启动失败时不显示底栏（此时没有播放器/队列）。
-                      if (!show || _startupError != null) {
-                        return const SizedBox.shrink();
-                      }
-                      return NowPlayingBar(onTap: _openPlayer);
-                    },
+    final themeListenable = settings != null
+        ? Listenable.merge([
+            settings.themeModeNotifier,
+            settings.accentColorNotifier,
+            systemAccent?.systemAccentNotifier ?? _fallbackSystemAccent,
+          ])
+        : Listenable.merge([
+            _fallbackThemeMode,
+            _fallbackAccent,
+            _fallbackSystemAccent,
+          ]);
+
+    return ListenableBuilder(
+      listenable: themeListenable,
+      builder: (context, _) {
+        final themeMode = settings?.themeMode ?? _fallbackThemeMode.value;
+        final accent = settings?.accentColor ?? _fallbackAccent.value;
+        final systemColor = systemAccent?.systemAccentNotifier.value;
+        // 「跟随系统」直用系统强调色；拿不到时 seedColor 回退默认石墨灰。
+        final seed = accent.seedColor(systemColor);
+        // 石墨灰默认 = 真·无彩色（monochrome，不走 fromSeed，避免灰 seed 派生偏色）；
+        // 跟随系统但拿不到系统色时兜底到石墨灰观感，同样走 monochrome。
+        final neutral =
+            accent == AccentColor.graphite ||
+            (accent.followsSystem && systemColor == null);
+        return MaterialApp(
+          title: '0x4D',
+          theme: neutral
+              ? AppTheme.monochrome(brightness: Brightness.light)
+              : AppTheme.light(seed: seed),
+          darkTheme: neutral
+              ? AppTheme.monochrome(brightness: Brightness.dark)
+              : AppTheme.dark(seed: seed),
+          themeMode: themeMode,
+          home: _startupError != null
+              ? StartupErrorPage(error: _startupError!, onRetry: _retry)
+              : ShellPage(
+                  isInitialized: _initialized,
+                  controller: _shellController,
+                ),
+          onGenerateRoute: AppRouter.generateRoute,
+          navigatorKey: _navKey,
+          navigatorObservers: [
+            _NowPlayingBarVisibilityObserver(_showBar),
+            routeObserver,
+          ],
+          debugShowCheckedModeBanner: false,
+          builder: (context, child) {
+            // 根 Overlay 包裹整个应用：底栏位于 Navigator（含 Overlay）之外，
+            // 没有这个根 Overlay，底栏里的 Tooltip 等依赖 Overlay 的组件
+            // 会报 "No Overlay widgets found"。
+            return Overlay(
+              initialEntries: [
+                OverlayEntry(
+                  builder: (context) => Scaffold(
+                    // 所有页面（Shell + 子页面 + 播放页）都渲染在底栏上方，底栏不被
+                    // 子页面盖住。顶部不再有全局顶栏，改由各页面自行避让（左侧边栏
+                    // 顶部预留 45 给红绿灯，右侧内容区用统一高度的 PageToolbar）。
+                    body: _PlaybackErrorConsumer(
+                      child: child ?? const SizedBox.shrink(),
+                    ),
+                    bottomNavigationBar: ValueListenableBuilder<bool>(
+                      valueListenable: _showBar,
+                      builder: (context, show, _) {
+                        // 全屏“正在播放”打开时隐藏底栏，关闭后恢复。
+                        // 启动失败时不显示底栏（此时没有播放器/队列）。
+                        if (!show || _startupError != null) {
+                          return const SizedBox.shrink();
+                        }
+                        return NowPlayingBar(onTap: _openPlayer);
+                      },
+                    ),
                   ),
                 ),
-              ),
-            ],
-          );
-        },
-      ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

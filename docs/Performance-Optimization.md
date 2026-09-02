@@ -1,29 +1,16 @@
 # 性能与待优化项清单
 
 > 删除线 = 已完成；其余为待办。详细完成记录见 git 提交与仓库记忆。
-> 最后更新：2026-08-27
+> 最后更新：2026-09-02
 
-## 1. 渲染 / UI 类
+## 1. 渲染 / UI 类（全部完成）
 
 - ~~P1 高频重建削减（播放页局部化、`uiListenable`、进度条自订阅、`PlayQueue.songs` 缓存视图）~~
 - ~~P2 封面降采样解码（`cacheWidth` + `gaplessPlayback`）~~
-
-### 1.1 搜索过滤结果未缓存
-- 位置：`library_page.dart:85-99` 及 album/artist/playlist 同类 getter。
-- 改法：query 不变时缓存过滤结果，变化才重算。
-
-### 1.2 全项目 0 处 `RepaintBoundary`
-- 位置：播放页封面/歌词区、`NowPlayingBar`、网格卡片封面。
-- 改法：关键区域加 `RepaintBoundary`（勿过度隔离致合成层爆炸）。
-
-### 1.3 歌手详情全表拉专辑
-- 位置：`artist_page.dart:217-220`。
-- 改法：按 `album_id` 定向查询（同 `getArtistStats` 聚合思路）。
-
-### 1.4 `NowPlayingBar` 仍订阅整个 PlayerService
-- 位置：`now_playing_bar.dart:22-23`。
-- 关联：底栏「按播放进度填充」功能正好需要 `positionStream`。
-- 改法：改订 `currentSongNotifier`+`playingNotifier`，进度填充部分单独订 `positionStream`。
+- ~~1.1 搜索过滤结果缓存（`QueryFilterCache`，四页过滤 getter 接入）~~
+- ~~1.2 关键区域加 `RepaintBoundary`（歌词区 / 播放页封面信息卡 / `CoverCard` 网格；不含长列表逐行）~~
+- ~~1.3 歌手详情定向查专辑（`getAlbumsByIds` 空集合短路，替代全表拉取）~~
+- ~~1.4 `NowPlayingBar` 订阅收窄 + 底栏背景进度填充（见 §6）~~
 
 ---
 
@@ -84,12 +71,12 @@
 - 位置：`player_service.dart:377`。
 - 改法：分批 `addAudioSources` + 加载反馈。
 
-## 6. 用户自规划功能
+## 6. 用户自规划功能（已完成）
 
-- 全局底栏「按播放进度填充」效果（可顺带解决 1.4）。
+- ~~全局底栏「按播放进度填充」效果（整体背景色从左向右填充，与 1.4 一并落地）~~
 
-## 0. 优先级建议
+## 7. 优先级建议
 
-1. **Release 前**：第 6 节（F2、F4）+ 第 7 节底栏进度填充（顺带解决 1.4）。
-2. **低风险顺手**：1.1、1.2、1.3、2.4、2.5、2.6、4.1、4.2。
+1. **Release 前**：`docs/TODO.md` 登记的发布项（macOS 菜单栏、Windows 最小尺寸/SMTC、macOS 权限）。
+2. **低风险顺手**：2.4、2.5、2.6、4.1、4.2。
 3. **第二轮架构优化**：2.1、2.2、2.3、5.1。

@@ -1,0 +1,50 @@
+/* App menu */
+"menu.about" = "About %@";
+"menu.preferences" = "Preferences…";
+"menu.services" = "Services";
+"menu.hide" = "Hide %@";
+"menu.hideOthers" = "Hide Others";
+"menu.showAll" = "Show All";
+"menu.quit" = "Quit %@";
+
+/* File menu */
+"menu.file" = "File";
+"menu.importFolder" = "Import Folder…";
+"menu.newPlaylist" = "New Playlist…";
+"menu.importPlaylist" = "Import Playlist…";
+"menu.exportPlaylist" = "Export Playlist…";
+
+/* Playback menu */
+"menu.playback" = "Playback";
+"menu.previous" = "Previous";
+"menu.play" = "Play";
+"menu.pause" = "Pause";
+"menu.next" = "Next";
+"menu.stop" = "Stop";
+"menu.volumeUp" = "Increase Volume";
+"menu.volumeDown" = "Decrease Volume";
+"menu.singleRepeat" = "Repeat One";
+"menu.playMode" = "Play Mode";
+"menu.modeSequential" = "Sequential";
+"menu.modeRepeatAll" = "Repeat All";
+"menu.modeShuffleAll" = "Shuffle";
+
+/* Edit menu */
+"menu.edit" = "Edit";
+"menu.undo" = "Undo";
+"menu.redo" = "Redo";
+"menu.cut" = "Cut";
+"menu.copy" = "Copy";
+"menu.paste" = "Paste";
+"menu.delete" = "Delete";
+"menu.selectAll" = "Select All";
+
+/* Window menu */
+"menu.window" = "Window";
+"menu.minimize" = "Minimize";
+"menu.zoom" = "Zoom";
+"menu.closeWindow" = "Close Window";
+"menu.bringAllToFront" = "Bring All to Front";
+
+/* Help menu */
+"menu.help" = "Help";

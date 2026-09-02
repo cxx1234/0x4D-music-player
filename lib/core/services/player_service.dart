@@ -386,6 +386,20 @@ class PlayerService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 相对调整音量（菜单 ⌘↑/⌘↓ 用）：按 [delta] 增减并钳制在 [0,1]。
+  ///
+  /// 菜单调整是离散、低频操作，调整后立即写盘到 settings.json——
+  /// 否则只改引擎不落盘，重启后恢复的还是旧值（强行覆盖用户最后的设置）。
+  Future<void> adjustVolume(double delta) async {
+    await setVolume(_volume + delta);
+    try {
+      // setVolume 内部已将 _volume 钳制到 [0,1]，持久化最终值。
+      await ServiceLocator.settings.setVolume(_volume);
+    } catch (e) {
+      AppLogger.warning('Settings', 'Failed to persist menu volume', e);
+    }
+  }
+
   /// 消费并清除最近的播放错误消息(返回 null 表示没有待提示的错误)。
   String? takePlaybackError() {
     final err = _lastPlaybackError;
@@ -511,6 +525,28 @@ class PlayerService extends ChangeNotifier {
     _resumePosition = null;
     await _player.stop();
     _playQueue.clear();
+  }
+
+  /// 停止播放但保留队列与当前曲目（菜单「停止」⌘. 用）。
+  ///
+  /// 与 [stop]（停止并清空队列）不同：这里只停引擎、保留队列与当前曲目，
+  /// 并把播放位置归零——再点播放会从当前曲目**开头**继续。
+  ///
+  /// ⚠️ just_audio 的 [AudioPlayer.stop] 语义是「暂停 + 释放解码器、保留位置
+  /// 可恢复」：内部把停止时的 position 存下来，下次 [AudioPlayer.play] 恢复
+  /// （_setPlatformActive 用保存的 position 重新 _load）。直接用它会让菜单
+  /// 「停止」表现得像「暂停」（音乐停、位置保留、再播放从原处继续）。
+  /// 要真正"从头开始"必须：
+  /// 1. [_resumePosition] 置零 → 下次 [play] 走 [_rebuildSequence] 时
+  ///    initialPosition 用 0（而不是引擎残留的旧位置）；
+  /// 2. 序列标记未加载 → 下次 [play] 触发 [_rebuildSequence] 重建；
+  /// 3. 保存的进度清零 → 未加载期间 [position] getter 回退到 0，进度条归零。
+  Future<void> stopPlayback() async {
+    _resumePosition = Duration.zero;
+    await _player.stop();
+    _sequenceLoaded = false;
+    _playQueue.setPlaybackState(Duration.zero, Duration.zero);
+    notifyListeners();
   }
 
   /// Skip to the next song.  Wraps around if [repeatMode] is [PlayerRepeatMode.all].
@@ -646,6 +682,19 @@ class PlayerService extends ChangeNotifier {
       _preSingleRepeat = _repeatMode;
       _repeatMode = PlayerRepeatMode.one;
     }
+    _persistModes();
+    unawaited(_applyAudioModes());
+    notifyListeners();
+  }
+
+  /// 直接设置播放模式（菜单「播放模式」子菜单用）：一步到位设基础模式 + 随机开关。
+  ///
+  /// 与 [cyclePlayMode] 的三态循环不同，这里精确到具体状态；同时清掉单曲循环记忆
+  /// （从单曲循环切到基础模式时不再恢复原模式）。
+  void setPlayMode(PlayerRepeatMode mode, {required bool shuffled}) {
+    _repeatMode = mode;
+    _isShuffled = shuffled;
+    _preSingleRepeat = null;
     _persistModes();
     unawaited(_applyAudioModes());
     notifyListeners();

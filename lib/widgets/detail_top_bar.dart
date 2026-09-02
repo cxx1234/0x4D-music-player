@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/constants/layout.dart';
+import '../core/navigation/route_observer.dart';
 
 /// 详情页顶部栏：返回键 + 左对齐标题 + 可选操作，替代二级页的 M3 AppBar。
 /// 作为 Scaffold 的 `appBar:` 槽位使用（实现 [PreferredSizeWidget]，body 无需改动）。
@@ -18,20 +21,73 @@ import '../core/constants/layout.dart';
 ///   body: ...,
 /// )
 /// ```
-class DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
+class DetailTopBar extends StatefulWidget implements PreferredSizeWidget {
   const DetailTopBar({super.key, required this.title, this.actions});
 
   final String title;
 
-  /// 右侧操作区（预留，暂无页面使用；后续按钮回归时接入）。
+  /// 右侧操作区（可空；宽度会上报给 macOS 原生，用于顶栏双击拦截）。
   final List<Widget>? actions;
 
   @override
   Size get preferredSize => Size.fromHeight(layoutConfig.detailTopBarHeight);
 
   @override
+  State<DetailTopBar> createState() => _DetailTopBarState();
+}
+
+class _DetailTopBarState extends State<DetailTopBar> with RouteAware {
+  static const _channel = MethodChannel('com.jerryc.txvziwm/window');
+
+  /// 最近测量的 actions 组宽度（逻辑像素；0 = 无 actions，右区不拦）。
+  double _actionsWidth = 0;
+  final _actionsKey = GlobalKey();
+
+  /// 当前已订阅的 ModalRoute（RouteAware 去重，路由变化时重订阅）。
+  ModalRoute<dynamic>? _subscribedRoute;
+
+  @override
+  void initState() {
+    super.initState();
+    _setTopBarGuard(true);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // ModalRoute 是 inherited widget，只能在 didChangeDependencies 里读取；
+    // 路由变化（push/pop）时重订阅 RouteAware。
+    final route = ModalRoute.of(context);
+    if (!identical(route, _subscribedRoute)) {
+      if (_subscribedRoute != null) routeObserver.unsubscribe(this);
+      if (route != null) routeObserver.subscribe(this, route);
+      _subscribedRoute = route;
+    }
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    _setTopBarGuard(false);
+    _reportActionsWidth(0);
+    super.dispose();
+  }
+
+  // 被上层路由覆盖：右区拦截交给上层（上报 0，避免残留旧宽度误拦）。
+  @override
+  void didPushNext() => _reportActionsWidth(0);
+
+  // 上层 pop 后自己重新可见：恢复自己最新的 actions 宽度。
+  @override
+  void didPopNext() => _reportActionsWidth(_actionsWidth);
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final actionsList = widget.actions;
+    final hasActions = actionsList != null && actionsList.isNotEmpty;
+    // 每次布局后测量 actions 宽度（仅宽度变化时上报原生）。
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureAndReport());
 
     return Padding(
       padding: EdgeInsets.only(
@@ -59,17 +115,47 @@ class DetailTopBar extends StatelessWidget implements PreferredSizeWidget {
               const SizedBox(width: 20),
               Expanded(
                 child: Text(
-                  title,
+                  widget.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleMedium,
                 ),
               ),
-              ...?actions,
+              if (hasActions)
+                Row(
+                  key: _actionsKey,
+                  mainAxisSize: MainAxisSize.min,
+                  children: actionsList,
+                ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// 测量 actions 组宽度（逻辑像素），变化时才上报给 macOS 原生。
+  void _measureAndReport() {
+    if (!mounted) return;
+    final box = _actionsKey.currentContext?.findRenderObject();
+    final width = (box is RenderBox && box.hasSize) ? box.size.width : 0.0;
+    if (width != _actionsWidth) {
+      _actionsWidth = width;
+      _reportActionsWidth(width);
+    }
+  }
+
+  /// 仅 macOS：DetailTopBar 出现/销毁时同步原生顶栏拦截开关。
+  void _setTopBarGuard(bool enabled) {
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      _channel.invokeMethod('setTopBarGuard', enabled);
+    }
+  }
+
+  /// 仅 macOS：上报 actions 组宽度（逻辑像素），原生按右缘反推拦截区。
+  void _reportActionsWidth(double width) {
+    if (defaultTargetPlatform == TargetPlatform.macOS) {
+      _channel.invokeMethod('setActionsWidth', width);
+    }
   }
 }

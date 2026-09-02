@@ -95,6 +95,33 @@ class _VolumeSliderState extends State<_VolumeSlider> {
   /// 拖动中的音量值（null = 未拖动，隐藏百分比提示）。
   double? _dragValue;
 
+  /// 最近一次引擎音量（用于检测外部音量变化，如 macOS 菜单 ⌘↑/⌘↓）。
+  late double _lastVolume;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastVolume = player.volume;
+    // 监听引擎音量变化：菜单/其他入口调音量时滑块即时同步。
+    // 仅音量值实际变化才重建，播放进度 notify 不会触发（值未变）。
+    player.addListener(_onPlayerChanged);
+  }
+
+  @override
+  void dispose() {
+    player.removeListener(_onPlayerChanged);
+    super.dispose();
+  }
+
+  void _onPlayerChanged() {
+    final v = player.volume;
+    if (v == _lastVolume) return;
+    _lastVolume = v;
+    if (!mounted) return;
+    // 拖动中 UI 已由 onChanged 的 setState 驱动，无需重复重建。
+    if (_dragValue == null) setState(() {});
+  }
+
   IconData _iconFor(double v) {
     if (v <= 0) return Icons.volume_off_rounded;
     if (v < 0.5) return Icons.volume_down_rounded;
