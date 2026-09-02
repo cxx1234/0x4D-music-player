@@ -242,38 +242,45 @@ class _PlayerPageState extends State<PlayerPage> {
                 );
               }
 
-              // ── 宽模式：信息卡（纵排）| 队列/歌词 + 底部全宽播放条 ──
-              return Column(
+              // ── 宽模式：信息卡（纵排）| 队列/歌词。底部全宽播放条已抽到
+              //    Scaffold.bottomNavigationBar（SnackBar 会自动顶到其上方）。──
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  SizedBox(
+                    width: wideInfoCardWidth(constraints.maxWidth),
+                    child: _buildWideInfo(context, theme, song),
+                  ),
                   Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(
-                          width: wideInfoCardWidth(constraints.maxWidth),
-                          child: _buildWideInfo(context, theme, song),
-                        ),
-                        Expanded(
-                          child: _RightPanel(
-                            viewModel: _viewModel,
-                            theme: theme,
-                            showQueue: _showQueue,
-                            uiState: widget.uiState,
-                            lyricsController: _lyrics.controller,
-                            hasTranslation: _lyrics.hasTranslationNotifier,
-                            onToggleTranslation: _toggleTranslation,
-                            onTextSizeChanged: _onTextSizeChanged,
-                          ),
-                        ),
-                      ],
+                    child: _RightPanel(
+                      viewModel: _viewModel,
+                      theme: theme,
+                      showQueue: _showQueue,
+                      uiState: widget.uiState,
+                      lyricsController: _lyrics.controller,
+                      hasTranslation: _lyrics.hasTranslationNotifier,
+                      onToggleTranslation: _toggleTranslation,
+                      onTextSizeChanged: _onTextSizeChanged,
                     ),
                   ),
-                  PlayerBar(
-                    player: ServiceLocator.player,
-                    theme: theme,
-                    onSeek: _viewModel.seek,
-                  ),
                 ],
+              );
+            },
+          ),
+          // 底部全宽播放条挂在 Scaffold.bottomNavigationBar：SnackBar(fixed)
+          // 会被自动顶到播放条上方，不再遮挡播放控制/进度/音量。
+          bottomNavigationBar: ListenableBuilder(
+            listenable: _viewModel,
+            builder: (context, _) {
+              // 空态（无可播歌曲）不显示播放条。
+              if (_viewModel.currentSong == null) {
+                return const SizedBox.shrink();
+              }
+              return PlayerBar(
+                player: ServiceLocator.player,
+                theme: theme,
+                onSeek: _viewModel.seek,
+                compact: narrow,
               );
             },
           ),
@@ -333,7 +340,7 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   /// 窄模式播放器：信息卡（高度够 → 竖版封面在上，不够 → 横版封面在左；
-  /// 矮窗可滚动）+ 底部播放条。
+  /// 矮窗可滚动）。底部播放条由 Scaffold.bottomNavigationBar 承载。
   Widget _buildNarrowPlayer(BuildContext context, ThemeData theme, Song song) {
     return Column(
       children: [
@@ -372,17 +379,12 @@ class _PlayerPageState extends State<PlayerPage> {
             },
           ),
         ),
-        PlayerBar(
-          player: ServiceLocator.player,
-          theme: theme,
-          onSeek: _viewModel.seek,
-          compact: true,
-        ),
       ],
     );
   }
 
-  /// 窄模式歌词/队列：内容块 + 迷你信息条 + 底部播放条。
+  /// 窄模式歌词/队列：内容块 + 迷你信息条。底部播放条由
+  /// Scaffold.bottomNavigationBar 承载。
   Widget _buildNarrowLyricsQueue(
     BuildContext context,
     ThemeData theme,
@@ -410,12 +412,6 @@ class _PlayerPageState extends State<PlayerPage> {
             isNarrow: true,
             compact: true,
           ),
-        ),
-        PlayerBar(
-          player: ServiceLocator.player,
-          theme: theme,
-          onSeek: _viewModel.seek,
-          compact: true,
         ),
       ],
     );

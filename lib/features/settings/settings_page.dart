@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/models/accent_color.dart';
 import '../../core/services/album_art_cache_service.dart';
 import '../../core/services/service_locator.dart';
 import '../../widgets/page_toolbar.dart';
@@ -21,6 +22,9 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 主题模式（启动时从设置读取，默认跟随系统）。
   ThemeMode _themeMode = ThemeMode.system;
 
+  /// 界面强调色（启动时从设置读取，默认石墨灰）。
+  AccentColor _accent = AccentColor.graphite;
+
   /// 底栏播放进度填充开关（启动时从设置读取，默认开）。
   bool _nowPlayingBarFill = true;
 
@@ -35,6 +39,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (ServiceLocator.isReady) {
       _resumePlayback = ServiceLocator.settings.resumePlaybackPosition;
       _themeMode = ServiceLocator.settings.themeMode;
+      _accent = ServiceLocator.settings.accentColor;
       _nowPlayingBarFill = ServiceLocator.settings.nowPlayingBarFill;
     }
     _loadCacheSize();
@@ -124,6 +129,21 @@ class _SettingsPageState extends State<SettingsPage> {
     ServiceLocator.settings.setNowPlayingBarFill(value);
   }
 
+  /// 跟随系统圆点的兜底监听源（非 macOS / 未就绪时无系统色服务）。
+  static final ValueNotifier<Color?> _noSystemColor = ValueNotifier<Color?>(
+    null,
+  );
+
+  /// 切换界面强调色（UI 状态 + 写盘 → MaterialApp 即时换肤）。
+  void _setAccentColor(AccentColor accent) {
+    setState(() => _accent = accent);
+    ServiceLocator.settings.setAccentColor(accent);
+  }
+
+  /// 底色相对亮度 → 覆盖前景色：深底用白、浅底用深黑灰（对勾可见）。
+  Color _contrastOn(Color background) =>
+      background.computeLuminance() > 0.5 ? Colors.black87 : Colors.white;
+
   /// 44×26 紧凑开关：M3 Switch 默认 52×32，非等比缩放（视觉+命中区同步）。
   Widget _buildCompactSwitch({
     required bool value,
@@ -165,6 +185,159 @@ class _SettingsPageState extends State<SettingsPage> {
           onChanged: _setResumePlayback,
         ),
         onTap: () => _setResumePlayback(!_resumePlayback),
+      ),
+    );
+  }
+
+  /// 「主题色」行：行内直排圆点（首项「跟随系统」+ 预设色板），点选即换肤。
+  Widget _buildAccentRow(ThemeData theme) {
+    // 跟随系统圆点的实时预览色：仅 macOS 有 SystemAccentService，
+    // 其余平台用兜底空 notifier（恒定 null，不触发重建）。
+    final systemAccent = ServiceLocator.isReady
+        ? ServiceLocator.systemAccent
+        : null;
+    final systemColorListenable =
+        systemAccent?.systemAccentNotifier ?? _noSystemColor;
+
+    const dotsGap = 6.0;
+    final count = AccentColor.values.length;
+    final fullMinWidth = 16.0 * count + dotsGap * (count - 1);
+
+    return SizedBox(
+      height: 72,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            const Icon(Icons.palette_outlined),
+            const SizedBox(width: 16),
+            // 文本块给上限宽度，剩余宽度尽量留给色板；极窄时文本省略号。
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 150),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('主题色', style: theme.textTheme.titleMedium),
+                  Text(
+                    '选择界面强调色或跟随系统',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _subtitleStyle(theme),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ValueListenableBuilder<Color?>(
+                valueListenable: systemColorListenable,
+                builder: (context, systemColor, _) => LayoutBuilder(
+                  builder: (context, constraints) {
+                    final available = constraints.maxWidth;
+                    if (available >= fullMinWidth) {
+                      // 宽度足够：圆点自适应填满（上限 24），右对齐。
+                      final size = ((available - dotsGap * (count - 1)) / count)
+                          .clamp(16.0, 24.0)
+                          .floorToDouble();
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: _accentDots(
+                          theme,
+                          size: size,
+                          systemColor: systemColor,
+                        ),
+                      );
+                    }
+                    // 极端窄：固定 20 圆点 + 横向滚动兜底（不溢出）。
+                    return SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: _accentDots(
+                          theme,
+                          size: 20,
+                          systemColor: systemColor,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 色板圆点列表（预设=实色圆；跟随系统=实时系统色或 auto 图标）。
+  List<Widget> _accentDots(
+    ThemeData theme, {
+    required double size,
+    required Color? systemColor,
+  }) => [
+    for (final accent in AccentColor.values) ...[
+      if (accent != AccentColor.values.first) const SizedBox(width: 6),
+      _buildAccentDot(
+        theme: theme,
+        accent: accent,
+        size: size,
+        systemColor: systemColor,
+      ),
+    ],
+  ];
+
+  /// 单个圆点：选中=描边+对勾；跟随系统无系统色=描边+auto 图标。
+  Widget _buildAccentDot({
+    required ThemeData theme,
+    required AccentColor accent,
+    required double size,
+    required Color? systemColor,
+  }) {
+    final scheme = theme.colorScheme;
+    final isSystem = accent.followsSystem;
+    final selected = _accent == accent;
+    final fill = isSystem ? systemColor : accent.seed;
+    final noFill = fill == null;
+
+    final Widget child;
+    if (selected) {
+      child = Icon(
+        Icons.check,
+        size: size * 0.6,
+        color: _contrastOn(fill ?? scheme.surface),
+      );
+    } else if (isSystem && noFill) {
+      child = Icon(
+        Icons.auto_awesome,
+        size: size * 0.55,
+        color: scheme.onSurfaceVariant,
+      );
+    } else {
+      child = const SizedBox.shrink();
+    }
+
+    return Tooltip(
+      message: accent.label,
+      child: GestureDetector(
+        onTap: () => _setAccentColor(accent),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: fill,
+            border: Border.all(
+              color: selected
+                  ? scheme.onSurface
+                  : (isSystem && noFill
+                        ? scheme.outlineVariant
+                        : Colors.transparent),
+              width: selected ? 2 : 1,
+            ),
+          ),
+          child: Center(child: child),
+        ),
       ),
     );
   }
@@ -246,6 +419,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ),
           ),
+          _buildAccentRow(theme),
         ],
       ),
     );
@@ -301,7 +475,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             minVerticalPadding: 16,
             leading: const Icon(Icons.info_outline),
-            title: _buildOptionText(theme, '关于', '版本 0.1.0+37 · 开源许可'),
+            title: _buildOptionText(theme, '关于', '版本 · 开源许可'),
             subtitle: null,
             trailing: Icon(Icons.chevron_right, color: chevronColor),
             onTap: () => Navigator.of(

@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../database/song_sort_order.dart';
+import '../models/accent_color.dart';
 import '../models/lyric_text_size.dart';
 
 /// A music folder with an optional macOS security-scoped bookmark.
@@ -36,6 +37,9 @@ class AppSettings {
   final List<MusicFolder> musicFolders;
   final String themeMode;
 
+  /// 界面强调色（[AccentColor.name]，如 'system'/'graphite'/'deepPurple'）。
+  final String accentColor;
+
   /// 音乐库歌曲排序方式（[SongSortOrder.name]）。
   final String songSortOrder;
 
@@ -57,6 +61,7 @@ class AppSettings {
   const AppSettings({
     this.musicFolders = const [],
     this.themeMode = 'system',
+    this.accentColor = 'graphite',
     this.songSortOrder = 'title',
     this.resumePlaybackPosition = true,
     this.volume = 1.0,
@@ -71,6 +76,7 @@ class AppSettings {
   Map<String, dynamic> toJson() => {
     'musicFolders': musicFolders.map((f) => f.toJson()).toList(),
     'themeMode': themeMode,
+    'accentColor': accentColor,
     'songSortOrder': songSortOrder,
     'resumePlaybackPosition': resumePlaybackPosition,
     'volume': volume,
@@ -98,6 +104,7 @@ class AppSettings {
     return AppSettings(
       musicFolders: folders,
       themeMode: json['themeMode'] as String? ?? 'system',
+      accentColor: json['accentColor'] as String? ?? 'graphite',
       songSortOrder: json['songSortOrder'] as String? ?? 'title',
       resumePlaybackPosition: json['resumePlaybackPosition'] as bool? ?? true,
       volume: (json['volume'] as num?)?.toDouble() ?? 1.0,
@@ -110,6 +117,7 @@ class AppSettings {
   AppSettings copyWith({
     List<MusicFolder>? musicFolders,
     String? themeMode,
+    String? accentColor,
     String? songSortOrder,
     bool? resumePlaybackPosition,
     double? volume,
@@ -120,6 +128,7 @@ class AppSettings {
     return AppSettings(
       musicFolders: musicFolders ?? this.musicFolders,
       themeMode: themeMode ?? this.themeMode,
+      accentColor: accentColor ?? this.accentColor,
       songSortOrder: songSortOrder ?? this.songSortOrder,
       resumePlaybackPosition:
           resumePlaybackPosition ?? this.resumePlaybackPosition,
@@ -237,6 +246,9 @@ class SettingsService {
     // 同步主题模式：启动读取持久化值并通知 MaterialApp。
     themeModeNotifier.value = _themeModeFromName(_settings.themeMode);
 
+    // 同步主题色（默认石墨灰；老配置文件缺失该键时保持默认）。
+    accentColorNotifier.value = AccentColor.fromName(_settings.accentColor);
+
     // 同步底栏填充开关（默认开；老配置文件缺失该键时保持 true）。
     nowPlayingBarFillNotifier.value = _settings.nowPlayingBarFill;
 
@@ -295,6 +307,23 @@ class SettingsService {
   Future<void> setThemeMode(ThemeMode mode) async {
     _settings = _settings.copyWith(themeMode: mode.name);
     themeModeNotifier.value = mode;
+    await _save();
+  }
+
+  /// 界面强调色（预设色板 / 跟随系统）。
+  ///
+  /// [AppSettings.accentColor] 持久化为字符串（[AccentColor.name]），
+  /// 这里解析成 [AccentColor] 供 MaterialApp 决定 seed。
+  AccentColor get accentColor => AccentColor.fromName(_settings.accentColor);
+
+  /// 主题色变化通知：设置页切换后驱动 [MaterialApp] 重建换肤。
+  final ValueNotifier<AccentColor> accentColorNotifier =
+      ValueNotifier<AccentColor>(AccentColor.graphite);
+
+  /// 持久化主题色并广播变化（触发 [MaterialApp] 换肤）。
+  Future<void> setAccentColor(AccentColor color) async {
+    _settings = _settings.copyWith(accentColor: color.name);
+    accentColorNotifier.value = color;
     await _save();
   }
 

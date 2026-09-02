@@ -20,6 +20,11 @@ class AppDelegate: FlutterAppDelegate {
   private var servicesMenu: NSMenu?
   private var keyMonitor: Any?
 
+  // MARK: - 系统强调色（SystemAccentService ↔ System Settings 强调色）
+
+  private var systemAccentChannel: FlutterMethodChannel?
+  private var systemAccentObservers: [NSObjectProtocol] = []
+
   override func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
     // Keep running in the background after the window is closed so playback
     // continues and the system media keys / Now Playing stay controllable.
@@ -563,6 +568,81 @@ class AppDelegate: FlutterAppDelegate {
     return item
   }
 
+  // MARK: - 系统强调色通道
+
+  private func configureSystemAccentChannel(binaryMessenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(
+      name: "com.jerryc.txvziwm/system_accent",
+      binaryMessenger: binaryMessenger
+    )
+    systemAccentChannel = channel
+
+    channel.setMethodCallHandler { (call: FlutterMethodCall, result: @escaping FlutterResult) in
+      switch call.method {
+      case "getAccent":
+        result(Self.currentSystemAccentRGB())
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    // 系统强调色变化（系统设置 → 外观 → 强调色）时主动推给 Dart，实时跟随。
+    let distributedCenter = DistributedNotificationCenter.default()
+    systemAccentObservers.append(
+      distributedCenter.addObserver(
+        forName: NSNotification.Name("AppleColorPreferencesChangedNotification"),
+        object: nil,
+        queue: .main
+      ) { [weak self] _ in
+        self?.pushSystemAccent()
+      }
+    )
+    // 明暗外观切换时 controlAccentColor 解析出的强调色 shade 会变，一并重推。
+    systemAccentObservers.append(
+      distributedCenter.addObserver(
+        forName: NSNotification.Name("AppleInterfaceThemeChangedNotification"),
+        object: nil,
+        queue: .main
+      ) { [weak self] _ in
+        self?.pushSystemAccent()
+      }
+    )
+    // 兜底：应用回到前台时重读一次（覆盖 Multicolor 随壁纸派生等场景——
+    // 该 SDK 无壁纸变化通知 API，改用前台重读）。
+    systemAccentObservers.append(
+      NotificationCenter.default.addObserver(
+        forName: NSApplication.didBecomeActiveNotification,
+        object: nil,
+        queue: .main
+      ) { [weak self] _ in
+        self?.pushSystemAccent()
+      }
+    )
+  }
+
+  private func pushSystemAccent() {
+    guard let rgb = Self.currentSystemAccentRGB(),
+          let channel = systemAccentChannel else { return }
+    channel.invokeMethod("accentChanged", arguments: rgb)
+  }
+
+  /// 当前系统强调色 → [r, g, b]（0-255）。
+  ///
+  /// `NSColor.controlAccentColor` 是外观相关的动态色：在主线程读取时按应用
+  /// 当前外观解析（明暗下强调色 shade 略有差异，属系统语义），转 sRGB 取分量。
+  private static func currentSystemAccentRGB() -> [Int]? {
+    guard let srgb = NSColor.controlAccentColor.usingColorSpace(.sRGB) else {
+      return nil
+    }
+    var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+    srgb.getRed(&r, green: &g, blue: &b, alpha: &a)
+    return [
+      Int((r * 255).rounded()),
+      Int((g * 255).rounded()),
+      Int((b * 255).rounded()),
+    ]
+  }
+
   override func applicationDidFinishLaunching(_ notification: Notification) {
     let controller = mainFlutterWindow?.contentViewController as! FlutterViewController
 
@@ -628,6 +708,9 @@ class AppDelegate: FlutterAppDelegate {
         result(FlutterMethodNotImplemented)
       }
     }
+
+    // 系统强调色通道：Dart 查询 + 原生在系统强调色/壁纸(Multicolor)变化时推送。
+    configureSystemAccentChannel(binaryMessenger: controller.engine.binaryMessenger)
 
     // Register the system media controls plugin (MPRemoteCommandCenter +
     // MPNowPlayingInfoCenter → Now Playing / Control Center / media keys).

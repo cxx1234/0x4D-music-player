@@ -13,6 +13,7 @@ import 'player_service.dart';
 import 'sandbox_service.dart';
 import 'settings_service.dart';
 import 'song_repository.dart';
+import 'system_accent_service.dart';
 
 /// 简单的服务定位器，用于全局访问各项服务。
 ///
@@ -29,6 +30,7 @@ class ServiceLocator {
   static SandboxService? _sandbox;
   static MediaControlService? _mediaControls;
   static MenuService? _menuService;
+  static SystemAccentService? _systemAccent;
 
   /// 启动时恢复沙箱权限失败的文件夹数量（0 = 全部成功）。
   static int _sandboxRestoreFailures = 0;
@@ -115,6 +117,9 @@ class ServiceLocator {
     return _menuService!;
   }
 
+  /// 系统强调色桥接服务（仅 macOS；其他平台为 null，跟随系统回退默认色）。
+  static SystemAccentService? get systemAccent => _systemAccent;
+
   /// Whether [initialize] has completed.
   static bool get isReady => _player != null;
 
@@ -194,6 +199,12 @@ class ServiceLocator {
     // 其他平台无原生菜单，不创建（避免通道噪音）。
     if (Platform.isMacOS) {
       _menuService = MenuService.attach(_player!);
+    }
+
+    // 系统强调色桥接（仅 macOS；attach 内触发首次读取，失败不抛）。
+    // 其他平台保持 null → 「跟随系统」回退默认石墨灰。
+    if (Platform.isMacOS) {
+      _systemAccent = SystemAccentService.attach();
     }
   }
 

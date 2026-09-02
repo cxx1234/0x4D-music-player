@@ -8,7 +8,7 @@ class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
 
   /// 版本号（暂时硬编码；后续如引入 package_info_plus 可自动读取）。
-  static const String version = '0.1.0+37';
+  static const String version = '0.2.2';
 
   /// 开源项目主页。
   static const String repoUrl = 'https://github.com/cxx1234/0x4D-music-player';
