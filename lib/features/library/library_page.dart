@@ -8,6 +8,7 @@ import '../../core/database/song_sort_order.dart';
 import '../../core/services/library_scanner_service.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/index_letters.dart';
+import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
 import '../../widgets/animated_collapse.dart';
 import '../../widgets/card_surface.dart';
@@ -43,6 +44,7 @@ class _LibraryPageState extends State<LibraryPage> {
   static const _scanResultDismissDelay = Duration(seconds: 4);
   bool _searchActive = false;
   String _query = '';
+  final _songFilterCache = QueryFilterCache<Song>();
   final _songScrollController = ScrollController();
   StreamSubscription<ShellAction>? _actionSub;
 
@@ -178,18 +180,20 @@ class _LibraryPageState extends State<LibraryPage> {
   // ─── Search ─────────────────────────────────────────────
 
   /// 搜索模式下的过滤结果；查询为空时返回全量歌曲。
-  List<Song> get _filteredSongs {
-    final q = normalizeQuery(_query);
-    if (q.isEmpty) return _viewModel.songs;
-    return _viewModel.songs
+  /// 经 QueryFilterCache 缓存：query / 源列表均未变时不重复 O(n) 过滤
+  /// （页面常因数据刷新、播放态等无关原因重建）。
+  List<Song> get _filteredSongs => _songFilterCache.get(
+    normalizeQuery(_query),
+    _viewModel.songs,
+    (q, source) => source
         .where(
           (s) =>
               containsIgnoreCase(s.title, q) ||
               containsIgnoreCase(s.artist, q) ||
               containsIgnoreCase(s.album, q),
         )
-        .toList();
-  }
+        .toList(),
+  );
 
   void _enterSearch() => setState(() => _searchActive = true);
 

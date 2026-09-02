@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
+import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
 import '../../widgets/card_surface.dart';
 import '../../widgets/cover_card.dart';
@@ -39,6 +40,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
   final _viewModel = PlaylistsViewModel();
   bool _searchActive = false;
   String _query = '';
+  final _playlistFilterCache = QueryFilterCache<Playlist>();
   StreamSubscription<ShellAction>? _actionSub;
 
   @override
@@ -426,13 +428,11 @@ class _PlaylistPageState extends State<PlaylistPage> {
 
   // ─── Search ─────────────────────────────────────────────
 
-  List<Playlist> get _filteredPlaylists {
-    final q = normalizeQuery(_query);
-    if (q.isEmpty) return _viewModel.playlists;
-    return _viewModel.playlists
-        .where((p) => containsIgnoreCase(p.name, q))
-        .toList();
-  }
+  List<Playlist> get _filteredPlaylists => _playlistFilterCache.get(
+    normalizeQuery(_query),
+    _viewModel.playlists,
+    (q, source) => source.where((p) => containsIgnoreCase(p.name, q)).toList(),
+  );
 
   void _enterSearch() => setState(() => _searchActive = true);
 

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_lyric/core/lyric_model.dart';
