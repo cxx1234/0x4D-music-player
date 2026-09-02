@@ -161,6 +161,11 @@ class _PlaylistPageState extends State<PlaylistPage> {
     }
     if (!mounted) return;
 
+    // 与导出同理：等播放列表数据就绪再展示「选择目标列表」，否则冷启动
+    // 立即导入时已有列表不会出现在可选目标里。
+    await _viewModel.ensureLoaded();
+    if (!mounted) return;
+
     final defaultName = p.basenameWithoutExtension(filePath);
     final targetId = await showModalBottomSheet<int>(
       context: context,
@@ -203,6 +208,10 @@ class _PlaylistPageState extends State<PlaylistPage> {
 
   /// macOS 菜单「导出播放列表」：先选要导出的播放列表，再存为 M3U8。
   Future<void> _exportPlaylistFromMenu() async {
+    // 冷启动首次构建时数据可能尚未加载完成（playlists 为空不等于真没有），
+    // 先等数据就绪再判断，避免误报「没有可导出的播放列表」。
+    await _viewModel.ensureLoaded();
+    if (!mounted) return;
     final playlists = _viewModel.playlists;
     if (playlists.isEmpty) {
       if (!mounted) return;
