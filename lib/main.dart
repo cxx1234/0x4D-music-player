@@ -7,13 +7,15 @@ import 'app/app.dart';
 import 'core/utils/logger.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
   // 启动时清理 7 天前的日志文件(不阻塞启动)。
   unawaited(AppLogger.pruneOldLogs());
 
   runZonedGuarded(
     () {
+      // 必须在 runZonedGuarded 内初始化 binding,使其与 runApp 处于同一 zone,
+      // 否则会触发 "bindings initialized in a different zone" 告警。
+      WidgetsFlutterBinding.ensureInitialized();
+
       // 全局 Flutter 错误:记录 fatal 日志;debug 下保留默认红屏便于开发,
       // release 下不再红屏(由 ErrorWidget.builder 接管)。
       FlutterError.onError = (details) {
