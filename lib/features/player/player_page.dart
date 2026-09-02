@@ -442,7 +442,9 @@ class _PlayerPageState extends State<PlayerPage> {
         onLike: _toggleLike,
         onOpenArtist: () => _openArtist(context, song),
         onOpenAlbum: () => _openAlbum(context, song),
-        menuBuilder: songMenuItems,
+        // 正在播放的信息卡显示的是当前曲（已在队列中）→ 用专用菜单，
+        // 不含「播放下一首 / 添加到播放队列」等队列操作。
+        menuBuilder: currentSongMenuItems,
         onMenuSelected: (s, v) => handleSongMenuAction(context, s, v),
       ),
     );

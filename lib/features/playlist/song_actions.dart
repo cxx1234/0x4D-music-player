@@ -33,6 +33,21 @@ List<PopupMenuEntry<String>> songMenuItems(Song song) {
   ];
 }
 
+/// 正在播放页（信息卡）的"更多"菜单项。
+///
+/// 当前曲必然已在逻辑队列中（正在播放），「播放下一首 / 添加到播放队列」
+/// 对它毫无意义（总是置灰）→ 仅保留「添加到播放列表」与「喜欢」。
+/// 此菜单与通用 [songMenuItems] 分开，避免队列操作出现在正在播放的信息卡上。
+List<PopupMenuEntry<String>> currentSongMenuItems(Song song) {
+  return [
+    const PopupMenuItem(value: 'playlist', child: Text('添加到播放列表')),
+    PopupMenuItem(
+      value: 'favorite',
+      child: Text(song.isFavorite == 1 ? '取消喜欢' : '喜欢'),
+    ),
+  ];
+}
+
 /// 处理歌曲"更多"菜单点击。
 Future<void> handleSongMenuAction(
   BuildContext context,
