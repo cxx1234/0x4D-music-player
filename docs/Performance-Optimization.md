@@ -1,7 +1,7 @@
 # 性能与待优化项清单
 
-> 删除线 = 已完成；其余为待办。详细完成记录见 git 提交与仓库记忆。
-> 最后更新：2026-09-03（2026-09-03 全项目三路只读审计并入；★=本次新增，○=可选）
+> 删除线 = 已完成；其余为待办。⛔=已失效/不再适用；🆕=2026-09-17 审计新增。
+> 最后更新：2026-09-17（行号已按当日代码重校）
 
 ## 1. 渲染 / UI 类
 
@@ -10,61 +10,70 @@
 - ~~1.1 搜索过滤结果缓存（`QueryFilterCache`，四页过滤 getter 接入）~~
 - ~~1.2 关键区域加 `RepaintBoundary`（歌词区 / 播放页封面信息卡 / `CoverCard` 网格；不含长列表逐行）~~
 - ~~1.3 歌手详情定向查专辑（`getAlbumsByIds` 空集合短路，替代全表拉取）~~
-- ~~1.4 `NowPlayingBar` 订阅收窄 + 底栏背景进度填充（可开关：设置 › 外观，见 §6）~~
+- ~~1.4 `NowPlayingBar` 订阅收窄 + 底栏背景进度填充（可开关：设置 › 外观）~~
+- ~~用户自规划：全局底栏「按播放进度填充」效果（整体背景色从左向右，可开关）~~
 
-### 1.x 第二批待办（2026-09-03 审计）
-- U1 ★ 进度条拖动每 tick seek（无 onChangeEnd 落点）— `player_progress_bar.dart:47`。仿音量滑块：拖动中预览、结束提交一次。
-- U2 ★ 音乐库每次播放/暂停/切歌整页 setState（行内播放图标）— `library_page.dart:104`。行内图标局部订阅。
-- U3 ★ `SongTile` build 真构建整份菜单（含 O(n) 队列查）— `song_tile.dart:~239`。以 `menuBuilder != null` 判有无。
-- U4 ★ 菜单动作后无条件整表重查 — `album_page.dart:323` / `artist_page.dart:347` / `library_page.dart:608`。仅需刷新项才重查。
-- U5 ★ 播放中行图标 60fps 动画在 offstage 页仍跑 — `song_tile` `_AnimatedPlayingIcon`。不可见时停。
-- L1 ★ `queue_view` 删除后 await 中 setState 未复查 mounted — `queue_view.dart:252-263`。
-- L2 ★ `library_page` 多处 await 后 setState 未复查 mounted — `:171/177/366`。
-- L3 ★ 收藏跨视图不一致（歌曲操作只写 DB，播放页红心可能 stale）— `song_actions.dart:58`。统一走 `toggleFavoriteForCurrent`。
-- L4 ★ 设置页缓存大小只在 initState 载、保活切回不刷新 — `settings_page.dart`。active + didUpdateWidget。
+### 1.x 待办（行号按 2026-09-17）
+- U1 进度条拖动每 tick seek（无 onChangeEnd 落点）— `player_progress_bar.dart:47`。仿 `_VolumeSlider`：拖动中预览、结束提交一次。
+- U2 音乐库每次播放/暂停/切歌整页 setState（行内播放图标）— `library_page.dart:105-107`。行内图标局部订阅。
+- U3 ⚠️半完成（`be38900` 已修「菜单陈旧」）：`song_tile.dart:151-152` build 内仍真跑 `menuBuilder.call`（含 O(n) 队列查）。`hasMenu` 改判 `menuBuilder != null`。
+- U4 菜单动作后无条件整表重查（四个动作都不改变列表内容）— `album_page.dart:340` / `artist_page.dart:364` / `library_page.dart:606`。
+- U5 播放中行图标 60fps 动画在 offstage 页仍跑 — `song_tile.dart:117/246`（IndexedStack 保活不关 ticker）。
+- L1 `queue_view` 批量删除后 await 中 setState 未复查 mounted — `queue_view.dart:292-303`。
+- L2 `library_page` 多处 await 后 setState 未复查 mounted — `:173/179/368`（`_removeFolder` 全程无守卫）。
+- L3 收藏跨视图不一致 — `song_actions.dart:47-49` 只写 DB；`0847d0f` 移除「正在播放」菜单收藏后，仅剩反方向：在库/专辑/歌手点收藏，播放页红心不更新。
+- L4 设置页缓存大小只在 initState 载、无 `active`/`didUpdateWidget`，保活切回不刷新 — `settings_page.dart:39-50`。
 
 ---
 
 ## 2. 启动 / 数据层类
 
 - ~~P3 DB schema v6（7 索引）+ WAL + 队列恢复批量查询~~
+- ~~2.9 扫描根读取失败时整根被误标不可用（改为只用成功读取的根 `okRoots` 做 diff；2026-09-17 ✅）~~
+- ~~2.10 文件夹路径 `LIKE '$root/%'` 未转义（改「SQL 粗筛 + Dart 精确判定」，新增 `utils/path_under_root.dart`；`deleteFolderSongs` 改分块 `isIn` 删除；2026-09-17 ✅）~~
 
 ### 2.1 启动路径串行阻塞
-- 位置：`service_locator.dart:137-169` `_doInitialize()`。
-- 改法：`Future.wait` 并行独立步骤（settings/DB 开库、backfill、restoreQueue、sandbox）。
+- 位置：`service_locator.dart:199-250` `_doInitialize()`（新增 `:203` 版本号读取在关键路径最前）。
+- 改法：`Future.wait` 并行独立步骤（settings/DB 开库、backfill、restoreQueue、sandbox）；版本号读取移出关键路径。
 
 ### 2.2 每次启动全盘遍历阻塞首屏
-- 位置：`library_view_model.dart:117`。
+- 位置：`library_view_model.dart:143-158`（`_quickSync` 在 `_loadSongs` 之前）。
 - 改法：先加载歌曲列表再后台 quickSync。
 
 ### 2.3 数据库跑主 isolate
-- 位置：`database.dart:51` `create()`。
+- 位置：`database.dart:90-107` `create()`。
 - 前置：WAL 已开。风险：中（需全量测试 + 真实库验证）。
 - 改法：`createInBackground`/`readPool`。
 
 ### 2.4 `getExistingFileStats` 拉全行
-- 位置：`database.dart:124`。
+- 位置：`database.dart:228-238`。
 - 改法：投影 `file_path/last_modified_ms/file_size` 三列。
 
-### 2.5 `backfillSortKeys` 每次启动全表扫
-- 位置：`song_repository.dart:150`。
-- 改法：先 `COUNT` 判断是否为 0，或迁移后一次性标记。
+### 2.5 `backfillSortKeys` 每次启动 3 次无索引全表扫
+- 位置：`song_repository.dart:129-147` + `database.dart:677/685/693`（已无全表 UPDATE，但仍未短路）。
+- 改法：先 `COUNT(*) WHERE sort_key IS NULL` 短路。
 
 ### 2.6 watch 流全是死代码
-- 位置：`database.dart` 6 个 `watch*` 方法。
-- 改法：清理，或改用 drift 流式更新替代手动 reload。
+- 位置：`database.dart:117/383/430/444/475/495` + `song_repository.dart:36/55/62/69/76/87`（零调用）。
+- 改法：删除，或改用 drift 流式更新替代手动 reload。
 
-### 2.7 ★ `getAllFilePaths` 拉全行（每次 quickSync 后同步队列用）
-- 位置：`database.dart:219-227`。
-- 改法：`selectOnly(songs.filePath)`。
+### 2.7 `getAllFilePaths` 拉全行（`getFolderFilePaths` 已修）
+- 位置：`database.dart:219-227`（`getAllFilePaths` 仍 `select(songs)` 物化 26 列）；调用点 `library_view_model.dart:340-342`。
+- 已修：`getFolderFilePaths` 改为 `selectOnly` 投影 + Dart 精确过滤（见 2.10，2026-09-17 ✅）。
+- 改法（剩余）：`getAllFilePaths` 改 `selectOnly(songs.filePath)`；多根合并为一次查询。
 
-### 2.8 ★ dateAdded / playCount / year 排序无复合索引
-- 位置：`database.dart:350-356` `getAvailableSongs`（现仅 `(is_available,title_sort_key)` 有索引）。
+### 2.8 dateAdded / playCount / year 排序无复合索引
+- 位置：`database.dart:365-371` + `_songOrdering :709-721`（schema 仍 v6、7 索引）。
 - 改法：按需补 `(is_available,date_added)` / `(is_available,play_count)`。
 
-### 2.9 ★ `LyricsViewModel` 构造即读当前歌歌词（启动期一次 I/O + isolate）
-- 位置：`lyrics_view_model.dart:63-66`。
-- 改法：延迟到播放页首次可见/首次播放再载。
+### 2.11 🆕 `resetInitialization()` 重试不释放旧实例（中）
+- 位置：`service_locator.dart:189-197` 重置 + `:214/227/234` 重建（PlayerService/MediaControlService/LyricsViewModel）。
+- 后果：幽灵 AudioEngine + 重复歌词订阅。
+- 改法：reset 前 dispose 已建服务，或仅在未创建时允许 reset。
+
+### 2.12 🆕 设置页「强制刷新」在扫描中被静默忽略（中）
+- 位置：`library_view_model.dart:255-260`（单飞守卫只 `AppLogger.warning`，UI 无反馈）+ `settings_page.dart:176-180` 跳转音乐库。
+- 改法：给 SnackBar 提示或排队执行。
 
 ## 3. 扫描 / 元数据类
 
@@ -72,67 +81,111 @@
 - ~~3.2 变化检测移后台 isolate（`detectChangedFiles` + `Isolate.run`；⚠️ 闭包勿捕获 UI 回调，防 unsendable）~~
 - ~~3.3 扫描事务查询去重（artist/album 批量缓存 + dateAdded 批量）~~
 - ~~3.4 文件夹并行遍历（`Future.wait`）~~
+- ~~3.9 扫描单飞守卫（`_scanInProgress` 覆盖 startScan/forceScan/rescan/quickSync——`library_view_model.dart:44/257/296`；2026-09-08 ✅）~~
+- ~~3.10 force 清幽灵误删仍在文件（磁盘路径 `p.normalize` 归一化 + `File.existsSync()` 二次确认，统一复用 `isUnderRootPath`；2026-09-17 ✅）~~
 
-### 3.5 第二批待办（2026-09-03 审计）
-- 3.5 ★ 扫描无条件拉 `existingStamps`（仅 force 分支使用）— `library_scanner_service.dart:174-175`。移进用时分支。
-- 3.6 ★ 每次 quickSync 都跑 `cleanupOrphans` + 孤儿封面清理（无增删也全量清）— `library_scanner_service.dart:263-264`。仅确有增删改/恢复才清；quick 跳过。
-- 3.7 ★ `cleanupOrphans` 3 段全表扫 + `NOT IN` 删除 — `database.dart:298-340`。改一条 `DELETE … WHERE NOT EXISTS`。
-- 3.8 ★ `restoreFiles` 逐文件 UPDATE — `song_repository.dart:546-550`。仿 `markMissingFiles` 用 `isIn` 批量。
-- ~~3.9 ★ `_runScan` 无单飞守卫，多入口（startScan/forceScan/rescan/quickSync）可能并发双跑事务 — `library_view_model.dart`。已加 `_scanInProgress` 单飞守卫（`_runScan`/`_quickSync` 共用；UI 刷新按钮扫描中已隐藏，VM 层兜底，2026-09-08 ✅）~~
+### 3.5 待办（行号按 2026-09-17）
+- 3.5 扫描无条件拉 `existingStamps`（全库映射；force 与非更新分支都白查）— `library_scanner_service.dart:195`（force `:213-214`、非更新 `:211-212`）。移进变化检测分支并按根限定。
+- 3.6 每次 quickSync 都跑 `cleanupOrphans` + 孤儿封面清理（无 mode 判断）— `library_scanner_service.dart:295-296`，每次启动 = 2 次全表扫 + `covers/` 全列（`album_art_cache_service.dart:159-176`）。仅确有增删改/恢复才清；quick 跳过。
+- 3.7 `cleanupOrphans` 3 段全表扫 + `isNotIn` 删除 — `database.dart:313-355`。改 `DELETE … WHERE NOT EXISTS`。
+- 3.8 `restoreFiles` 逐文件 UPDATE — `song_repository.dart:564-569` + `database.dart:272-278`。仿 `markMissingFiles` 用 `isIn` 批量。
+
+### 3.11 🆕 `restoredFiles` 在主 isolate 逐路径 `existsSync`
+- 位置：`library_scanner_service.dart:199-201`，抵消 3.2 把 `statSync` 移入 isolate 的收益。
+- 改法：并入 `_detectChangedInIsolate` 或复用目录收集结果。
 
 ---
 
-## 4. 后台 / 媒体控制类
+## 4. 后台 / 服务类
 
-### 4.1 每秒重读封面文件 + 解码
-- 位置：`media_control_service.dart:42-49` + `MediaControlsPlugin.swift:104-122`。
-- 改法：仅切歌传封面，位置用独立轻量更新（只更新 `ElapsedPlaybackTime`）。
+### 4.1 每秒重读封面文件 + 整包 push
+- 位置：`media_control_service.dart:40-44/78-95` + `macos/Runner/MediaControlsPlugin.swift:119-125`（每秒 `fileExists` + `NSImage(contentsOfFile:)` 重建 `MPMediaItemArtwork`）。
+- 改法：切歌才传封面；播放中走独立的轻量 `ElapsedPlaybackTime` 更新通道。
 
 ### 4.2 日志每行 flush
-- 位置：`logger.dart:229-232`。
+- 位置：`lib/core/utils/logger.dart:229-232`。
 - 改法：批量缓冲 + 周期 flush（保持崩溃前落盘语义）。
 
-### 4.3-4.5 第二批待办（2026-09-03 审计）
-- 4.3 ★ 媒体键操作 fire-and-forget 未串行，与扫描 `_rebuildSequence` 并发有风险 — `media_control_service.dart:55-72`。加操作串行/统一入口。
-- 4.4 ★ 媒体键 EventChannel `onError: (_){}` 静默吞 — `macos_media_controls.dart:30`。至少 `AppLogger.warning`。
-- ~~4.5 ★ folder watcher 无防抖且扫描写库期间仍并发触发 — `folder_watcher_service.dart`。已改去抖批量（500ms 窗口聚合 + 一次 flush）+ `suspend()` 扫描期缓冲、`resumeAfterScan` 扫完跳过已扫描文件再批处理（2026-09-08 ✅）~~
+### 4.3 媒体键操作 fire-and-forget 未串行
+- 位置：`media_control_service.dart:49-64`。⚠️ 原依据「与扫描 `_rebuildSequence` 并发」已失效（该方法随引擎迁移删除）；现并发载体为 `PlayerService._loadCurrent`（见 5.6）。
+- 改法：给引擎操作加操作串行/统一入口。
 
-## 5. 播放器 / 持久化类
+### 4.4 媒体键 EventChannel `onError` 静默吞
+- 位置：`lib/core/audio/macos_media_controls.dart:30`。
+- 改法：至少 `AppLogger.warning`。
+
+- ~~4.5 folder watcher 无防抖 + 扫描期并发触发（已改 500ms 去抖批量 + `suspend()` 扫描期缓冲 + `resumeAfterScan`；`folder_watcher_service.dart:56/127/181`，2026-09-08 ✅）~~
+
+### 4.6 🆕 watcher 新实现的残留问题（中）
+- `folder_watcher_service.dart:127-133`：`suspend()` 不等待在途 `_flushPending` → 仍可能与扫描事务并发写库。建议 suspend 返回 Future 并 await，或纳入 `_scanInProgress` 单飞锁。
+- `:175-179`：force 扫描把全部文件算作已解析 → 扫描期间/结束后的编辑事件被直接丢弃（quick 扫描影响小）。建议按「事件时间 vs 解析时间」过滤。
+- `:150-160`：批次被 suspend 时结尾不通知 VM（已落库但 UI 不刷新，低）。
+- `:200-202`：批量 remove 不校验存在性，remove+add 乱序会瞬时把歌标不可用（低）。
+
+## 5. 播放引擎 / 播放器 / 持久化
 
 - ~~P4 写盘防抖（队列 debounce + 串行写链 + 生命周期 flush、音量拖动结束落盘）~~
 - ~~5.2 封面缓存扩展名不一致~~
+- ⛔ ~~5.1 大队列 `setAudioSources` 一次性构建~~ **已失效**：引擎已换 audioplayers（单曲 `AudioEngine`），`setAudioSources`/`_rebuildSequence` 全库 0 命中。替代关注点见 5.6/5.7。
+- ~~5.4 `settings.json` 写无串行化与非原子写（改**串行写链** + temp/rename **原子写**；2026-09-17 ✅）~~
+- ~~5.8 `settings.json` 解析零容错（损坏则备份为 `.corrupt` 并用默认设置继续启动；2026-09-17 ✅）~~
 
-### 5.1 大队列 `setAudioSources` 一次性构建
-- 位置：`player_service.dart:419-427`（`playFromList`）/ `923-931`（`_rebuildSequence`）。
-- 改法：分批 `addAudioSources` + 加载反馈。
+### 5.3 位置每几秒整份重写 `play_queue.json`
+- 位置：`player_service.dart:75-78`（1s tick）→ `:425-430`（5s 节流）→ `:911-917`；`play_queue.dart:291-307`（每次写全部 `filePaths`，千首歌可百 KB）。
+- 改法：`positionMs/durationMs` 拆独立小文件/独立 key。
 
-### 5.3-5.5 第二批待办（2026-09-03 审计）
-- 5.3 ★ 位置每几秒整份重写 `play_queue.json`（千首歌可百 KB）— `play_queue.dart:288-317` + `player_service.dart:146-149/301-308`。`positionMs/durationMs` 独立小文件/独立 key。
-- 5.4 ★ `settings.json` 写无串行化，并发 setter 可能乱序覆盖 — `settings_service.dart:258-263`。加串行写链。
-- 5.5 ○（可选残余）`_positionSub` 每 200ms 仍唤醒订整个 service 的订阅者（媒体控制等）— `player_service.dart:144`。可接受，需再压再处理。
+### 5.5 ○（可选残余）`_positionSub` 每 200ms 唤醒订整个 service 的订阅者
+- 位置：`player_service.dart:68`。现存 6 个整 service 订阅者均有去重守卫（`player_bar.dart:107`、`menu_service.dart:63`、`media_control_service.dart:35`、`app.dart:299`、`now_playing_bar.dart:175`）→ 可接受。
 
-## 6. 用户自规划功能（已完成）
+### 5.6 🆕 切歌加载无串行/代际 → UI 与引擎可能不一致（中高）
+- 位置：`player_service.dart:324-352`（`_loadCurrent` 可被连点 next、双击点歌、媒体键连击、`_skipOnFailure` 并发进入）。
+- 后果：`_loadedIndex` 与引擎真实 `loadedPath` 不一致（UI 显示 B 实际唱 A）、重复 `setSource`。
+- 改法：加载代际 token（最后一次胜出）或单飞队列。
 
-- ~~全局底栏「按播放进度填充」效果（整体背景色从左向右填充，与 1.4 一并落地；可开关：设置 › 外观）~~
+### 5.7 🆕 引擎迁移沉淀问题（中低）
+- `audioplayers_engine.dart:133-134` + `player_service.dart:336`：`load()` 未清 `_duration/_position`，且 `_loadedIndex` 在 await 前置位 → 加载窗口内 `duration/position` 返回上一首（媒体控制可能推「新标题+旧时长」，`_persistPosition` 可能错配）。改：load 起始清空、`_loadedIndex` 延后置位。
+- `play_queue.dart:178-184` + `player_service.dart:357-366/762/781`：`setCurrentIndex` 不重置持久化位置 → 切换后退出会把上一首位置写到新歌，续播错位。改：切换时 `setPlaybackState(0,0)`。
+- `player_service.dart:339-341` + `audioplayers_engine.dart:124/127/134`：切歌固定开销（`setVolume`+`setReleaseMode`+`pause`+`load()` 内再 `setReleaseMode`+`getDuration`）→ 按需下发、去重复。
+- `audioplayers_engine.dart:122-124`：`load()` 的 pause 依赖 Dart 侧瞬时状态（滞后时不对齐）→ 改无条件 pause。
+- `player_service.dart:444/604-611`：`isPlaying`/`togglePlay` 仍信引擎瞬时值（滞后期可能不生效）→ 用户意图判断改用 `_shouldPlay`。
+- `player_service.dart:497-505`：shuffle 下 `effectiveQueue` 每次访问 O(n) 重建 + `indexOf` → 缓存并按队列/顺序表失效。
+- 已知取舍（`audioplayers_engine.dart:108-146`）：单曲引擎无预加载 → 结构性曲间空白；应在文档写明「不得用位置提前量切歌」。
 
-## 7. 平台 / 发布检查（2026-09-03）
+## 6. 歌词
 
-- R1 版本与 CHANGELOG：当前 `pubspec.yaml` 0.2.2+2；`CHANGELOG.md` 无 0.2.x 条目且有多余重复 `[0.1.0]` 头 → 发版前对齐补录。
-- R2 ★ 设置页「清理缓存」仍为占位假功能（`还没做 -ω-`）— `settings_page.dart:55-78`。实现删除或隐藏入口。
-- R3 ★ `audio_metadata_reader` 为 git fork 分支依赖未 pin commit — `pubspec.yaml`。固定 commit hash 保证可复现构建。
-- R4 ★ 菜单通道名仍 `flutter_music/menu`（改名后唯一未随 `com.jerryc.txvziwm/` 约定）— `AppDelegate.swift:76` + `menu_service.dart:21`。双侧同步改名。
-- R5 `Info.plist` `FLTEnableImpeller=false` 全局关 Impeller（Apple Silicon 也受影响）→ 发版决策；上游修复后按架构移除。
-- R6 `setTopBarHeight` 为 no-op + Dart 侧 `_syncTopBarHeightToNative` 死调用 → 按 `docs/UI-Rules.md` 清理。
-- R7 Windows `WM_GETMINMAXINFO` 最小尺寸未做 — 登记于 `docs/TODO.md` §3 Phase 4。
-- R8 Windows/Linux 系统媒体控制（SMTC）未做 → 明确纳入/移出发布范围（`docs/TODO.md` §3 Phase 5）。
-- R9 macOS 音乐文件夹权限（`docs/TODO.md` §1 方案 A/B/C）未落地，README 无授权说明 → 至少补 README 一句，理想做方案 A。
-- R10 `assets/fonts/BoutiqueBitmap9x9_Circle_Dot.ttf` 无 pubspec 声明、无引用 → 删或声明。
-- R11 `docs/TODO.md`：macOS 菜单栏已实质完成未勾 ✅；`windows/runner/Runner.rc` 显示名描述过期（已为 0x4D）→ 同步。
-- R12 文档小项：macOS 部署目标 12.0 vs `docs/UI-Rules.md` 写的 11.0；`flutter clean` 会卡 SPM（sqlite3 native assets）需构建文档注明用 `rm -rf build/macos`；`test/log_page_test.dart` 样本含 `MetadataGod` 字样可换中性串；README 补 fork 依赖与授权说明。
+### 6.1 🆕 两遍匹配误判：整首歌词被当成翻译段（中）
+- 位置：`lib/core/utils/bilingual_lrc.dart:210-216`（只看「时间戳值二次出现」，不校验切点位置）。
+- 触发：片头多行共用同一时间戳（如 `[00:00.00]作词/作曲`）时即判定切点 → `mainLyric` 仅剩一行，全部歌词进 `translationLyric`（关掉翻译几乎看不到歌词）。现有 `test/lyrics_split_test.dart` 未覆盖该形态。
+- 改法：要求切点越过 ≥2 个时间戳行，或两侧时间戳数量相当。
+
+### 6.2 外部 `.lrc` 无缓存，切歌/切翻译开关都重读重解析（低）
+- 位置：`lib/core/services/lyrics_view_model.dart:145` + `:171-196`（`splitBilingualLrc` 在 UI isolate 同步跑）；内嵌歌词已有 mtime 缓存（`:199-213`），外部没有。
+- 改法：加「路径+mtime → 文本/拆分结果」缓存。
+
+### 6.3 `LyricsViewModel` 启动期即读当前歌歌词（低）
+- 位置：`service_locator.dart:234` 构造 → `lyrics_view_model.dart:70-71`（同步 `_onSongChanged()`/`_syncPosition()`）→ `:125` 立刻读盘（`resolveLrcPath :22-31` 用 `existsSync`）。
+- 改法：延迟到播放页首次可见/首次播放。
+
+## 7. 平台 / 发布检查（2026-09-17 复核）
+
+- R1 版本与 CHANGELOG：`pubspec.yaml:19` 已是 `0.2.2+12`；`CHANGELOG.md` 无 0.2.x 条目且有 13 个重复 `[0.1.0]` 头 → 发版前整理。
+- R2 设置页「清理缓存」仍为占位假功能（`还没做 -ω-`）— `settings_page.dart:59-82`（入口 `:498/:513`）。
+- R3 `audio_metadata_reader` 分支依赖未 pin（`pubspec.yaml:44-48` `ref: feat/album-artist`）→ 固定 commit。
+- R4 菜单通道仍 `flutter_music/menu`（其余通道均已 `com.jerryc.txvziwm/*`）— `menu_service.dart:21` + `AppDelegate.swift:76`。
+- R5 `macos/Runner/Info.plist:37` `FLTEnableImpeller=false` 全局关 Impeller → 发版决策。
+- R6 `setTopBarHeight` no-op + Dart 侧 `_syncTopBarHeightToNative` 死调用 → 清理。
+- R7 Windows `WM_GETMINMAXINFO` 未做（`docs/TODO.md` §3 Phase 4）。
+- R8 Windows/Linux SMTC 未做 → 明确纳入/移出发布范围。
+- R9 macOS 权限方案 A/B/C 未落地；`README.md:67` 无仓库链接与授权说明。
+- R10 `assets/fonts/BoutiqueBitmap9x9_Circle_Dot.ttf` 无声明无引用（`pubspec.yaml:76-118` 资源段全为注释）→ 删或声明。
+- R11 `docs/TODO.md:52-54` 仍写「正在做菜单栏 Phase 2/3」与「Runner.rc 保持 flutter_music」，与实际（菜单已完成、Runner.rc 已是 0x4D）不符。
+- R12 部署目标 12.0 vs `docs/UI-Rules.md:40` 写 11.0；`flutter clean` 卡 SPM 说明未进构建文档；`test/log_page_test.dart:7/14` 仍用 `MetadataGod` 样本。
 
 ## 8. 优先级建议
 
-1. **发布前必须**：R1（版本/CHANGELOG）、R2（清理缓存假功能）、R3（依赖 pin）、R9（授权说明）；`docs/TODO.md` 其余发布项（Windows 最小尺寸/SMTC、macOS 菜单栏勾选）。
-2. **低风险顺手**：U3、U5、L1、L2、2.4、2.6、2.7、3.5、3.7、3.8、4.4、5.4、R4、R10、R12。
-3. **本轮中风险（建议排期做）**：U1、U4、L3、3.6、4.1、5.1。
-4. **第二轮架构优化**：2.1、2.2、2.3、2.8、5.3、R7、R8。
+1. ~~**立即（数据/状态风险）**：2.9（扫描根失败误标）、2.10（LIKE 未转义）、3.10（force purge 误删）、5.4/5.8（settings 写盘）~~ —— 2026-09-17 已全部修复 ✅
+2. **发布前必须**：R1、R2、R3、R9；`docs/TODO.md` 其余发布项（Windows 最小尺寸/SMTC、菜单栏勾选）。
+3. **中风险（建议排期）**：5.6、5.7、4.6、6.1、U1、U4、L3、3.6、4.1。
+4. **低风险顺手**：U3、U5、L1、L2、2.4、2.6、2.7、3.5、3.7、3.8、4.4、5.3、6.2、6.3、R4、R10、R12。
+5. **第二轮架构**：2.1、2.2、2.3、2.8、R7、R8。
+

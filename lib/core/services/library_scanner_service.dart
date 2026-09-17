@@ -189,9 +189,11 @@ class LibraryScannerService {
     // 只拿「本次所扫根目录」下的可用路径做 diff：单文件夹重扫不会误标其它
     // 未扫文件夹（不再依赖 File.existsSync 启发式兜底）。全量扫描传全部根，
     // scopedDb 即全部可用歌曲，行为与旧逻辑等价。
-    final scopedDb = await _songRepository.getExistingFilePathsUnder(
-      folderPaths,
-    );
+    // 只用「本次成功读取的根」做 diff：某根读取失败（外接盘未挂载/权限异常）
+    // 时其磁盘文件不会进入 diskFiles，若仍把该根的库内路径纳入 scopedDb，
+    // 整根歌曲会被误标为不可用（并可能被 pruneQueue 从播放队列剔除）。
+    // 失败根的库内行本次不参与增删判断，留待下次成功扫描处理。
+    final scopedDb = await _songRepository.getExistingFilePathsUnder(okRoots);
     final existingStamps = await _songRepository.getExistingFileStats();
 
     final newFiles = diskFiles.difference(scopedDb).toList()..sort();

@@ -7,6 +7,7 @@ import '../../models/scanned_song.dart';
 import '../database/database.dart';
 import '../database/song_sort_order.dart';
 import '../utils/logger.dart';
+import '../utils/path_under_root.dart';
 import '../utils/sort_key.dart';
 import 'album_art_cache_service.dart';
 import 'service_locator.dart';
@@ -586,12 +587,19 @@ class SongRepository {
   }) async {
     if (roots.isEmpty) return 0;
     final songs = await _db.getUnavailableSongs();
+    // 磁盘侧路径先按 normalize 归一化再比较：macOS 上同一路径可能以 NFD/NFC
+    // 不同形式出现，直接用原始字符串 contains 会把「文件仍在」的行误判为已
+    // 消失，随后物理删除（丢掉 dateAdded/playCount/isFavorite）。
+    final normalizedDisk = {for (final path in diskFiles) p.normalize(path)};
     final toDelete = <String>[];
     for (final song in songs) {
       final path = song.filePath;
       // 只清理本次成功读取的根内的行；文件若还在磁盘（将恢复）则保留。
-      if (!roots.any((root) => _isUnderRoot(path, root))) continue;
-      if (diskFiles.contains(path)) continue;
+      if (!roots.any((root) => isUnderRootPath(path, root))) continue;
+      if (normalizedDisk.contains(p.normalize(path))) continue;
+      // 兜底：Unicode 归一化/符号链接等表示差异下文件其实还在，
+      // 二次确认后再删。
+      if (File(path).existsSync()) continue;
       toDelete.add(path);
     }
     if (toDelete.isEmpty) return 0;
@@ -609,17 +617,6 @@ class SongRepository {
   }
 
   // ─── Helpers ───────────────────────────────────────────
-
-  /// 边界语义的「路径在根下」判断：恰好等于根，或根后紧跟 `/`。
-  ///
-  /// 与 database.dart 里 `getFolderFilePaths`/`deleteFolderSongs` 的 SQL
-  /// （`= root OR LIKE 'root/%'`）保持一致（均先 normalize），避免前缀误匹配
-  /// 兄弟文件夹。
-  bool _isUnderRoot(String path, String root) {
-    final r = p.normalize(root);
-    if (path == r) return true;
-    return path.startsWith('$r/');
-  }
 
   SongsCompanion _toCompanion(
     ScannedSong scanned,

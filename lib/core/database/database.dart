@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../utils/path_under_root.dart';
 import 'song_sort_order.dart';
 import 'tables/albums.dart';
 import 'tables/artists.dart';
@@ -254,20 +255,46 @@ class AppDatabase extends _$AppDatabase {
     };
   }
 
+  /// 返回 [root] 下（含子目录、含根自身）的歌曲文件路径。
+  ///
+  /// SQL 只用 `= root OR LIKE 'root/%'` 做**粗筛**：路径里的 `_`/`%` 会被
+  /// SQLite 当作通配符（例：`Music_2024` 会匹配 `MusicX2024`），而 LIKE 对真实
+  /// 前缀只会**多**匹配、不会漏，因此随后在 Dart 侧用 [isUnderRootPath] 精确
+  /// 过滤即可，无需转义 SQL 模式。
+  ///
+  /// [onlyAvailable] 为 true 时只返回可用歌曲（供扫描 diff 使用）。
+  Future<List<String>> _pathsUnderRoot(
+    String root, {
+    required bool onlyAvailable,
+  }) async {
+    final normalized = p.normalize(root);
+    var predicate =
+        songs.filePath.equals(normalized) |
+        songs.filePath.like('$normalized/%');
+    if (onlyAvailable) {
+      predicate = predicate & songs.isAvailable.equals(1);
+    }
+    final rows =
+        await (selectOnly(songs)
+              ..addColumns([songs.filePath])
+              ..where(predicate))
+            .get();
+    final result = <String>[];
+    for (final row in rows) {
+      final path = row.read(songs.filePath);
+      if (path != null && isUnderRootPath(path, normalized)) {
+        result.add(path);
+      }
+    }
+    return result;
+  }
+
   /// 返回该文件夹（含其下所有子目录）里「可用」歌曲的文件路径。
   ///
-  /// **边界语义**：只匹配「恰好等于根」或「根后紧跟 `/`」的路径，避免
-  /// `LIKE '$root%'` 前缀匹配误伤「名字以 root 开头」的兄弟文件夹。
-  Future<List<String>> getFolderFilePaths(String folderPath) async {
-    final root = p.normalize(folderPath);
-    return (select(songs)..where(
-          (t) =>
-              (t.filePath.equals(root) | t.filePath.like('$root/%')) &
-              t.isAvailable.equals(1),
-        ))
-        .map((s) => s.filePath)
-        .get();
-  }
+  /// **边界语义**：见 [_pathsUnderRoot]——SQL 仅粗筛，Dart 侧做精确的根边界
+  /// 判定，避免 `LIKE '$root/%'` 里的 `_`/`%` 通配符误伤兄弟文件夹。
+  Future<List<String>> getFolderFilePaths(String folderPath) =>
+      _pathsUnderRoot(folderPath, onlyAvailable: true);
 
   Future<int> markAsUnavailable(List<String> filePaths) async {
     return (update(songs)..where((t) => t.filePath.isIn(filePaths))).write(
@@ -285,14 +312,22 @@ class AppDatabase extends _$AppDatabase {
   /// albums / artists / playlist references that no longer point at any song.
   ///
   /// Runs in a single transaction so the cleanup is atomic with the delete.
+  /// 删除范围按 [_pathsUnderRoot] 精确判定（不再直接用 LIKE 删除，避免 `_`/`%`
+  /// 通配符误删兄弟目录），并按块执行以规避 SQLite 的变量数上限。
   Future<int> deleteFolderSongs(String folderPath) async {
-    final root = p.normalize(folderPath);
     return transaction(() async {
-      final deleted =
-          await (delete(songs)..where(
-                (t) => t.filePath.equals(root) | t.filePath.like('$root/%'),
-              ))
-              .go();
+      final paths = await _pathsUnderRoot(folderPath, onlyAvailable: false);
+      if (paths.isEmpty) return 0;
+      var deleted = 0;
+      const chunkSize = 500;
+      for (var start = 0; start < paths.length; start += chunkSize) {
+        final end = (start + chunkSize < paths.length)
+            ? start + chunkSize
+            : paths.length;
+        deleted += await (delete(
+          songs,
+        )..where((t) => t.filePath.isIn(paths.sublist(start, end)))).go();
+      }
       await cleanupOrphans();
       return deleted;
     });
