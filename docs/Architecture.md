@@ -128,9 +128,12 @@ AudioEngine
 
 Platform implementation
 
-The UI must never directly call just_audio or any platform API.
+The UI must never directly call the audio library or any platform API.
 
-This abstraction allows replacing the playback engine in the future.
+Implemented as a single-track `AudioEngine` (`lib/core/audio/audio_engine.dart`,
+with `AudioplayersEngine` as the only implementation). The engine plays **one file
+at a time**; queue sequencing, shuffle order, repeat modes and auto-skip live in
+`PlayerService`. See `AudioEngine-Migration.md`.
 
 ⸻
 

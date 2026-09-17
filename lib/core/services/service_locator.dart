@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:just_audio_platform_interface/just_audio_platform_interface.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../audio/audio_engine_factory.dart';
 import '../audio/platform_media_controls.dart';
 import '../database/database.dart';
 import '../utils/logger.dart';
@@ -198,15 +198,6 @@ class ServiceLocator {
 
   static Future<void> _doInitialize() async {
     AppLogger.info('Startup', 'ServiceLocator.initialize()');
-    // 清理上一个 isolate（热重启）遗留的 just_audio 原生播放器，避免
-    // "幽灵播放器"在新播放器首次激活前仍在后台出声/切歌。
-    try {
-      await JustAudioPlatform.instance.disposeAllPlayers(
-        DisposeAllPlayersRequest(),
-      );
-    } catch (e) {
-      AppLogger.warning('Startup', 'disposeAllPlayers failed', e);
-    }
     // 读取应用版本号（设置页/关于页唯一来源）。置于 initialize() 内并 await，
     // 保证 UI 仅在 isReady 后渲染时一定能读到非空值。
     await _loadAppVersion();
@@ -220,6 +211,7 @@ class ServiceLocator {
     _playQueue = PlayQueue();
     await _playQueue!.restoreQueue(_database!);
     _player = PlayerService(
+      createAudioEngine(),
       playQueue: _playQueue!,
       resumePlaybackPosition: _settings!.settings.resumePlaybackPosition,
       volume: _settings!.settings.volume,

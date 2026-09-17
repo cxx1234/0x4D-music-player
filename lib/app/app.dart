@@ -300,7 +300,11 @@ class _PlaybackErrorConsumerState extends State<_PlaybackErrorConsumer> {
   void _onPlayerChanged() {
     final err = _player!.takePlaybackError();
     if (err == null || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    // 连跳多首坏文件时会连续产生提示：**替换**当前提示而不是排队，否则会积起
+    // 一串"无法播放"按顺序慢慢弹完（观感很差，且滞后于真实进度）。
+    ScaffoldMessenger.of(context)
+      ..removeCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(err)));
   }
 
   @override
