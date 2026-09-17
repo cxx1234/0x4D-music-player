@@ -101,6 +101,10 @@ class _QueueViewState extends State<QueueView> {
   // 上次已知的当前播放索引；变化时自动滚动到高亮项。
   int? _lastCurrentIndex;
 
+  // 定位请求去重：同一帧内多次触发只排一次 post-frame 回调（队列被替换时会
+  // 连发多次通知，每次都排一个 animateTo 会相互打架）。
+  bool _scrollScheduled = false;
+
   PlayerViewModel get vm => widget.viewModel;
   ThemeData get theme => widget.theme;
 
@@ -115,14 +119,20 @@ class _QueueViewState extends State<QueueView> {
   @override
   void initState() {
     super.initState();
-    // 用上次会话保存的偏移初始化（重开同歌 → 恢复位置，不重滚）。
-    _scrollController = ScrollController(
-      initialScrollOffset: widget.uiState.queueScrollOffset,
-    );
     _lastCurrentIndex = _displayIndex;
     // 重开判断：当前歌与上次会话相同 → 恢复滚动位置；不同（离开期间切歌）→ 跟随当前歌。
     final follow = vm.currentSong?.id != widget.uiState.lastCurrentSongId;
     widget.uiState.lastCurrentSongId = vm.currentSong?.id;
+    // 恢复旧偏移的前提：**队列没换过**（歌曲数与保存时一致）且不需要跟随当前歌。
+    // 队列被替换后（如 65 首 → 42 首）旧偏移属于上一版内容，用它初始化会让
+    // ScrollPosition 先超范围、再在 layout 中被纠正——曾因此触发
+    // 'haveDimensions == (_lastMetrics != null)' 断言（歌词 → 播放队列切换 +
+    // 队列被替换的场景）。
+    final canRestore =
+        !follow && widget.uiState.queueScrollItemCount == _displayQueue.length;
+    _scrollController = ScrollController(
+      initialScrollOffset: canRestore ? widget.uiState.queueScrollOffset : 0,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.locateOnOpen) {
         // 点「播放列表」按钮新打开队列：当前播放项不在视口（等同「定位」按钮
@@ -150,7 +160,7 @@ class _QueueViewState extends State<QueueView> {
       widget.uiState.lastCurrentSongId = vm.currentSong?.id;
       // 当前播放项变化后自动滚动到高亮位置（删除/拖拽模式下不打扰用户）。
       if (!_deleteMode && !_reorderMode) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrent());
+        _scheduleScrollToCurrent();
       }
     }
   }
@@ -170,6 +180,16 @@ class _QueueViewState extends State<QueueView> {
   // 当前项距视口顶部的预留：避开顶部边缘淡出遮罩（约 32 高）。
   static const double _kCurrentTopInset = 30;
 
+  /// 排一次"定位到当前播放项"（一帧内多次调用只生效一次）。
+  void _scheduleScrollToCurrent() {
+    if (_scrollScheduled) return;
+    _scrollScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollScheduled = false;
+      _scrollToCurrent();
+    });
+  }
+
   // 滚动到当前播放项并置于视口顶部下方（先快后慢 easeOutCubic，400ms）。
   void _scrollToCurrent() {
     if (!mounted) return;
@@ -177,12 +197,16 @@ class _QueueViewState extends State<QueueView> {
     final queue = _displayQueue;
     if (index < 0 || index >= queue.length) return;
     if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    // ⚠️ 列表尚未拿到滚动范围（刚挂载 / 刚被替换）时 maxScrollExtent 无意义，
+    // 此时发起动画会与 layout 中的尺寸纠正相互干扰，因此直接跳过。
+    if (!position.hasContentDimensions) return;
 
     // 偏移 = index * 固定行高 - 顶部预留：当前项贴到视口顶部下方 30pt
     // （列表到底时钳制到底部）。
     final target = (index * _kQueueTileExtent - _kCurrentTopInset).clamp(
       0.0,
-      _scrollController.position.maxScrollExtent,
+      position.maxScrollExtent,
     );
     _scrollController.animateTo(
       target,
@@ -226,6 +250,8 @@ class _QueueViewState extends State<QueueView> {
   void _refreshFadeState() {
     if (!mounted || !_scrollController.hasClients) return;
     final position = _scrollController.position;
+    // 还没有滚动范围时 extentBefore/extentAfter 不可读（列表刚挂载）。
+    if (!position.hasContentDimensions) return;
     final topFaded = position.extentBefore > 0;
     final bottomFaded = position.extentAfter > 0;
     final showLocate = !_isCurrentInView(position);
@@ -361,7 +387,9 @@ class _QueueViewState extends State<QueueView> {
   bool _handleScroll(ScrollNotification notification) {
     final metrics = notification.metrics;
     // 持续写回：与 dispose 时机解耦（dispose 时 Scrollable 已 detach，读不到 offset）。
+    // 同时记下当时的队列长度：队列若被替换过，这个偏移就不再可用于恢复。
     widget.uiState.queueScrollOffset = metrics.pixels;
+    widget.uiState.queueScrollItemCount = _displayQueue.length;
     final topFaded = metrics.extentBefore > 0;
     final bottomFaded = metrics.extentAfter > 0;
     final showLocate = !_isCurrentInView(metrics);
