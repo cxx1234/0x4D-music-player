@@ -44,6 +44,22 @@ flutter pub get
 flutter run -d macos
 ```
 
+> Editing anything under `macos/` (Swift / native code) requires a native rebuild: quit the
+> app, delete `build/macos`, then run again — hot reload and hot restart do not recompile
+> Swift. **Do not run `flutter clean`** in this project: it hangs on the SQLite native
+> assets built through Swift Package Manager.
+
+### macOS permissions
+
+Music folders inside `~/Music` are protected by the **Media & Apple Music** privacy setting.
+`NSOpenPanel` + security-scoped bookmarks only grant *Files and Folders* access, so a library
+stored there still fails with `Operation not permitted` (errno 1) on the first scan.
+Fix it once per machine:
+
+1. Open **System Settings → Privacy & Security → Media & Apple Music**
+2. Add `0x4D.app` with the `+` button and leave it enabled
+3. Scan again — the library loads normally
+
 ## Project Structure
 
 Feature-oriented layout — shared infrastructure in `core/`, business features in `features/`, reusable widgets in `widgets/`.
@@ -64,7 +80,7 @@ See [docs/Architecture.md](docs/Architecture.md) for the full architecture and [
 - **Flutter / Dart**
 - **drift** — SQLite ORM for the local library database
 - **audioplayers** — audio playback (single-track; queue logic lives in the app)
-- **audio_metadata_reader** — metadata & embedded cover art parsing (pure Dart, fork version)
+- **audio_metadata_reader** — metadata & embedded cover art parsing (pure Dart; uses the [cxx1234 fork](https://github.com/cxx1234/audio_metadata_reader) pinned to commit `4a6f245` for `albumArtist` + embedded lyrics support)
 - **flutter_lyric** — `.lrc` lyric rendering
 - **file_picker / watcher** — folder selection & library change watching
 - **lpinyin** — pinyin sort keys

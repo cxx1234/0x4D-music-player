@@ -75,7 +75,6 @@ class MainFlutterWindow: NSWindow {
     RegisterGeneratedPlugins(registry: flutterViewController)
 
     // 顶栏双击拦截：Dart 侧 DetailTopBar 上报出现计数与 actions 组宽度。
-    // setTopBarHeight 为兼容旧调用（仅保持通道平衡）。
     let channel = FlutterMethodChannel(
       name: "com.jerryc.txvziwm/window",
       binaryMessenger: flutterViewController.engine.binaryMessenger)

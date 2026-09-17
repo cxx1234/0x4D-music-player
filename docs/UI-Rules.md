@@ -23,9 +23,9 @@
 - 旧的**全局顶栏（TopBar）已于 2026-08-04 移除**，改为「页面避让」方案：
   - 左侧 NavigationRail 顶部预留 `layoutConfig.sidebarTopInset`（macOS=52）给红绿灯；
   - 右侧内容区各页使用统一高度的 `PageToolbar`（`lib/widgets/page_toolbar.dart`）。
-- 传原生：Flutter 启动仍会通过 **MethodChannel `com.jerryc.txvziwm/window`**（方法 `setTopBarHeight`）
-  发送 `layoutConfig.sidebarTopInset`（52），但**红绿灯已由 unified 工具栏原生定位，Swift 端为 no-op**。
-  **仅 macOS 会调用**（其他平台无 handler，避免 MissingPluginException 噪音）。
+- **不再传原生**：`setTopBarHeight` 桥接已于 **2026-09-17 移除**（Dart 调用 + Swift no-op handler），
+  红绿灯完全由 unified 工具栏原生定位，Dart 侧无需知道该高度。
+  同通道（`com.jerryc.txvziwm/window`）的 `setTopBarGuard` / `setActionsWidth` 仍保留，用于顶栏双击拦截。
 - **数值微调**：Windows 版调试时改 `_default`（或新增 Windows 专属配置）即可，无需动 UI 代码。
 
 ## 2. 红绿灯定位规则（macOS 原生层）
@@ -37,7 +37,7 @@
   - 从启动起位置即稳定，**不再用 `setFrameOrigin` 与 AppKit 布局争夺**；
   - 之前 `setFrameOrigin` 方案因 AppKit 会在启动各布局时点反复覆盖按钮位置而不可靠。
 - Flutter 侧按此对齐：`sidebarTopInset = detailTopBarHeight = 52`（= 2×26）。
-- 部署目标已升至 **11.0**（`toolbarStyle` 需 11+）。
+- 部署目标为 **12.0**（`toolbarStyle` 需 11+；Xcode 工程当前设为 12.0）。
 
 ### 2.1 红绿灯绿钮：最大化而非全屏（2026-08-10）
 

@@ -33,7 +33,9 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
-	<!-- Disable Impeller for Intel Macs -->
+	<!-- Impeller currently misrenders on this Intel Mac (flicker / SDF shadow
+	     artifacts), which is why it is turned off here. FLTEnableImpeller cannot be
+	     set per arch, so Apple Silicon builds are affected too. Revisit once fixed. -->
 	<key>FLTEnableImpeller</key>
 	<false/>
 </dict>

@@ -142,20 +142,21 @@
 - 位置：`service_locator.dart:234` 构造 → `lyrics_view_model.dart:70-71`（同步 `_onSongChanged()`/`_syncPosition()`）→ `:125` 立刻读盘（`resolveLrcPath :22-31` 用 `existsSync`）。
 - 改法：延迟到播放页首次可见/首次播放。
 
-## 7. 平台 / 发布检查（2026-09-17 复核）
+## 7. 平台 / 发布检查（2026-09-17 复核，同日处理完毕）
 
-- R1 版本与 CHANGELOG：`pubspec.yaml:19` 已是 `0.2.2+12`；`CHANGELOG.md` 无 0.2.x 条目且有 13 个重复 `[0.1.0]` 头 → 发版前整理。
-- R2 设置页「清理缓存」仍为占位假功能（`还没做 -ω-`）— `settings_page.dart:59-82`（入口 `:498/:513`）。
-- R3 `audio_metadata_reader` 分支依赖未 pin（`pubspec.yaml:44-48` `ref: feat/album-artist`）→ 固定 commit。
-- R4 菜单通道仍 `flutter_music/menu`（其余通道均已 `com.jerryc.txvziwm/*`）— `menu_service.dart:21` + `AppDelegate.swift:76`。
-- R5 `macos/Runner/Info.plist:37` `FLTEnableImpeller=false` 全局关 Impeller → 发版决策。
-- R6 `setTopBarHeight` no-op + Dart 侧 `_syncTopBarHeightToNative` 死调用 → 清理。
-- R7 Windows `WM_GETMINMAXINFO` 未做（`docs/TODO.md` §3 Phase 4）。
-- R8 Windows/Linux SMTC 未做 → 明确纳入/移出发布范围。
-- R9 macOS 权限方案 A/B/C 未落地；`README.md:67` 无仓库链接与授权说明。
-- R10 `assets/fonts/BoutiqueBitmap9x9_Circle_Dot.ttf` 无声明无引用（`pubspec.yaml:76-118` 资源段全为注释）→ 删或声明。
-- R11 `docs/TODO.md:52-54` 仍写「正在做菜单栏 Phase 2/3」与「Runner.rc 保持 flutter_music」，与实际（菜单已完成、Runner.rc 已是 0x4D）不符。
-- R12 部署目标 12.0 vs `docs/UI-Rules.md:40` 写 11.0；`flutter clean` 卡 SPM 说明未进构建文档；`test/log_page_test.dart:7/14` 仍用 `MetadataGod` 样本。
+- ~~R1 版本与 CHANGELOG~~ ✅：`CHANGELOG.md` 把 13 个重复 `[0.1.0]` 头合并为单一 `[0.1.0]`（08-02）与 `[0.0.1]`（07-27），并按实际版本号重排：`[0.2.3] - 2026-09-17`（引擎迁移 + 审计修复 + 发布清单）、`[0.2.2] - 2026-09-08`、`[0.2.0] - 2026-09-03`。`pubspec.yaml` 已 bump 到 `0.2.3`。
+- ~~R2 设置页「清理缓存」占位假功能~~ ✅：改为真实清理——复用 `SongRepository.cleanupOrphanCovers()` 删除未被引用的封面，SnackBar 报数量并刷新缓存大小。
+- ~~R3 `audio_metadata_reader` 分支依赖未 pin~~ ✅：`pubspec.yaml` 固定到 commit `4a6f245413d8f0f11f4a8e7613a9ae9ee0681eae`（不再跟随分支）。
+- ~~R4 菜单通道仍 `flutter_music/menu`~~ ✅：Dart（`menu_service.dart`）与 Swift（`AppDelegate.swift`）同步改为 `com.jerryc.txvziwm/menu`。
+- R5 `macos/Runner/Info.plist:37` `FLTEnableImpeller=false` 全局关 Impeller → **决策：保留现状**（Intel macOS 上 Impeller 闪烁/阴影栅格问题未解）；已记入 `docs/TODO.md` §2，待上游修复后按机型重评。
+- ~~R6 `setTopBarHeight` no-op + Dart 侧死调用~~ ✅：Dart `_windowChannel` / `_syncTopBarHeightToNative()` 与 Swift 侧注释一并移除；同通道的 `setTopBarGuard` / `setActionsWidth` 保留（顶栏双击拦截）。
+- R7 Windows `WM_GETMINMAXINFO`：**移出本轮发布范围**（需 Windows 环境验证），保留在 `docs/TODO.md` §3 Phase 4。
+- R8 Windows/Linux SMTC：**移出本轮发布范围**（本轮为 macOS 发布），保留在 `docs/TODO.md` §3 Phase 5。
+- ~~R9 macOS 权限方案与 README~~ ✅：采用方案 C——README 新增「macOS permissions」小节（媒体与 Apple Music 手动添加）；`audio_metadata_reader` 补 fork 仓库链接与固定 commit。
+- R10 `assets/fonts/BoutiqueBitmap9x9_Circle_Dot.ttf`（5.8MB，无声明无引用）：文件暂留，已登记 `docs/TODO.md` §2 待删。该文件未在 `pubspec.yaml` 声明，不会进 app 包，不阻塞发布。
+- ~~R11 `docs/TODO.md` 过时描述~~ ✅：菜单栏标为已完成、Phase 2/3 关闭、`Runner.rc` 更正为已是 `0x4D`。
+- ~~R12 文档与测试样本~~ ✅：`docs/UI-Rules.md` 部署目标改 12.0 并删除已失效的 `setTopBarHeight` 描述；README 补「改 `macos/` 需 `rm -rf build/macos` 重建，勿用 `flutter clean`」；`test/log_page_test.dart` 样本去 `MetadataGod`。
+- 验证：`flutter analyze lib` 无问题；`flutter test` 225 通过。
 
 ## 8. 优先级建议
 

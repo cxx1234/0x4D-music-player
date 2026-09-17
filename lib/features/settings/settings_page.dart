@@ -68,13 +68,13 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _cacheSizeBytes = size);
   }
 
-  /// 清理缓存：功能未实现。先弹确认框（占位文案），确认后提示占位。
+  /// 清理未被引用的封面缓存文件（安全：仍在使用的封面不会被动）。
   Future<void> _clearCache() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('清理缓存'),
-        content: const Text('还没做 -ω-;'),
+        title: const Text('清理封面缓存'),
+        content: const Text('将删除不再被任何歌曲或专辑引用的封面文件。\n正在使用的封面不受影响。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -88,9 +88,15 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('还没做 -ω-;')));
+    final removed = await ServiceLocator.songRepo.cleanupOrphanCovers();
+    if (!mounted) return;
+    await _loadCacheSize();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(removed > 0 ? '已清理 $removed 个未使用的封面' : '没有可清理的封面缓存'),
+      ),
+    );
   }
 
   /// 字节数 → 人类可读（B/KB/MB）。

@@ -40,7 +40,7 @@ class ServiceLocator {
   /// 重开时重新读盘/解析歌词。提升为全局服务后播放页只消费其 controller。
   static LyricsViewModel? _lyrics;
 
-  /// 应用版本号（来自 pubspec.yaml 的 `version`，如 `0.2.2`）。
+  /// 应用版本号（来自 pubspec.yaml 的 `version`，如 `0.2.3`）。
   ///
   /// 启动时经 package_info_plus 读取一次并缓存，作为设置页/关于页版本号的
   /// **唯一来源**；读取失败时为 null（UI 端自行兜底）。

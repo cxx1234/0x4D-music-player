@@ -19,12 +19,18 @@
 2. **方案 B：把音乐文件夹移出 `~/Music`**
    - 如移到 `~/Documents/Music`，走「文件与文件夹」的 FilePicker 授权，用户「添加文件夹」时即自动授权，无需进系统设置；
    - 代价：需迁移现有 527 个文件（`~/Music/Music`）。
-3. **方案 C（最轻量）**：README / 文档补充一句「新环境需到系统设置 → 隐私与安全性 → 媒体与 Apple Music 添加本 App」。
+3. **方案 C（最轻量）**：✅ 2026-09-17 完成，README 已加「macOS permissions」小节（手动添加到「媒体与 Apple Music」）。
 
 ## 2. 发布前待办（非性能）
 
-- F4 Windows 窗口最小尺寸（`WM_GETMINMAXINFO`）→ 已纳入本文件 §3 Phase 4。
-- 菜单栏项与键盘快捷键 → 已纳入计划（macOS 原生菜单 + Dart 桥接，见 `/memories/session/plan.md` Phase 2/3）。
+- ✅ **macOS 菜单栏与键盘快捷键**（2026-09-17 关闭）：原生菜单（App / 编辑 / 查看 / 播放 / 窗口 / 帮助）+ Dart 桥接已完成；通道改名为 `com.jerryc.txvziwm/menu`。
+- ✅ **依赖可复现**（2026-09-17 关闭）：`audio_metadata_reader` 由分支名改为固定 commit `4a6f245413d8f0f11f4a8e7613a9ae9ee0681eae`。
+- ✅ **设置页「清理缓存」**（2026-09-17 关闭）：由占位改为真实删除未被引用的封面（复用 `SongRepository.cleanupOrphanCovers()`），并刷新缓存大小。
+- ⛔ **`setTopBarHeight` 桥接**（2026-09-17 移除）：Dart 调用 + Swift no-op handler 均已删除，红绿灯由 unified 工具栏原生定位。
+- **Impeller 开关（R5）决策**：`macos/Runner/Info.plist` 中 `FLTEnableImpeller=false` 为全局关闭（Intel 与 Apple Silicon 均生效）。**保留现状**——Intel macOS 上 Impeller 存在闪烁/阴影栅格问题（见 `docs/Performance-Optimization.md` §7）；待上游修复后再按机型评估是否重新启用。
+- **Windows 窗口最小尺寸（`WM_GETMINMAXINFO`）** → 见 §3 Phase 4，仍未做（需 Windows 环境验证，不阻塞 macOS 发布）。
+- **Windows SMTC（系统媒体控制）** → 见 §3 Phase 5，仍未做（不阻塞 macOS 发布）。
+- **字体资源**：`assets/fonts/BoutiqueBitmap9x9_Circle_Dot.ttf`（5.8MB）无任何引用且未在 `pubspec.yaml` 声明，建议删除（或在 `fonts:` 中正式声明后使用，否则会白占仓库体积；未打包进 app，不影响发布包大小）。
 - i18n 多语言支持 → 已纳入本文件 §3 Phase 1（只搭基建，暂不迁移现有字符串）。
 
 ## 其他已登记待办
@@ -37,7 +43,7 @@
 
 ## 3. macOS 菜单栏 & Windows 适配 — 后续阶段（2026-08-30 登记）
 
-> 当前在做 macOS 菜单栏 Phase 2/3（原生菜单 + Dart 桥接，计划见 `/memories/session/plan.md`）。
+> **macOS 菜单栏已完成**（2026-09-17：原生菜单 + Dart 桥接，Phase 2/3 关闭）。
 > 以下 Phase 1/4/5 为后续阶段，实施时再展开。
 
 ### Phase 1 — Flutter i18n 基建（只搭基建，不迁移）
@@ -50,7 +56,7 @@
 
 ### Phase 4 — Windows 最小集
 - `windows/runner/win32_window.cpp` `MessageHandler` 处理 `WM_GETMINMAXINFO` → `ptMinTrackSize = (640,520)×DPI`（对齐 macOS `contentMinSize`）
-- `windows/runner/Runner.rc` 显示名保持英文 `flutter_music`（不改）
+- `windows/runner/Runner.rc` 显示名已是 `0x4D`（2026-09-17 核验，无需改动）
 - `lib/core/constants/layout.dart` `_default` 核验 `pageToolbarHeight=62` vs `topInset32+content80=112` 不一致（预存问题，Windows 调试时按需调整）
 - 验证：Windows 机器 `flutter build windows` + 运行，窗口最小 640×520
 
