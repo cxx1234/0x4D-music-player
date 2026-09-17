@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../database/song_sort_order.dart';
 import '../models/accent_color.dart';
 import '../models/lyric_text_size.dart';
+import '../utils/logger.dart';
 
 /// A music folder with an optional macOS security-scoped bookmark.
 ///
@@ -156,6 +157,10 @@ class SettingsService {
   late final String _filePath;
   bool _initialized = false;
 
+  /// 写盘串行链：并发 setter（多个 `unawaited(setXxx())`）不会互相交错覆盖，
+  /// 后写者按调用顺序落盘（与 PlayQueue 的写链同思路）。
+  Future<void> _saveChain = Future.value();
+
   AppSettings get settings => _settings;
   bool get isInitialized => _initialized;
 
@@ -235,9 +240,31 @@ class SettingsService {
 
     final file = File(_filePath);
     if (await file.exists()) {
-      final content = await file.readAsString();
-      final json = jsonDecode(content) as Map<String, dynamic>;
-      _settings = AppSettings.fromJson(json);
+      try {
+        final content = await file.readAsString();
+        final json = jsonDecode(content) as Map<String, dynamic>;
+        _settings = AppSettings.fromJson(json);
+      } catch (e, s) {
+        // 文件损坏（例如写盘中断留下截断内容）：备份后用默认设置继续启动，
+        // 避免整个应用因配置解析失败而进入启动错误页且无法自救。
+        AppLogger.warning(
+          'Settings',
+          'settings.json unreadable; falling back to defaults',
+          e,
+          s,
+        );
+        _settings = const AppSettings();
+        try {
+          await file.rename('$_filePath.corrupt');
+        } catch (e2) {
+          AppLogger.warning(
+            'Settings',
+            'failed to back up corrupt settings.json',
+            e2,
+          );
+        }
+        await _save();
+      }
     } else {
       _settings = const AppSettings();
       await _save();
@@ -255,11 +282,34 @@ class SettingsService {
     _initialized = true;
   }
 
-  Future<void> _save() async {
+  /// 串行、原子地持久化设置。
+  ///
+  /// - 串行链：并发调用不会互相交错覆盖；
+  /// - temp + rename：写盘中途被杀不会留下截断的 settings.json；
+  /// - 失败只记日志不向外抛：配置写失败不应让调用方崩溃。
+  Future<void> _save() {
+    _saveChain = _saveChain.then((_) => _writeSettingsAtomically()).catchError((
+      Object e,
+      StackTrace s,
+    ) {
+      AppLogger.warning('Settings', 'failed to persist settings.json', e, s);
+    });
+    return _saveChain;
+  }
+
+  Future<void> _writeSettingsAtomically() async {
+    final content = const JsonEncoder.withIndent(
+      '  ',
+    ).convert(_settings.toJson());
+    final tmp = File('$_filePath.tmp');
+    await tmp.writeAsString(content, flush: true);
     final file = File(_filePath);
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(_settings.toJson()),
-    );
+    // Windows 上 rename 到已存在文件会失败，需先删除；POSIX 上 rename 覆盖
+    // 本身是原子的（不先删，避免「删后失败」丢配置的窗口）。
+    if (Platform.isWindows && await file.exists()) {
+      await file.delete();
+    }
+    await tmp.rename(file.path);
   }
 
   /// Adds a music folder with an optional security-scoped [bookmark].

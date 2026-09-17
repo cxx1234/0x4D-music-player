@@ -73,7 +73,7 @@ class AppDelegate: FlutterAppDelegate {
 
   private func configureMenuChannel(binaryMessenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(
-      name: "flutter_music/menu",
+      name: "com.jerryc.txvziwm/menu",
       binaryMessenger: binaryMessenger
     )
     menuChannel = channel

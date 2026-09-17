@@ -57,10 +57,12 @@ class _LibraryPageState extends State<LibraryPage> {
     _actionSub = widget.controller?.actions.listen(_onShellAction);
   }
 
-  /// macOS 菜单「导入文件夹」动作：直接弹文件夹选择器。
+  /// Shell 动作：导入文件夹 / 强制刷新（设置页触发后切回本页执行）。
   void _onShellAction(ShellAction action) {
     if (action == ShellAction.importFolder) {
       _pickFolder();
+    } else if (action == ShellAction.forceRescan) {
+      _viewModel.forceScan();
     }
   }
 
@@ -168,12 +170,14 @@ class _LibraryPageState extends State<LibraryPage> {
     // accessible after app restarts.
     final bookmark = await ServiceLocator.sandbox.createBookmark(path);
     await ServiceLocator.settings.addMusicFolder(path, bookmark: bookmark);
+    if (!mounted) return;
     setState(() => _musicFolders = ServiceLocator.settings.musicFolders);
     _viewModel.startScan();
   }
 
   Future<void> _removeFolder(String path) async {
     await _viewModel.removeFolder(path);
+    if (!mounted) return;
     setState(() => _musicFolders = ServiceLocator.settings.musicFolders);
   }
 
@@ -257,16 +261,24 @@ class _LibraryPageState extends State<LibraryPage> {
           visible: !_searchActive && _musicFolders.isNotEmpty,
           child: _buildFolderList(theme),
         ),
+        // 播放态（切歌/播放暂停）只重建歌曲列表本身：整页 setState 会连带重建
+        // 扫描状态条与文件夹列表（见 LibraryViewModel.playerUiListenable）。
         if (!_searchActive) ...[
           if (_musicFolders.isEmpty && !_viewModel.isScanning)
             _buildEmptyState(theme),
           if (_viewModel.songs.isNotEmpty)
-            _buildSongList(theme, _viewModel.songs),
+            ListenableBuilder(
+              listenable: _viewModel.playerUiListenable,
+              builder: (context, _) => _buildSongList(theme, _viewModel.songs),
+            ),
         ] else ...[
           if (filtered.isEmpty)
             Expanded(child: SearchEmptyState(query: _query))
           else
-            _buildSongList(theme, filtered),
+            ListenableBuilder(
+              listenable: _viewModel.playerUiListenable,
+              builder: (context, _) => _buildSongList(theme, filtered),
+            ),
         ],
       ],
     );
@@ -363,6 +375,7 @@ class _LibraryPageState extends State<LibraryPage> {
     final bookmark = await ServiceLocator.sandbox.createBookmark(path);
     await ServiceLocator.settings.updateMusicFolderBookmark(path, bookmark);
     ServiceLocator.clearSandboxRestoreFailures();
+    if (!mounted) return;
     setState(() => _musicFolders = ServiceLocator.settings.musicFolders);
     _viewModel.startScan();
   }
@@ -411,15 +424,10 @@ class _LibraryPageState extends State<LibraryPage> {
           ),
         if (_musicFolders.isNotEmpty) ...[
           if (!_viewModel.isScanning)
-            GestureDetector(
-              // 桌面右键：直接强制刷新（忽略 mtime/大小变化检测，全量重解析）。
-              onSecondaryTapDown: (_) => _viewModel.forceScan(),
-              child: IconButton(
-                onPressed: _viewModel.startScan,
-                onLongPress: _viewModel.forceScan,
-                icon: const Icon(Icons.refresh),
-                tooltip: '重新扫描（右键/长按强制刷新）',
-              ),
+            IconButton(
+              onPressed: _viewModel.startScan,
+              icon: const Icon(Icons.refresh),
+              tooltip: '重新扫描',
             ),
           const SizedBox(width: 8),
           FilledButton.icon(
@@ -533,9 +541,9 @@ class _LibraryPageState extends State<LibraryPage> {
           itemCount: _musicFolders.length,
           itemBuilder: (context, index) {
             final folder = _musicFolders[index];
-            // 每个卡片底部留 8pt 间距，避免多个卡片叠在一起。
+            // 每个卡片顶部留 8pt 间距，避免多个卡片叠在一起。
             return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(top: 8),
               child: CardSurface(
                 child: ListTile(
                   dense: true,
@@ -607,7 +615,8 @@ class _LibraryPageState extends State<LibraryPage> {
                 menuBuilder: (song) => songMenuItems(song),
                 onMenuSelected: (song, value) async {
                   await handleSongMenuAction(context, song, value);
-                  await _viewModel.reloadSongs();
+                  // 菜单动作（下一首播放/加入队列/加入播放列表/喜欢）都不改变本
+                  // 列表内容，无需整表重查（原先每次动作都跑一次全量查询）。
                 },
               );
             },
@@ -628,6 +637,7 @@ String scanResultText(ScanResult result) {
     if (result.updated > 0) '更新 ${result.updated} 首',
     if (result.added == 0 && result.updated == 0) '无新文件',
     if (result.markedMissing > 0) '${result.markedMissing} 首已移除',
+    if (result.purged > 0) '清理 ${result.purged} 条残留',
     if (result.errors > 0) '${result.errors} 处失败',
   ];
   return parts.join('，');

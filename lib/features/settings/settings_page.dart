@@ -4,12 +4,19 @@ import '../../core/models/accent_color.dart';
 import '../../core/services/album_art_cache_service.dart';
 import '../../core/services/service_locator.dart';
 import '../../widgets/page_toolbar.dart';
+import '../shell/shell_controller.dart';
 import 'about_page.dart';
 import 'log_page.dart';
 
-/// 设置页：分组卡片（播放设置 / 外观 / 通用）。
+/// 设置页：分组卡片（音乐库 / 播放设置 / 外观 / 通用）。
 class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+  /// Shell 控制器（「音乐库 › 强制刷新」动作由此切到音乐库并触发）。
+  final ShellController? controller;
+
+  /// 是否为当前选中的 tab；从非激活切回激活时刷新缓存大小等快照数据。
+  final bool active;
+
+  const SettingsPage({super.key, this.controller, this.active = true});
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -45,19 +52,29 @@ class _SettingsPageState extends State<SettingsPage> {
     _loadCacheSize();
   }
 
+  @override
+  void didUpdateWidget(SettingsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 保活切回本页时刷新封面缓存大小（此前只在 initState 读一次，之后
+    // 一直显示旧值，清理过缓存也不会变）。
+    if (widget.active && !oldWidget.active) {
+      _loadCacheSize();
+    }
+  }
+
   Future<void> _loadCacheSize() async {
     final size = await AlbumArtCacheService().cacheSizeBytes();
     if (!mounted) return;
     setState(() => _cacheSizeBytes = size);
   }
 
-  /// 清理缓存：功能未实现。先弹确认框（占位文案），确认后提示占位。
+  /// 清理未被引用的封面缓存文件（安全：仍在使用的封面不会被动）。
   Future<void> _clearCache() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('清理缓存'),
-        content: const Text('还没做 -ω-;'),
+        title: const Text('清理封面缓存'),
+        content: const Text('将删除不再被任何歌曲或专辑引用的封面文件。\n正在使用的封面不受影响。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -71,9 +88,15 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('还没做 -ω-;')));
+    final removed = await ServiceLocator.songRepo.cleanupOrphanCovers();
+    if (!mounted) return;
+    await _loadCacheSize();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(removed > 0 ? '已清理 $removed 个未使用的封面' : '没有可清理的封面缓存'),
+      ),
+    );
   }
 
   /// 字节数 → 人类可读（B/KB/MB）。
@@ -162,6 +185,47 @@ class _SettingsPageState extends State<SettingsPage> {
           1,
         ),
         child: Switch(value: value, onChanged: onChanged),
+      ),
+    );
+  }
+
+  /// 音乐库 › 强制刷新：切回音乐库 tab 并触发全量重解析（与旧长按/右键一致）。
+  ///
+  /// 无文件夹时按钮已置灰（onTap:null），此处只负责跳转并触发。
+  void _forceRescan() {
+    final controller = widget.controller;
+    if (controller == null || !mounted) return;
+    controller.request(NavigationItem.library, action: ShellAction.forceRescan);
+  }
+
+  /// 「音乐库」分组卡片：目前为强制刷新入口。无文件夹时禁用（ListTile 置灰）。
+  Widget _buildLibraryCard() {
+    final theme = Theme.of(context);
+    final hasFolders =
+        ServiceLocator.isReady &&
+        ServiceLocator.settings.musicFolders.isNotEmpty;
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      elevation: 0,
+      color: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        minVerticalPadding: 16,
+        enabled: hasFolders,
+        leading: const Icon(Icons.refresh),
+        title: _buildOptionText(
+          theme,
+          '强制刷新',
+          hasFolders ? '重新解析全部歌曲，修复异常元数据/封面' : '请先在音乐库添加文件夹',
+        ),
+        subtitle: null,
+        trailing: Icon(
+          Icons.chevron_right,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        onTap: hasFolders ? _forceRescan : null,
       ),
     );
   }
@@ -519,6 +583,8 @@ class _SettingsPageState extends State<SettingsPage> {
             child: ListView(
               padding: const EdgeInsets.only(bottom: 24),
               children: [
+                _buildSectionHeader('音乐库'),
+                _buildLibraryCard(),
                 _buildSectionHeader('播放设置'),
                 _buildPlaybackCard(),
                 _buildSectionHeader('外观'),

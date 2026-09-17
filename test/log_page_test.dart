@@ -4,14 +4,14 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('解析单行日志：时间/级别/tag/消息', () {
     final entries = parseLogLines([
-      '2026-08-11 10:23:45.123 [INFO ] [App    ] MetadataGod initialized successfully',
+      '2026-08-11 10:23:45.123 [INFO ] [App    ] App initialized successfully',
     ]);
     expect(entries, hasLength(1));
     final e = entries.single;
     expect(e.timestamp, DateTime(2026, 8, 11, 10, 23, 45, 123));
     expect(e.level, 'INFO');
     expect(e.tag, 'App');
-    expect(e.message, 'MetadataGod initialized successfully');
+    expect(e.message, 'App initialized successfully');
     expect(e.detailLines, isEmpty);
   });
 

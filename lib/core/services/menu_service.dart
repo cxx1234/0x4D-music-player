@@ -18,7 +18,7 @@ import 'player_service.dart';
 class MenuService {
   MenuService._(this._player);
 
-  static const _channel = MethodChannel('flutter_music/menu');
+  static const _channel = MethodChannel('com.jerryc.txvziwm/menu');
 
   final PlayerService _player;
 

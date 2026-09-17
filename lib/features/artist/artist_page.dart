@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
+import '../../core/services/folder_watcher_service.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/index_letters.dart';
 import '../../core/utils/memoized_filter.dart';
@@ -35,12 +38,23 @@ class _ArtistsPageState extends State<ArtistsPage> {
   String _query = '';
   final _artistFilterCache = QueryFilterCache<Artist>();
   final _scrollController = ScrollController();
+  StreamSubscription<FolderWatcherEvent>? _folderWatcherSub;
 
   @override
   void initState() {
     super.initState();
     _viewModel.addListener(_onChanged);
     _viewModel.load();
+    _attachFolderWatcher();
+  }
+
+  /// 订阅文件夹监听事件：正看着本 tab 时外部文件增删也能实时刷新（保活页
+  /// 平时靠 `active` 激活刷新，监听覆盖「停留在本页」的即时变更）。
+  void _attachFolderWatcher() {
+    if (!ServiceLocator.isReady) return;
+    _folderWatcherSub ??= ServiceLocator.folderWatcher.events.listen((_) {
+      if (mounted) _viewModel.load();
+    });
   }
 
   @override
@@ -53,6 +67,8 @@ class _ArtistsPageState extends State<ArtistsPage> {
 
   @override
   void dispose() {
+    _folderWatcherSub?.cancel();
+    _folderWatcherSub = null;
     _scrollController.dispose();
     _viewModel.removeListener(_onChanged);
     _viewModel.dispose();
@@ -346,7 +362,7 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
                   menuBuilder: (song) => songMenuItems(song),
                   onMenuSelected: (song, value) async {
                     await handleSongMenuAction(context, song, value);
-                    await _load();
+                    // 菜单动作不改变本页列表内容，无需重查。
                   },
                 );
               }, childCount: _songs.length),

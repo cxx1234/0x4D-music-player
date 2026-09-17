@@ -2,12 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import 'router.dart';
 import 'startup_error_page.dart';
 import 'theme.dart';
-import '../core/constants/layout.dart';
 import '../core/models/accent_color.dart';
 import '../core/navigation/route_observer.dart';
 import '../core/services/player_service.dart';
@@ -37,17 +35,10 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   /// Shell tab 外部控制（播放页跳歌手/专辑时切 tab）。
   final _shellController = ShellController();
 
-  /// 与原生层（MainFlutterWindow.swift）通信的通道。
-  static const _windowChannel = MethodChannel('com.jerryc.txvziwm/window');
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // 首帧后将顶部高度参数同步给原生层（红绿灯定位用）。
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _syncTopBarHeightToNative();
-    });
     _initializeServices();
   }
 
@@ -117,21 +108,6 @@ class _AppState extends State<App> with WidgetsBindingObserver {
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
       unawaited(ServiceLocator.flushPendingWrites());
-    }
-  }
-
-  /// 将左侧边栏顶部预留高度（layoutConfig.sidebarTopInset）传给原生层，用于红绿灯定位。
-  Future<void> _syncTopBarHeightToNative() async {
-    // 红绿灯仅 macOS 有；其他平台没有该 MethodChannel handler，
-    // 不调用可避免 MissingPluginException 噪音。
-    if (defaultTargetPlatform != TargetPlatform.macOS) return;
-    try {
-      await _windowChannel.invokeMethod(
-        'setTopBarHeight',
-        layoutConfig.sidebarTopInset,
-      );
-    } catch (e) {
-      AppLogger.warning('App', 'Failed to sync top bar height to native', e);
     }
   }
 
@@ -300,7 +276,11 @@ class _PlaybackErrorConsumerState extends State<_PlaybackErrorConsumer> {
   void _onPlayerChanged() {
     final err = _player!.takePlaybackError();
     if (err == null || !mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+    // 连跳多首坏文件时会连续产生提示：**替换**当前提示而不是排队，否则会积起
+    // 一串"无法播放"按顺序慢慢弹完（观感很差，且滞后于真实进度）。
+    ScaffoldMessenger.of(context)
+      ..removeCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(err)));
   }
 
   @override

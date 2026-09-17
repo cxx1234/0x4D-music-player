@@ -14,6 +14,14 @@ class PlayerUiState {
   /// 队列滚动偏移（关闭时由 QueueView 存下，重开时恢复）。
   double queueScrollOffset = 0;
 
+  /// 保存 [queueScrollOffset] 时队列的歌曲数。
+  ///
+  /// 用于判断"旧偏移是否属于当前队列"：队列被替换过（如 65 首 → 42 首）时
+  /// 偏移就失效了，不能再拿去初始化新的列表——否则 ScrollPosition 会先在
+  /// layout 中拿到一个超出范围的值、再被纠正，可能触发 Flutter 的
+  /// `haveDimensions == (_lastMetrics != null)` 断言。
+  int? queueScrollItemCount;
+
   /// 上次会话当前歌曲 id（null=尚无会话）。重开时用它判断是否跟随当前歌：
   /// 相同 → 恢复滚动位置；不同（离开期间切歌）→ 跟随当前歌。
   int? lastCurrentSongId;

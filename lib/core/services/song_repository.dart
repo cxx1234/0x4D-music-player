@@ -7,6 +7,7 @@ import '../../models/scanned_song.dart';
 import '../database/database.dart';
 import '../database/song_sort_order.dart';
 import '../utils/logger.dart';
+import '../utils/path_under_root.dart';
 import '../utils/sort_key.dart';
 import 'album_art_cache_service.dart';
 import 'service_locator.dart';
@@ -111,6 +112,10 @@ class SongRepository {
   Future<void> moveSongInPlaylist(int playlistId, int oldIndex, int newIndex) =>
       _db.moveSongInPlaylist(playlistId, oldIndex, newIndex);
 
+  /// 按给定歌曲顺序重排播放列表（如「按名称排序」一键整理）。
+  Future<void> reorderSongsInPlaylist(int playlistId, List<int> songIds) =>
+      _db.reorderSongsInPlaylist(playlistId, songIds);
+
   Future<List<Song>> getFavoriteSongs() => _db.getFavoriteSongs();
 
   Future<int> getFavoriteCount() => _db.getFavoriteCount();
@@ -173,6 +178,20 @@ class SongRepository {
   Future<Set<String>> getExistingFilePaths() async {
     final paths = await _db.getAllFilePaths();
     return paths.toSet();
+  }
+
+  /// 返回这些根目录（含子目录）下所有「可用」歌曲路径的并集。
+  ///
+  /// 供扫描 diff 使用：部分扫描（单文件夹重扫）只应在这几个根内做增删/标记
+  /// 缺失，避免影响其它未扫描的文件夹（不再依赖 File.existsSync 启发式兜底）。
+  Future<Set<String>> getExistingFilePathsUnder(
+    Iterable<String> folderPaths,
+  ) async {
+    final result = <String>{};
+    for (final root in folderPaths) {
+      result.addAll(await _db.getFolderFilePaths(root));
+    }
+    return result;
   }
 
   /// Returns the set of available file paths under [folderPath].
@@ -554,6 +573,37 @@ class SongRepository {
   /// Physically deletes all songs under [folderPath] from the database.
   Future<int> removeFolder(String folderPath) async {
     return _db.deleteFolderSongs(folderPath);
+  }
+
+  /// 物理删除「确已从磁盘消失」的不可用(ghost)行，仅限 [roots] 下、且不在
+  /// [diskFiles]（本次扫描在磁盘上实际看到的文件）。返回删除行数。
+  ///
+  /// 仅 force 扫描调用：普通全量只把缺失标不可用保留可恢复，这里才是真正
+  /// 清理永远回不来的残留行（如转码后删除的原 flac）。删除后由调用方跑
+  /// [cleanupOrphans] 清理被删行引用的 album/artist/playlist。
+  Future<int> purgeUnavailableGone({
+    required List<String> roots,
+    required Set<String> diskFiles,
+  }) async {
+    if (roots.isEmpty) return 0;
+    final songs = await _db.getUnavailableSongs();
+    // 磁盘侧路径先按 normalize 归一化再比较：macOS 上同一路径可能以 NFD/NFC
+    // 不同形式出现，直接用原始字符串 contains 会把「文件仍在」的行误判为已
+    // 消失，随后物理删除（丢掉 dateAdded/playCount/isFavorite）。
+    final normalizedDisk = {for (final path in diskFiles) p.normalize(path)};
+    final toDelete = <String>[];
+    for (final song in songs) {
+      final path = song.filePath;
+      // 只清理本次成功读取的根内的行；文件若还在磁盘（将恢复）则保留。
+      if (!roots.any((root) => isUnderRootPath(path, root))) continue;
+      if (normalizedDisk.contains(p.normalize(path))) continue;
+      // 兜底：Unicode 归一化/符号链接等表示差异下文件其实还在，
+      // 二次确认后再删。
+      if (File(path).existsSync()) continue;
+      toDelete.add(path);
+    }
+    if (toDelete.isEmpty) return 0;
+    return _db.deleteSongsByPaths(toDelete);
   }
 
   /// 清理不再被任何歌曲引用的 album / artist / playlist 行(全量扫描后调用)。

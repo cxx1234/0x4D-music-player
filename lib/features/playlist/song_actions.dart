@@ -18,7 +18,7 @@ List<PopupMenuEntry<String>> songMenuItems(Song song) {
       PopupMenuItem(
         value: 'playNext',
         enabled: !inQueue,
-        child: const Text('播放下一首'),
+        child: const Text('下一首播放'),
       ),
     PopupMenuItem(
       value: 'addQueue',
@@ -33,6 +33,15 @@ List<PopupMenuEntry<String>> songMenuItems(Song song) {
   ];
 }
 
+/// 正在播放页（信息卡）的"更多"菜单项。
+///
+/// 当前曲必然已在逻辑队列中（正在播放），「播放下一首 / 添加到播放队列」
+/// 对它毫无意义（总是置灰）→ 仅保留「添加到播放列表」与「喜欢」。
+/// 此菜单与通用 [songMenuItems] 分开，避免队列操作出现在正在播放的信息卡上。
+List<PopupMenuEntry<String>> currentSongMenuItems(Song song) {
+  return [const PopupMenuItem(value: 'playlist', child: Text('添加到播放列表'))];
+}
+
 /// 处理歌曲"更多"菜单点击。
 Future<void> handleSongMenuAction(
   BuildContext context,
@@ -40,7 +49,14 @@ Future<void> handleSongMenuAction(
   String value,
 ) async {
   if (value == 'favorite') {
-    await ServiceLocator.songRepo.toggleFavorite(song.id);
+    final player = ServiceLocator.player;
+    if (player.currentSong?.id == song.id) {
+      // 当前曲：走播放器统一入口（它会替换队列里的 Song 快照），否则播放页
+      // 红心读到的仍是旧的 isFavorite，只有列表页会刷新。
+      await player.toggleFavoriteForCurrent();
+    } else {
+      await ServiceLocator.songRepo.toggleFavorite(song.id);
+    }
   } else if (value == 'playlist') {
     await showPlaylistPicker(context, [song]);
   } else if (value == 'playNext') {

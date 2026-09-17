@@ -7,6 +7,10 @@ import 'cached_album_art.dart';
 ///
 /// 供音乐库、专辑详情、歌手详情等页面复用。
 class SongTile extends StatelessWidget {
+  /// 固定行高；调用方列表用 `ListView(itemExtent: 72)`、`IndexScrollbar`
+  /// 也用 72 定位，两处必须一致。
+  static const double kRowHeight = 72;
+
   final Song song;
   final bool isCurrentSong;
   final bool isPlaying;
@@ -148,8 +152,10 @@ class SongTile extends StatelessWidget {
         ? '${(duration / 60000).floor()}:${((duration % 60000) / 1000).round().toString().padLeft(2, '0')}'
         : null;
     final primaryColor = theme.colorScheme.primary;
-    final menu = menuBuilder?.call(song);
-    final hasMenu = menu != null && menu.isNotEmpty;
+    // 只判断「有没有菜单回调」：菜单内容依赖实时播放状态（随机开关/是否已在
+    // 队列），已在 itemBuilder 内按需构建；若在这里真构建一次，会为每行每次
+    // 重建都跑 songMenuItems（内含 O(n) 队列查）。
+    final hasMenu = menuBuilder != null;
     final hasSubtitle =
         (song.artist != null && song.artist!.isNotEmpty) || song.album != null;
     // title 槽位会统一应用标题样式，副标题需显式回退为小一号、偏灰
@@ -161,10 +167,14 @@ class SongTile extends StatelessWidget {
       selected: isCurrentSong,
       selectedTileColor: primaryColor.withValues(alpha: 0.1),
       minVerticalPadding: 16,
+      // 必须显式给 72：SongTile 把副标题放进 title 里，对 ListTile 而言永远是
+      // 「单行」模式，它会按 1 行默认高 56 计算 titleY/leadingY 再居中；而外层
+      // 列表用 itemExtent: 72 把行高紧约束成 72，多出的 8px 全落在底部 →
+      // 无歌手/专辑（没有副标题）的行整体偏上 8px。固定 72 后单行/双行
+      // 排版尺寸都与 itemExtent 一致，内容与封面都居中。
+      minTileHeight: kRowHeight,
       leading: _buildLeading(theme, primaryColor),
-      // 标题 + 副标题组成一个块，整体垂直居中（ListTile 单行模式 titleY 居中）；
-      // minVerticalPadding 16 保证双行块行高 ~72（M3 双行规格），文本不再随
-      // leading 高度上下偏移。
+      // 标题 + 副标题组成一个块，整体垂直居中（ListTile 单行模式 titleY 居中）。
       title: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

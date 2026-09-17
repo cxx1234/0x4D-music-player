@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../utils/path_under_root.dart';
 import 'song_sort_order.dart';
 import 'tables/albums.dart';
 import 'tables/artists.dart';
@@ -254,13 +255,46 @@ class AppDatabase extends _$AppDatabase {
     };
   }
 
-  Future<List<String>> getFolderFilePaths(String folderPath) async {
-    final pattern = '$folderPath%';
-    return (select(songs)
-          ..where((t) => t.filePath.like(pattern) & t.isAvailable.equals(1)))
-        .map((s) => s.filePath)
-        .get();
+  /// 返回 [root] 下（含子目录、含根自身）的歌曲文件路径。
+  ///
+  /// SQL 只用 `= root OR LIKE 'root/%'` 做**粗筛**：路径里的 `_`/`%` 会被
+  /// SQLite 当作通配符（例：`Music_2024` 会匹配 `MusicX2024`），而 LIKE 对真实
+  /// 前缀只会**多**匹配、不会漏，因此随后在 Dart 侧用 [isUnderRootPath] 精确
+  /// 过滤即可，无需转义 SQL 模式。
+  ///
+  /// [onlyAvailable] 为 true 时只返回可用歌曲（供扫描 diff 使用）。
+  Future<List<String>> _pathsUnderRoot(
+    String root, {
+    required bool onlyAvailable,
+  }) async {
+    final normalized = p.normalize(root);
+    var predicate =
+        songs.filePath.equals(normalized) |
+        songs.filePath.like('$normalized/%');
+    if (onlyAvailable) {
+      predicate = predicate & songs.isAvailable.equals(1);
+    }
+    final rows =
+        await (selectOnly(songs)
+              ..addColumns([songs.filePath])
+              ..where(predicate))
+            .get();
+    final result = <String>[];
+    for (final row in rows) {
+      final path = row.read(songs.filePath);
+      if (path != null && isUnderRootPath(path, normalized)) {
+        result.add(path);
+      }
+    }
+    return result;
   }
+
+  /// 返回该文件夹（含其下所有子目录）里「可用」歌曲的文件路径。
+  ///
+  /// **边界语义**：见 [_pathsUnderRoot]——SQL 仅粗筛，Dart 侧做精确的根边界
+  /// 判定，避免 `LIKE '$root/%'` 里的 `_`/`%` 通配符误伤兄弟文件夹。
+  Future<List<String>> getFolderFilePaths(String folderPath) =>
+      _pathsUnderRoot(folderPath, onlyAvailable: true);
 
   Future<int> markAsUnavailable(List<String> filePaths) async {
     return (update(songs)..where((t) => t.filePath.isIn(filePaths))).write(
@@ -278,15 +312,31 @@ class AppDatabase extends _$AppDatabase {
   /// albums / artists / playlist references that no longer point at any song.
   ///
   /// Runs in a single transaction so the cleanup is atomic with the delete.
+  /// 删除范围按 [_pathsUnderRoot] 精确判定（不再直接用 LIKE 删除，避免 `_`/`%`
+  /// 通配符误删兄弟目录），并按块执行以规避 SQLite 的变量数上限。
   Future<int> deleteFolderSongs(String folderPath) async {
-    final pattern = '$folderPath%';
     return transaction(() async {
-      final deleted = await (delete(
-        songs,
-      )..where((t) => t.filePath.like(pattern))).go();
+      final paths = await _pathsUnderRoot(folderPath, onlyAvailable: false);
+      if (paths.isEmpty) return 0;
+      var deleted = 0;
+      const chunkSize = 500;
+      for (var start = 0; start < paths.length; start += chunkSize) {
+        final end = (start + chunkSize < paths.length)
+            ? start + chunkSize
+            : paths.length;
+        deleted += await (delete(
+          songs,
+        )..where((t) => t.filePath.isIn(paths.sublist(start, end)))).go();
+      }
       await cleanupOrphans();
       return deleted;
     });
+  }
+
+  /// 按文件路径物理删除歌曲行（不清理孤儿；调用方自行 [cleanupOrphans]）。
+  Future<int> deleteSongsByPaths(List<String> filePaths) async {
+    if (filePaths.isEmpty) return 0;
+    return (delete(songs)..where((t) => t.filePath.isIn(filePaths))).go();
   }
 
   /// Removes rows in [playlistSongs] / [albums] / [artists] that no longer
@@ -404,15 +454,17 @@ class AppDatabase extends _$AppDatabase {
   Future<int> updateAlbum(AlbumsCompanion entry, int id) =>
       (update(albums)..where((t) => t.id.equals(id))).write(entry);
 
+  /// 专辑详情页歌曲。只返回可用歌曲（`is_available=1`），与音乐库/浏览计数
+  /// 一致：已删除文件仅被标记不可用（保留可恢复），不应出现在详情列表里。
   Future<List<Song>> getSongsByAlbum(int albumId) =>
       (select(songs)
-            ..where((t) => t.albumId.equals(albumId))
+            ..where((t) => t.albumId.equals(albumId) & t.isAvailable.equals(1))
             ..orderBy(_songTrackOrdering()))
           .get();
 
   Stream<List<Song>> watchSongsByAlbum(int albumId) =>
       (select(songs)
-            ..where((t) => t.albumId.equals(albumId))
+            ..where((t) => t.albumId.equals(albumId) & t.isAvailable.equals(1))
             ..orderBy(_songTrackOrdering()))
           .watch();
 
@@ -442,9 +494,13 @@ class AppDatabase extends _$AppDatabase {
   Future<int> updateArtist(ArtistsCompanion entry, int id) =>
       (update(artists)..where((t) => t.id.equals(id))).write(entry);
 
+  /// 歌手详情页歌曲。只返回可用歌曲（`is_available=1`），与歌手卡片计数
+  /// （`getArtistStats`）一致：被删除文件的残留行不应计入详情。
   Future<List<Song>> getSongsByArtist(int artistId) =>
       (select(songs)
-            ..where((t) => t.artistId.equals(artistId))
+            ..where(
+              (t) => t.artistId.equals(artistId) & t.isAvailable.equals(1),
+            )
             ..orderBy([
               (t) => OrderingTerm.asc(t.album),
               ..._songTrackOrdering(),
@@ -453,7 +509,9 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<List<Song>> watchSongsByArtist(int artistId) =>
       (select(songs)
-            ..where((t) => t.artistId.equals(artistId))
+            ..where(
+              (t) => t.artistId.equals(artistId) & t.isAvailable.equals(1),
+            )
             ..orderBy([
               (t) => OrderingTerm.asc(t.album),
               ..._songTrackOrdering(),
@@ -566,6 +624,36 @@ class AppDatabase extends _$AppDatabase {
       if (newIndex < 0 || newIndex > rows.length) return;
       final item = rows.removeAt(oldIndex);
       rows.insert(newIndex, item);
+      await _writePositions(rows);
+    });
+  }
+
+  /// 按 [songIds] 顺序重排播放列表歌曲的 position（一键整理，如「按名称排序」）。
+  ///
+  /// 仅调整现有行；不在 [songIds] 中的行（如已失效/不可用歌曲）保持原相对
+  /// 顺序追加到末尾，避免遗漏。整表在事务内批量更新。
+  Future<void> reorderSongsInPlaylist(int playlistId, List<int> songIds) {
+    return transaction(() async {
+      final rows =
+          await (select(playlistSongs)
+                ..where((t) => t.playlistId.equals(playlistId))
+                ..orderBy([(t) => OrderingTerm.asc(t.position)]))
+              .get();
+      if (rows.isEmpty || songIds.isEmpty) return;
+      final order = <int, int>{};
+      for (var i = 0; i < songIds.length; i++) {
+        order[songIds[i]] = i;
+      }
+      rows.sort((a, b) {
+        final ai = order[a.songId];
+        final bi = order[b.songId];
+        if (ai == null && bi == null) {
+          return a.position.compareTo(b.position);
+        }
+        if (ai == null) return 1;
+        if (bi == null) return -1;
+        return ai.compareTo(bi);
+      });
       await _writePositions(rows);
     });
   }

@@ -20,6 +20,12 @@ class NoOpMediaControls implements PlatformMediaControls {
   Future<void> updateNowPlaying(NowPlayingInfo info) async {}
 
   @override
+  Future<void> updateElapsed({
+    required Duration position,
+    required bool isPlaying,
+  }) async {}
+
+  @override
   Future<void> clearNowPlaying() async {}
 
   @override

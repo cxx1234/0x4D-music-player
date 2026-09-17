@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'song_tile.dart';
+
 /// 通用列表行：行首图标 + 标题 + 副标题 + 右侧图标，布局与 [SongTile] 一致
-/// （标题 + 副标题组成一个块整体垂直居中，双行行高 72 / 单行 56）。
+/// （标题 + 副标题组成一个块整体垂直居中，行高固定 72，与各列表
+/// `itemExtent: 72` 对齐；无副标题时也保持 72，避免行高不齐）。
 ///
 /// 供歌手、播放列表选择等「非歌曲」实体列表复用。
 /// 使用：
@@ -46,8 +49,11 @@ class ListItemTile extends StatelessWidget {
       color: theme.colorScheme.onSurfaceVariant,
     );
     return ListTile(
-      // 与 SongTile 一致：文本块整体垂直居中并保持行高
+      // 与 SongTile 一致：文本块整体垂直居中并保持行高。副标题在 title 里，
+      // ListTile 一律按「单行」排版，必须显式给 72 才不会在外层 itemExtent: 72
+      // 的列表里被挤到上方（详见 SongTile 同名参数注释）。
       minVerticalPadding: 16,
+      minTileHeight: SongTile.kRowHeight,
       leading: leading,
       title: Column(
         mainAxisSize: MainAxisSize.min,

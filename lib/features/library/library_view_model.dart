@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../core/database/database.dart';
 import '../../core/database/song_sort_order.dart';
+import '../../core/services/folder_watcher_service.dart';
 import '../../core/services/library_scanner_service.dart';
 import '../../core/services/player_service.dart';
 import '../../core/services/service_locator.dart';
@@ -36,6 +39,12 @@ class LibraryViewModel extends PageViewModel {
   List<Song> _songs = [];
   String? _errorMessage;
   SongSortOrder _sortOrder = SongSortOrder.title;
+
+  /// 扫描单飞守卫：startScan/forceScan/rescan/quickSync 共用，防并发双跑事务。
+  bool _scanInProgress = false;
+
+  /// 文件夹监听的订阅：外部文件增删（去抖批量 flush 后）实时刷新歌曲列表。
+  StreamSubscription<FolderWatcherEvent>? _folderWatcherSub;
 
   LibraryScanState get scanState => _scanState;
   ScanProgress? get scanProgress => scanProgressNotifier.value;
@@ -74,33 +83,41 @@ class LibraryViewModel extends PageViewModel {
 
   final _scanner = LibraryScannerService();
 
-  /// 本 ViewModel 是否已订阅播放器的轻量通知器。
+  /// 播放态（当前曲 / 播放中）变化的可监听源，供**列表局部重建**。
   ///
-  /// 用于保证「注册最多一次 / 注销彻底一次」。ChangeNotifier 的 addListener
-  /// 不去重、removeListener 一次只移除一个匹配项;若 initialize() 被重复调用
-  /// (initState / 轮询兜底 / didUpdateWidget 多个触发源)会残留指向已 dispose
-  /// 实例的监听,播放时触发即抛 "used after being disposed"。
-  bool _playerListenerAttached = false;
+  /// 不再用 [safeNotify] 通知整页：音乐库列表里只有行的播放高亮依赖播放态，
+  /// 整页 setState（扫描状态条、文件夹列表、工具栏全部跟着重建）纯属浪费。
+  ///
+  /// 延迟创建：本 VM 在页面 State 构造时即实例化，而 `ServiceLocator.player`
+  /// 要等初始化完成后才可用。
+  Listenable? _playerUiListenable;
 
-  /// 幂等注册:无论调用多少次,最多挂一份轻量通知器监听。
-  ///
-  /// 只订阅去重的 [PlayerService.currentSongNotifier] 与 [playingNotifier]
-  /// (切歌/播放态翻转才触发),不订阅整个 PlayerService——后者随
-  /// positionStream 每 ~200ms notify,会让整页(尤其保活后的 offstage 页)
-  /// 跟着高频重建。
-  void _attachPlayerListener() {
-    if (_playerListenerAttached) return;
-    ServiceLocator.player.currentSongNotifier.addListener(safeNotify);
-    ServiceLocator.player.playingNotifier.addListener(safeNotify);
-    _playerListenerAttached = true;
+  /// 播放态变化的可监听源（切歌 / 播放态翻转才触发）。
+  Listenable get playerUiListenable =>
+      _playerUiListenable ??= Listenable.merge([
+        ServiceLocator.player.currentSongNotifier,
+        ServiceLocator.player.playingNotifier,
+      ]);
+
+  /// 幂等订阅文件夹监听事件：外部文件增删去抖批量落库后，实时刷新歌曲列表与
+  /// 播放队列（LibraryPage 保活常驻，靠它捕捉 watcher 驱动的变更）。
+  void _attachFolderWatcherListener() {
+    if (_folderWatcherSub != null) return;
+    _folderWatcherSub = ServiceLocator.folderWatcher.events.listen(
+      (_) => unawaited(_onFolderWatcherEvent()),
+    );
   }
 
-  /// 注销注册:页面生命周期结束时调用,保证移除干净。
-  void _detachPlayerListener() {
-    if (!_playerListenerAttached) return;
-    ServiceLocator.player.currentSongNotifier.removeListener(safeNotify);
-    ServiceLocator.player.playingNotifier.removeListener(safeNotify);
-    _playerListenerAttached = false;
+  void _detachFolderWatcherListener() {
+    _folderWatcherSub?.cancel();
+    _folderWatcherSub = null;
+  }
+
+  /// 外部文件变化已由 FolderWatcherService 落库：重载歌曲 + 同步播放队列。
+  Future<void> _onFolderWatcherEvent() async {
+    await _syncQueueWithLibrary();
+    await _loadSongs();
+    safeNotify();
   }
 
   // ─── Initialization ────────────────────────────────────
@@ -111,7 +128,6 @@ class LibraryViewModel extends PageViewModel {
   /// Resolves macOS security-scoped bookmarks first to restore sandbox
   /// file access across app restarts.
   Future<void> initialize() async {
-    _attachPlayerListener();
     final folders = ServiceLocator.settings.musicFolders;
     if (folders.isNotEmpty) {
       // 沙箱权限恢复已在 ServiceLocator.initialize() 完成（与 UI 解耦，
@@ -123,6 +139,7 @@ class LibraryViewModel extends PageViewModel {
       await _quickSync(folders);
     }
     _sortOrder = ServiceLocator.settings.songSortOrder;
+    _attachFolderWatcherListener();
     await _loadSongs();
     safeNotify();
   }
@@ -210,6 +227,8 @@ class LibraryViewModel extends PageViewModel {
   /// Removes a folder: stop watching → delete songs from DB → remove from settings.
   Future<void> removeFolder(String folderPath) async {
     ServiceLocator.folderWatcher.stopWatching(folderPath);
+    // 清掉该目录下尚未 flush 的监听事件，避免随后误处理已删目录的事件。
+    ServiceLocator.folderWatcher.discardPendingUnder(folderPath);
     await ServiceLocator.songRepo.removeFolder(folderPath);
     await ServiceLocator.settings.removeMusicFolder(folderPath);
     await _syncQueueWithLibrary();
@@ -220,14 +239,26 @@ class LibraryViewModel extends PageViewModel {
   // ─── Internal ──────────────────────────────────────────
 
   Future<void> _runScan(List<String> folders, {bool force = false}) async {
+    // 单飞：扫描进行中时忽略新的扫描请求（UI 已隐藏刷新按钮，这是 VM 层兜底）。
+    if (_scanInProgress) {
+      AppLogger.warning('Scan', 'Scan already in progress; request ignored');
+      return;
+    }
+    _scanInProgress = true;
+    // 扫描期间暂停文件夹监听：事件缓冲，扫完 resumeAfterScan 批量处理，并跳过
+    // 本次已扫描过的文件（与扫描集求差），避免并发写库与重复解析。
+    // suspend 会等在途 flush 落库结束，避免它与本次扫描事务并发写库。
+    await ServiceLocator.folderWatcher.suspend();
+
     _scanState = LibraryScanState.scanning;
     scanProgressNotifier.value = null;
     _scanResult = null;
     _errorMessage = null;
     safeNotify();
 
+    ScanResult? result;
     try {
-      final result = await _scanner.scanFolders(
+      result = await _scanner.scanFolders(
         folders,
         updateExisting: true,
         force: force,
@@ -248,6 +279,11 @@ class LibraryViewModel extends PageViewModel {
       AppLogger.error('Scan', 'Scan failed', e, s);
       _scanState = LibraryScanState.error;
       _errorMessage = e.toString();
+    } finally {
+      _scanInProgress = false;
+      ServiceLocator.folderWatcher.resumeAfterScan(
+        result?.parsedFiles ?? const <String>{},
+      );
     }
 
     await _syncQueueWithLibrary();
@@ -267,10 +303,22 @@ class LibraryViewModel extends PageViewModel {
   }
 
   Future<void> _quickSync(List<String> folders) async {
+    if (_scanInProgress) {
+      AppLogger.warning('Scan', 'Quick sync skipped: a scan is running');
+      return;
+    }
+    _scanInProgress = true;
+    await ServiceLocator.folderWatcher.suspend();
+    ScanResult? result;
     try {
-      await _scanner.scanFolders(folders, markMissing: false);
+      result = await _scanner.scanFolders(folders, markMissing: false);
     } catch (e) {
       AppLogger.warning('Scan', 'Quick sync failed', e);
+    } finally {
+      _scanInProgress = false;
+      ServiceLocator.folderWatcher.resumeAfterScan(
+        result?.parsedFiles ?? const <String>{},
+      );
     }
     await _syncQueueWithLibrary();
   }
@@ -293,7 +341,7 @@ class LibraryViewModel extends PageViewModel {
   void dispose() {
     // 测试环境可能未初始化 ServiceLocator，需要判空。
     if (ServiceLocator.isReady) {
-      _detachPlayerListener();
+      _detachFolderWatcherListener();
     }
     scanProgressNotifier.dispose();
     super.dispose(); // 基类置 _disposed 并释放
