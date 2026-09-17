@@ -126,9 +126,11 @@
 
 - ~~P4 写盘防抖（队列 debounce + 串行写链 + 生命周期 flush、音量拖动结束落盘）~~
 - ~~5.2 封面缓存扩展名不一致~~
-- ⛔ ~~5.1 大队列 `setAudioSources` 一次性构建~~ **已失效**：引擎已换 audioplayers（单曲 `AudioEngine`），`setAudioSources`/`_rebuildSequence` 全库 0 命中。替代关注点见 5.6/5.7。
+- ⛔ ~~5.1 大队列 `setAudioSources` 一次性构建~~ **已失效**：引擎已换 audioplayers（单曲 `AudioEngine`），`setAudioSources`/`_rebuildSequence` 全库 0 命中。替代关注点见 5.7b。
 - ~~5.4 `settings.json` 写无串行化与非原子写（改**串行写链** + temp/rename **原子写**；2026-09-17 ✅）~~
 - ~~5.8 `settings.json` 解析零容错（损坏则备份为 `.corrupt` 并用默认设置继续启动；2026-09-17 ✅）~~
+- ~~5.6 切歌加载无串行/代际（新增 `_loadGeneration`：过期加载在 await 后直接丢弃；2026-09-17 ✅）~~
+- ~~5.7 引擎迁移沉淀问题（load 起始清空 `_duration/_position` + `_loadedIndex` 延后到加载成功；切歌先清零持久化位置；`setLoopSingle`/释放模式去重；`load()` 无条件 pause；`isPlaying`/`togglePlay` 改用播放意图 `_shouldPlay`；2026-09-17 ✅）~~
 
 ### 5.3 位置每几秒整份重写 `play_queue.json`
 - 位置：`player_service.dart:75-78`（1s tick）→ `:425-430`（5s 节流）→ `:911-917`；`play_queue.dart:291-307`（每次写全部 `filePaths`，千首歌可百 KB）。
@@ -137,19 +139,9 @@
 ### 5.5 ○（可选残余）`_positionSub` 每 200ms 唤醒订整个 service 的订阅者
 - 位置：`player_service.dart:68`。现存 6 个整 service 订阅者均有去重守卫（`player_bar.dart:107`、`menu_service.dart:63`、`media_control_service.dart:35`、`app.dart:299`、`now_playing_bar.dart:175`）→ 可接受。
 
-### 5.6 🆕 切歌加载无串行/代际 → UI 与引擎可能不一致（中高）
-- 位置：`player_service.dart:324-352`（`_loadCurrent` 可被连点 next、双击点歌、媒体键连击、`_skipOnFailure` 并发进入）。
-- 后果：`_loadedIndex` 与引擎真实 `loadedPath` 不一致（UI 显示 B 实际唱 A）、重复 `setSource`。
-- 改法：加载代际 token（最后一次胜出）或单飞队列。
-
-### 5.7 🆕 引擎迁移沉淀问题（中低）
-- `audioplayers_engine.dart:133-134` + `player_service.dart:336`：`load()` 未清 `_duration/_position`，且 `_loadedIndex` 在 await 前置位 → 加载窗口内 `duration/position` 返回上一首（媒体控制可能推「新标题+旧时长」，`_persistPosition` 可能错配）。改：load 起始清空、`_loadedIndex` 延后置位。
-- `play_queue.dart:178-184` + `player_service.dart:357-366/762/781`：`setCurrentIndex` 不重置持久化位置 → 切换后退出会把上一首位置写到新歌，续播错位。改：切换时 `setPlaybackState(0,0)`。
-- `player_service.dart:339-341` + `audioplayers_engine.dart:124/127/134`：切歌固定开销（`setVolume`+`setReleaseMode`+`pause`+`load()` 内再 `setReleaseMode`+`getDuration`）→ 按需下发、去重复。
-- `audioplayers_engine.dart:122-124`：`load()` 的 pause 依赖 Dart 侧瞬时状态（滞后时不对齐）→ 改无条件 pause。
-- `player_service.dart:444/604-611`：`isPlaying`/`togglePlay` 仍信引擎瞬时值（滞后期可能不生效）→ 用户意图判断改用 `_shouldPlay`。
+### 5.7b 引擎迁移剩余项（2026-09-17 修复后）
 - `player_service.dart:497-505`：shuffle 下 `effectiveQueue` 每次访问 O(n) 重建 + `indexOf` → 缓存并按队列/顺序表失效。
-- 已知取舍（`audioplayers_engine.dart:108-146`）：单曲引擎无预加载 → 结构性曲间空白；应在文档写明「不得用位置提前量切歌」。
+- 文档约束：单曲引擎无预加载 → 结构性曲间空白；应在 `docs/AudioEngine-Migration.md` 写明「不得用位置提前量切歌」，避免后人"修"出截尾。
 
 ## 6. 歌词
 
@@ -185,7 +177,7 @@
 
 1. ~~**立即（数据/状态风险）**：2.9（扫描根失败误标）、2.10（LIKE 未转义）、3.10（force purge 误删）、5.4/5.8（settings 写盘）~~ —— 2026-09-17 已全部修复 ✅
 2. **发布前必须**：R1、R2、R3、R9；`docs/TODO.md` 其余发布项（Windows 最小尺寸/SMTC、菜单栏勾选）。
-3. **中风险（建议排期）**：5.6、5.7、4.6、6.1、U1、U4、L3、3.6、4.1。
+3. **中风险（建议排期）**：4.6、6.1、U1、U4、L3、3.6、4.1、5.7b。
 4. **低风险顺手**：U3、U5、L1、L2、2.4、2.6、2.7、3.5、3.7、3.8、4.4、5.3、6.2、6.3、R4、R10、R12。
 5. **第二轮架构**：2.1、2.2、2.3、2.8、R7、R8。
 

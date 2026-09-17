@@ -73,6 +73,9 @@ class AudioplayersEngine implements AudioEngine {
 
   String? _loadedPath;
   bool _loopSingle = false;
+
+  /// 释放模式是否已在原生侧应用过（免得每次切歌都重设一次）。
+  bool _releaseModeApplied = false;
   Duration _position = Duration.zero;
   Duration? _duration;
 
@@ -113,25 +116,21 @@ class AudioplayersEngine implements AudioEngine {
         await _seekInternal(position);
         return;
       }
-      // ⚠️ 换源前显式暂停，让状态机走一条**确定**的路径：
-      //   · 否则 lib 内部的 `_completePrepared` 会在"正在播放"时自行 stop，
-      //     产生一串 playing → stopped → (resume) 的异步事件；
-      //   · 其中"迟到的 stopped"会把 UI 刷成"未播放"，而 resume() 又可能因为
-      //     Dart 侧 state 仍为 playing 而**提前返回、根本没有下发起播命令**
-      //     （实测表现：音频在播但按钮显示"播放"，或跳过链走完却不播）。
-      //   · pause() 会等待原生的确认事件，因此 await 之后两侧状态一致。
-      if (_player.state == PlayerState.playing) {
-        await _player.pause();
-      }
-      // 释放模式必须先设：它决定播完后的行为。
-      await _player.setReleaseMode(
-        _loopSingle ? ReleaseMode.loop : ReleaseMode.stop,
-      );
+      // ⚠️ 无条件 pause：Dart 侧 state 会滞后（原生在播而 Dart 记为 paused），
+      // 只按瞬时状态判断会在换源时留下交错的 playing/stopped 事件。
+      await _player.pause();
+      // 释放模式必须先设：它决定播完后的行为。值未变时跳过（省一次原生
+      // 往返，正常由 PlayerService 在加载前调 setLoopSingle 维护）。
+      await _applyReleaseMode();
       // ⚠️ 加载失败时 audioplayers 通过事件流报错（future 本身可能成功），
       // 因此这里不能只依赖 try/catch，还需 errorStream 兜底（已在构造中接线）。
       await _player.setSourceDeviceFile(path);
       _loadedPath = path;
-      _duration = await _player.getDuration() ?? _duration;
+      // 先清掉上一首的时长/位置：加载窗口内 duration/position 若仍返回旧值，
+      // 媒体控制的 1s 轮询与位置落盘会把「新标题 + 旧时长/旧位置」写出去。
+      _duration = null;
+      _position = Duration.zero;
+      _duration = await _player.getDuration();
       // ⚠️ 必须等 source 准备好之后再 seek：没有 currentItem 时 seek 会等到超时。
       if (position > Duration.zero) {
         await _seekInternal(position);
@@ -205,9 +204,25 @@ class AudioplayersEngine implements AudioEngine {
 
   @override
   Future<void> setLoopSingle(bool loop) async {
+    // 值未变且已应用过 → 免去一次原生往返（每次切歌都会调本方法）。
+    if (loop == _loopSingle && _releaseModeApplied) return;
     _loopSingle = loop;
     try {
       await _player.setReleaseMode(loop ? ReleaseMode.loop : ReleaseMode.stop);
+      _releaseModeApplied = true;
+    } catch (e, s) {
+      _emit('loop', e, s);
+    }
+  }
+
+  /// 惰性应用释放模式（[load] 里保证首次已有确定值，后续由 setLoopSingle 维护）。
+  Future<void> _applyReleaseMode() async {
+    if (_releaseModeApplied) return;
+    try {
+      await _player.setReleaseMode(
+        _loopSingle ? ReleaseMode.loop : ReleaseMode.stop,
+      );
+      _releaseModeApplied = true;
     } catch (e, s) {
       _emit('loop', e, s);
     }

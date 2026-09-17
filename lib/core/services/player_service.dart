@@ -92,6 +92,11 @@ class PlayerService extends ChangeNotifier {
   /// bookmark 先恢复权限）。
   int? _loadedIndex;
 
+  /// 加载代际：并发加载（连点 next / 双击点歌 / 媒体键连击 / 自动跳过链）
+  /// 只允许最后一次生效——过期的加载在 await 之后直接放弃，避免引擎实际
+  /// 播放 A 而 `_loadedIndex` 指向 B（UI 显示与实际不一致、重复 setSource）。
+  int _loadGeneration = 0;
+
   PlayerRepeatMode _repeatMode = PlayerRepeatMode.off;
   bool _isShuffled = false;
 
@@ -322,27 +327,35 @@ class PlayerService extends ChangeNotifier {
   /// 返回是否加载成功；失败时错误已由 [AudioEngine.errorStream] 上报，并由
   /// [_onEngineError] 统一走"提示 + 自动跳过"。
   Future<bool> _loadCurrent({required bool autoPlay}) async {
+    final generation = ++_loadGeneration;
+    final targetIndex = _playQueue.currentIndex;
+    // 曲目切换（或首次加载）时先清零持久化进度：否则切歌后立刻退出/挂起
+    // （flushPendingWrites）会把**上一首**的位置写进新曲，下次续播到错误位置。
+    if (_loadedIndex != targetIndex) {
+      _playQueue.setPlaybackState(Duration.zero, Duration.zero);
+    }
+    // 加载窗口内先摘掉「已加载」标记：position/duration 不再读上一首的引擎值
+    // （媒体控制 1s 轮询与位置落盘都可能落在这个窗口里）。
+    _loadedIndex = null;
     // 加载事务：把这次加载期间产生的通知合并为一次 UI 重建。
     _loadDepth++;
     try {
       final song = _playQueue.currentSong;
-      if (song == null) {
-        _loadedIndex = null;
-        return false;
-      }
+      if (song == null) return false;
       // 续播位置只在"首次加载"消费一次（手动切歌会提前清空）。
       final position = _resumePosition ?? Duration.zero;
       _resumePosition = null;
-      _loadedIndex = _playQueue.currentIndex;
       // 记下本次的播放意图：跳过链 / 自动推进后续都以它为准（而非引擎的瞬时状态）。
       _shouldPlay = autoPlay;
       await _engine.setVolume(_volume);
       await _engine.setLoopSingle(_repeatMode == PlayerRepeatMode.one);
       await _engine.load(song.filePath, initialPosition: position);
-      if (_engine.loadedPath == null) {
-        _loadedIndex = null;
-        return false;
-      }
+      // 已被更新的一次加载取代（或队列已被切走）：放弃，由最新那次收尾。
+      if (generation != _loadGeneration) return false;
+      if (_playQueue.currentIndex != targetIndex) return false;
+      if (_engine.loadedPath == null) return false;
+      // 加载成功后才标记「已加载」（此前 position/duration 回退到队列保存值）。
+      _loadedIndex = targetIndex;
       if (autoPlay) await _engine.play();
       // 加载（并起播）成功 → 复位连续失败计数，避免"隔了很久的旧失败"累积到上限。
       _clearPlaybackError();
@@ -441,7 +454,11 @@ class PlayerService extends ChangeNotifier {
   Song? get currentSong => _playQueue.currentSong;
 
   /// Whether audio is currently playing.
-  bool get isPlaying => _engine.isPlaying;
+  ///
+  /// 用「播放意图」而非引擎瞬时状态：audioplayers 的 Dart 侧状态在换源空档会
+  /// 滞后（原生在播而 Dart 记为 paused），直接读它会让按钮/媒体控制在切歌
+  /// 瞬间闪成「未播放」。
+  bool get isPlaying => _shouldPlay;
 
   /// Current playback position.
   ///
@@ -602,7 +619,9 @@ class PlayerService extends ChangeNotifier {
   }
 
   Future<void> togglePlay() async {
-    if (_engine.isPlaying) {
+    // 同样以播放意图判定：换源空档（引擎尚未恢复 playing）时点按钮，
+    // 应继续「暂停」而不是重复下发播放。
+    if (_shouldPlay) {
       await pause();
     } else {
       await play();

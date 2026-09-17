@@ -189,6 +189,49 @@ void main() {
     expect(player.isPlaying, isTrue, reason: '跳过链结束后必须真的起播（曾因沿用引擎瞬时状态而静默加载不播）');
   });
 
+  test('切歌后持久化位置归零（不会把上一首的位置写进新曲）', () async {
+    await player.playFromList([_song(1), _song(2)]);
+    // 第一首播到 30s 并落盘（pause 会立即落盘当前位置）。
+    engine.setPosition(const Duration(seconds: 30));
+    await player.pause();
+    expect(queue.position, const Duration(seconds: 30));
+
+    await player.next();
+
+    expect(player.currentIndex, 1);
+    expect(
+      queue.position,
+      Duration.zero,
+      reason: '切歌后新曲的持久化进度必须归零，否则退出时会写入上一首的位置',
+    );
+  });
+
+  test('isPlaying 取播放意图：引擎瞬时状态滞后时仍显示播放中', () async {
+    await player.playFromList([_song(1), _song(2)]);
+    expect(player.isPlaying, isTrue);
+
+    // 引擎侧被外部暂停（模拟换源空档/原生状态滞后），用户意图不变。
+    await engine.pause();
+
+    expect(engine.isPlaying, isFalse);
+    expect(player.isPlaying, isTrue, reason: '不应因引擎瞬时状态闪成未播放');
+  });
+
+  test('并发切歌：过期的加载被丢弃，最终只保留最后一次', () async {
+    await player.playFromList([_song(1), _song(2), _song(3)]);
+    engine.loadDelay = const Duration(milliseconds: 30);
+    engine.loads.clear();
+
+    // 不 await，让两次加载交错（第一次会被代际守卫丢弃）。
+    final first = player.next();
+    final second = player.next();
+    await Future.wait([first, second]);
+
+    expect(player.currentIndex, 2);
+    expect(engine.loads.last, '/music/3.mp3');
+    expect(player.isPlaying, isTrue);
+  });
+
   test('连续 3 首坏文件后停止自动跳转', () async {
     engine.badPaths.addAll(['/music/1.mp3', '/music/2.mp3', '/music/3.mp3']);
     await player.playFromList([_song(1), _song(2), _song(3), _song(4)]);
@@ -301,8 +344,12 @@ class FakeAudioEngine implements AudioEngine {
   @override
   Stream<AudioEngineError> get errorStream => _errorCtrl.stream;
 
+  /// 可选的加载延迟：用于制造「两次加载交错」的窗口（并发切歌测试）。
+  Duration loadDelay = Duration.zero;
+
   @override
   Future<void> load(String path, {Duration? initialPosition}) async {
+    if (loadDelay > Duration.zero) await Future<void>.delayed(loadDelay);
     loads.add(path);
     loadPositions.add(initialPosition);
     if (badPaths.contains(path)) {
