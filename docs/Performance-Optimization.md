@@ -16,12 +16,10 @@
 - ~~U3 `SongTile` build 内真构建菜单（改判 `menuBuilder != null`，菜单仍在 `itemBuilder` 内按需构建；2026-09-17 ✅）~~
 - ~~U5 非选中页动画空转（`shell_page` 给 IndexedStack 子项包 `TickerMode(enabled: active)`；2026-09-17 ✅）~~
 - ~~L1/L2 await 后未复查 mounted（`queue_view` 批量删除、`library_page` 导入/移除/重授权；2026-09-17 ✅）~~
-
-### 1.x 待办（行号按 2026-09-17）
-- U1 进度条拖动每 tick seek（无 onChangeEnd 落点）— `player_progress_bar.dart:47`。仿 `_VolumeSlider`：拖动中预览、结束提交一次。
-- U2 音乐库每次播放/暂停/切歌整页 setState（行内播放图标）— `library_page.dart:105-107`。行内图标局部订阅。
-- U4 菜单动作后无条件整表重查（四个动作都不改变列表内容）— `album_page.dart:340` / `artist_page.dart:364` / `library_page.dart:606`。
-- L4 设置页缓存大小只在 initState 载、无 `active`/`didUpdateWidget`，保活切回不刷新 — `settings_page.dart:39-50`。
+- ~~U1 进度条拖动每 tick seek（改为拖动预览 + `onChangeEnd` 提交一次，左侧时间同步预览；2026-09-17 ✅）~~
+- ~~U2 音乐库播放态整页 setState（改为 VM 暴露 `playerUiListenable`，列表局部重建；2026-09-17 ✅）~~
+- ~~U4 菜单动作后无条件整表重查（四个动作都不改变列表内容，已去掉重查；2026-09-17 ✅）~~
+- ~~L4 设置页缓存大小保活不刷新（新增 `active` + `didUpdateWidget` 重读；2026-09-17 ✅）~~
 
 ---
 
@@ -163,7 +161,7 @@
 
 1. ~~**立即（数据/状态风险）**：2.9（扫描根失败误标）、2.10（LIKE 未转义）、3.10（force purge 误删）、5.4/5.8（settings 写盘）~~ —— 2026-09-17 已全部修复 ✅
 2. **发布前必须**：R1、R2、R3、R9；`docs/TODO.md` 其余发布项（Windows 最小尺寸/SMTC、菜单栏勾选）。
-3. **中风险（建议排期）**：U1、U4、3.6、5.7b。
+3. **中风险（建议排期）**：3.6、5.7b。
 4. **低风险顺手**：2.4、2.6、2.7、3.5、3.7、3.8、4.2、4.3、5.3、6.2、6.3、R4、R10、R12。
 5. **第二轮架构**：2.1、2.2、2.3、2.8、R7、R8。
 

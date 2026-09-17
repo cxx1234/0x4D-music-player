@@ -261,16 +261,24 @@ class _LibraryPageState extends State<LibraryPage> {
           visible: !_searchActive && _musicFolders.isNotEmpty,
           child: _buildFolderList(theme),
         ),
+        // 播放态（切歌/播放暂停）只重建歌曲列表本身：整页 setState 会连带重建
+        // 扫描状态条与文件夹列表（见 LibraryViewModel.playerUiListenable）。
         if (!_searchActive) ...[
           if (_musicFolders.isEmpty && !_viewModel.isScanning)
             _buildEmptyState(theme),
           if (_viewModel.songs.isNotEmpty)
-            _buildSongList(theme, _viewModel.songs),
+            ListenableBuilder(
+              listenable: _viewModel.playerUiListenable,
+              builder: (context, _) => _buildSongList(theme, _viewModel.songs),
+            ),
         ] else ...[
           if (filtered.isEmpty)
             Expanded(child: SearchEmptyState(query: _query))
           else
-            _buildSongList(theme, filtered),
+            ListenableBuilder(
+              listenable: _viewModel.playerUiListenable,
+              builder: (context, _) => _buildSongList(theme, filtered),
+            ),
         ],
       ],
     );
@@ -607,7 +615,8 @@ class _LibraryPageState extends State<LibraryPage> {
                 menuBuilder: (song) => songMenuItems(song),
                 onMenuSelected: (song, value) async {
                   await handleSongMenuAction(context, song, value);
-                  await _viewModel.reloadSongs();
+                  // 菜单动作（下一首播放/加入队列/加入播放列表/喜欢）都不改变本
+                  // 列表内容，无需整表重查（原先每次动作都跑一次全量查询）。
                 },
               );
             },

@@ -338,7 +338,7 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
                       menuBuilder: (song) => songMenuItems(song),
                       onMenuSelected: (song, value) async {
                         await handleSongMenuAction(context, song, value);
-                        await _load();
+                        // 菜单动作不改变本页列表内容，无需重查。
                       },
                     );
                   },

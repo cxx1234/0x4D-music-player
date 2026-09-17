@@ -13,7 +13,10 @@ class SettingsPage extends StatefulWidget {
   /// Shell 控制器（「音乐库 › 强制刷新」动作由此切到音乐库并触发）。
   final ShellController? controller;
 
-  const SettingsPage({super.key, this.controller});
+  /// 是否为当前选中的 tab；从非激活切回激活时刷新缓存大小等快照数据。
+  final bool active;
+
+  const SettingsPage({super.key, this.controller, this.active = true});
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -47,6 +50,16 @@ class _SettingsPageState extends State<SettingsPage> {
       _nowPlayingBarFill = ServiceLocator.settings.nowPlayingBarFill;
     }
     _loadCacheSize();
+  }
+
+  @override
+  void didUpdateWidget(SettingsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 保活切回本页时刷新封面缓存大小（此前只在 initState 读一次，之后
+    // 一直显示旧值，清理过缓存也不会变）。
+    if (widget.active && !oldWidget.active) {
+      _loadCacheSize();
+    }
   }
 
   Future<void> _loadCacheSize() async {

@@ -83,34 +83,21 @@ class LibraryViewModel extends PageViewModel {
 
   final _scanner = LibraryScannerService();
 
-  /// 本 ViewModel 是否已订阅播放器的轻量通知器。
+  /// 播放态（当前曲 / 播放中）变化的可监听源，供**列表局部重建**。
   ///
-  /// 用于保证「注册最多一次 / 注销彻底一次」。ChangeNotifier 的 addListener
-  /// 不去重、removeListener 一次只移除一个匹配项;若 initialize() 被重复调用
-  /// (initState / 轮询兜底 / didUpdateWidget 多个触发源)会残留指向已 dispose
-  /// 实例的监听,播放时触发即抛 "used after being disposed"。
-  bool _playerListenerAttached = false;
-
-  /// 幂等注册:无论调用多少次,最多挂一份轻量通知器监听。
+  /// 不再用 [safeNotify] 通知整页：音乐库列表里只有行的播放高亮依赖播放态，
+  /// 整页 setState（扫描状态条、文件夹列表、工具栏全部跟着重建）纯属浪费。
   ///
-  /// 只订阅去重的 [PlayerService.currentSongNotifier] 与 [playingNotifier]
-  /// (切歌/播放态翻转才触发),不订阅整个 PlayerService——后者随
-  /// positionStream 每 ~200ms notify,会让整页(尤其保活后的 offstage 页)
-  /// 跟着高频重建。
-  void _attachPlayerListener() {
-    if (_playerListenerAttached) return;
-    ServiceLocator.player.currentSongNotifier.addListener(safeNotify);
-    ServiceLocator.player.playingNotifier.addListener(safeNotify);
-    _playerListenerAttached = true;
-  }
+  /// 延迟创建：本 VM 在页面 State 构造时即实例化，而 `ServiceLocator.player`
+  /// 要等初始化完成后才可用。
+  Listenable? _playerUiListenable;
 
-  /// 注销注册:页面生命周期结束时调用,保证移除干净。
-  void _detachPlayerListener() {
-    if (!_playerListenerAttached) return;
-    ServiceLocator.player.currentSongNotifier.removeListener(safeNotify);
-    ServiceLocator.player.playingNotifier.removeListener(safeNotify);
-    _playerListenerAttached = false;
-  }
+  /// 播放态变化的可监听源（切歌 / 播放态翻转才触发）。
+  Listenable get playerUiListenable =>
+      _playerUiListenable ??= Listenable.merge([
+        ServiceLocator.player.currentSongNotifier,
+        ServiceLocator.player.playingNotifier,
+      ]);
 
   /// 幂等订阅文件夹监听事件：外部文件增删去抖批量落库后，实时刷新歌曲列表与
   /// 播放队列（LibraryPage 保活常驻，靠它捕捉 watcher 驱动的变更）。
@@ -141,7 +128,6 @@ class LibraryViewModel extends PageViewModel {
   /// Resolves macOS security-scoped bookmarks first to restore sandbox
   /// file access across app restarts.
   Future<void> initialize() async {
-    _attachPlayerListener();
     final folders = ServiceLocator.settings.musicFolders;
     if (folders.isNotEmpty) {
       // 沙箱权限恢复已在 ServiceLocator.initialize() 完成（与 UI 解耦，
@@ -355,7 +341,6 @@ class LibraryViewModel extends PageViewModel {
   void dispose() {
     // 测试环境可能未初始化 ServiceLocator，需要判空。
     if (ServiceLocator.isReady) {
-      _detachPlayerListener();
       _detachFolderWatcherListener();
     }
     scanProgressNotifier.dispose();
