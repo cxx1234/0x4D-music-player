@@ -12,6 +12,7 @@
 - ~~1.3 歌手详情定向查专辑（`getAlbumsByIds` 空集合短路，替代全表拉取）~~
 - ~~1.4 `NowPlayingBar` 订阅收窄 + 底栏背景进度填充（可开关：设置 › 外观）~~
 - ~~用户自规划：全局底栏「按播放进度填充」效果（整体背景色从左向右，可开关）~~
+- ~~L3 收藏跨视图不一致（当前曲改走 `toggleFavoriteForCurrent`，队列快照同步；2026-09-17 ✅）~~
 
 ### 1.x 待办（行号按 2026-09-17）
 - U1 进度条拖动每 tick seek（无 onChangeEnd 落点）— `player_progress_bar.dart:47`。仿 `_VolumeSlider`：拖动中预览、结束提交一次。
@@ -21,7 +22,6 @@
 - U5 播放中行图标 60fps 动画在 offstage 页仍跑 — `song_tile.dart:117/246`（IndexedStack 保活不关 ticker）。
 - L1 `queue_view` 批量删除后 await 中 setState 未复查 mounted — `queue_view.dart:292-303`。
 - L2 `library_page` 多处 await 后 setState 未复查 mounted — `:173/179/368`（`_removeFolder` 全程无守卫）。
-- L3 收藏跨视图不一致 — `song_actions.dart:47-49` 只写 DB；`0847d0f` 移除「正在播放」菜单收藏后，仅剩反方向：在库/专辑/歌手点收藏，播放页红心不更新。
 - L4 设置页缓存大小只在 initState 载、无 `active`/`didUpdateWidget`，保活切回不刷新 — `settings_page.dart:39-50`。
 
 ---
@@ -107,7 +107,7 @@
 - 改法：批量缓冲 + 周期 flush（保持崩溃前落盘语义）。
 
 ### 4.3 媒体键操作 fire-and-forget 未串行
-- 位置：`media_control_service.dart:49-64`。⚠️ 原依据「与扫描 `_rebuildSequence` 并发」已失效（该方法随引擎迁移删除）；现并发载体为 `PlayerService._loadCurrent`（见 5.6）。
+- 位置：`media_control_service.dart:49-64`。⚠️ 原依据「与扫描 `_rebuildSequence` 并发」已失效（该方法随引擎迁移删除）；现并发载体为 `PlayerService._loadCurrent`——已加代际守卫（5.6 ✅），剩余风险为连击时的重复下发。
 - 改法：给引擎操作加操作串行/统一入口。
 
 ### 4.4 媒体键 EventChannel `onError` 静默吞
@@ -115,12 +115,7 @@
 - 改法：至少 `AppLogger.warning`。
 
 - ~~4.5 folder watcher 无防抖 + 扫描期并发触发（已改 500ms 去抖批量 + `suspend()` 扫描期缓冲 + `resumeAfterScan`；`folder_watcher_service.dart:56/127/181`，2026-09-08 ✅）~~
-
-### 4.6 🆕 watcher 新实现的残留问题（中）
-- `folder_watcher_service.dart:127-133`：`suspend()` 不等待在途 `_flushPending` → 仍可能与扫描事务并发写库。建议 suspend 返回 Future 并 await，或纳入 `_scanInProgress` 单飞锁。
-- `:175-179`：force 扫描把全部文件算作已解析 → 扫描期间/结束后的编辑事件被直接丢弃（quick 扫描影响小）。建议按「事件时间 vs 解析时间」过滤。
-- `:150-160`：批次被 suspend 时结尾不通知 VM（已落库但 UI 不刷新，低）。
-- `:200-202`：批量 remove 不校验存在性，remove+add 乱序会瞬时把歌标不可用（低）。
+- ~~4.6 watcher 残留问题（`suspend()` 改为 async 并等待在途 flush；跳过项按「事件时间 vs 扫描开始」过滤（force 扫描不再吞掉扫描期间的编辑）；扫描期间已落库的变更在 resume 时补发汇总通知；remove 落库前校验文件确实已不在；2026-09-17 ✅）~~
 
 ## 5. 播放引擎 / 播放器 / 持久化
 
@@ -145,10 +140,8 @@
 
 ## 6. 歌词
 
-### 6.1 🆕 两遍匹配误判：整首歌词被当成翻译段（中）
-- 位置：`lib/core/utils/bilingual_lrc.dart:210-216`（只看「时间戳值二次出现」，不校验切点位置）。
-- 触发：片头多行共用同一时间戳（如 `[00:00.00]作词/作曲`）时即判定切点 → `mainLyric` 仅剩一行，全部歌词进 `translationLyric`（关掉翻译几乎看不到歌词）。现有 `test/lyrics_split_test.dart` 未覆盖该形态。
-- 改法：要求切点越过 ≥2 个时间戳行，或两侧时间戳数量相当。
+### 6.1 两遍匹配误判（已修，2026-09-17 ✅）
+- ~~片头多行共用同一时间戳（作词/作曲/编曲）时误判切点，整首歌词被归入翻译段；已加「切点前至少两个不同时间戳」守卫，并在 `lyrics_split_test.dart` 补回归用例。~~
 
 ### 6.2 外部 `.lrc` 无缓存，切歌/切翻译开关都重读重解析（低）
 - 位置：`lib/core/services/lyrics_view_model.dart:145` + `:171-196`（`splitBilingualLrc` 在 UI isolate 同步跑）；内嵌歌词已有 mtime 缓存（`:199-213`），外部没有。
@@ -177,7 +170,7 @@
 
 1. ~~**立即（数据/状态风险）**：2.9（扫描根失败误标）、2.10（LIKE 未转义）、3.10（force purge 误删）、5.4/5.8（settings 写盘）~~ —— 2026-09-17 已全部修复 ✅
 2. **发布前必须**：R1、R2、R3、R9；`docs/TODO.md` 其余发布项（Windows 最小尺寸/SMTC、菜单栏勾选）。
-3. **中风险（建议排期）**：4.6、6.1、U1、U4、L3、3.6、4.1、5.7b。
+3. **中风险（建议排期）**：U1、U4、3.6、4.1、5.7b。
 4. **低风险顺手**：U3、U5、L1、L2、2.4、2.6、2.7、3.5、3.7、3.8、4.4、5.3、6.2、6.3、R4、R10、R12。
 5. **第二轮架构**：2.1、2.2、2.3、2.8、R7、R8。
 

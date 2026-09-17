@@ -49,7 +49,14 @@ Future<void> handleSongMenuAction(
   String value,
 ) async {
   if (value == 'favorite') {
-    await ServiceLocator.songRepo.toggleFavorite(song.id);
+    final player = ServiceLocator.player;
+    if (player.currentSong?.id == song.id) {
+      // 当前曲：走播放器统一入口（它会替换队列里的 Song 快照），否则播放页
+      // 红心读到的仍是旧的 isFavorite，只有列表页会刷新。
+      await player.toggleFavoriteForCurrent();
+    } else {
+      await ServiceLocator.songRepo.toggleFavorite(song.id);
+    }
   } else if (value == 'playlist') {
     await showPlaylistPicker(context, [song]);
   } else if (value == 'playNext') {

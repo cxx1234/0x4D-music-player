@@ -197,6 +197,10 @@ typedef _LrcEntry = ({
 ) {
   int? firstMs;
   var foundFirst = false;
+  // 切点之前出现过的**不同**时间戳集合：主歌词段至少要有两个不同的时间戳。
+  // 否则会把片头「作词/作曲/编曲」这类共用同一时间戳的多行当成翻译段起点，
+  // 导致整首歌词被归入翻译（关掉翻译开关就几乎看不到歌词）。
+  final seenBefore = <int>{};
   for (var i = 0; i < entries.length; i++) {
     final e = entries[i];
     if (!e.isTimestamp) continue;
@@ -205,9 +209,12 @@ typedef _LrcEntry = ({
     if (!foundFirst) {
       firstMs = ms;
       foundFirst = true;
+      seenBefore.add(ms);
       continue;
     }
     if (ms == firstMs) {
+      // 片头噪声（同一时间戳连续多行）：继续往后找真正的翻译段起点。
+      if (seenBefore.length < 2) continue;
       // 翻译段至少要有几行时间戳，防「单行重复」噪声误判。
       final transCount = entries.skip(i).where((x) => x.isTimestamp).length;
       if (transCount >= 3) {
@@ -215,6 +222,7 @@ typedef _LrcEntry = ({
       }
       break;
     }
+    seenBefore.add(ms);
   }
   return null;
 }

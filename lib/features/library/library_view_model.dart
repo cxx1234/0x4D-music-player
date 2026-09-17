@@ -261,7 +261,8 @@ class LibraryViewModel extends PageViewModel {
     _scanInProgress = true;
     // 扫描期间暂停文件夹监听：事件缓冲，扫完 resumeAfterScan 批量处理，并跳过
     // 本次已扫描过的文件（与扫描集求差），避免并发写库与重复解析。
-    ServiceLocator.folderWatcher.suspend();
+    // suspend 会等在途 flush 落库结束，避免它与本次扫描事务并发写库。
+    await ServiceLocator.folderWatcher.suspend();
 
     _scanState = LibraryScanState.scanning;
     scanProgressNotifier.value = null;
@@ -321,7 +322,7 @@ class LibraryViewModel extends PageViewModel {
       return;
     }
     _scanInProgress = true;
-    ServiceLocator.folderWatcher.suspend();
+    await ServiceLocator.folderWatcher.suspend();
     ScanResult? result;
     try {
       result = await _scanner.scanFolders(folders, markMissing: false);

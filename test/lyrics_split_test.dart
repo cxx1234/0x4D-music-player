@@ -189,6 +189,26 @@ void main() {
       expect(r.translationLyric, isNot(contains('[ti:Demo]')));
     });
 
+    test('片头多行共用同一时间戳时不应误判两段式（作词/作曲/编曲）', () {
+      // krc 转 lrc 常见：片头信息行共用 [00:00.00]，其后才是正文时间轴。
+      const lrc = '''
+[00:00.00]作词：A
+[00:00.00]作曲：B
+[00:00.00]编曲：C
+[00:05.00]第一句
+[00:10.00]第二句
+[00:15.00]第三句
+''';
+      final r = splitBilingualLrc(lrc);
+      expect(r.mainLyric, contains('[00:05.00]第一句'));
+      expect(r.mainLyric, contains('[00:15.00]第三句'));
+      expect(
+        r.translationLyric,
+        isEmpty,
+        reason: '片头同时间戳不应被当成翻译段起点（否则整首歌词会被归入翻译）',
+      );
+    });
+
     test('一行多时间戳 [a][b] 原文 翻译 → 主/翻译都保留全部时间戳', () {
       const lrc = '[00:00.00][00:05.00]Hello world 你好世界';
       final r = splitBilingualLrc(lrc);

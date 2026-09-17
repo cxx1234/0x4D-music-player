@@ -66,9 +66,10 @@ void main() {
     expect(emitted.single.addedOrUpdated, 2);
   });
 
-  test('remove 批量标记缺失', () async {
+  test('remove 批量标记缺失（文件确实已从磁盘消失）', () async {
     final p = await addFile('gone.mp3');
     await insertAvailable(p);
+    await File(p).delete();
 
     watcher.recordEvent(p, ChangeType.REMOVE);
     await watcher.flushNow();
@@ -80,6 +81,7 @@ void main() {
   test('同路径 add 后 remove → 按最新 remove 处理', () async {
     final p = await addFile('x.mp3');
     await insertAvailable(p);
+    await File(p).delete();
 
     watcher.recordEvent(p, ChangeType.ADD);
     watcher.recordEvent(p, ChangeType.REMOVE);
@@ -92,7 +94,7 @@ void main() {
   test('suspend 期间缓冲不落库，恢复后处理', () async {
     final f = await addFile('s.mp3');
     watcher.recordEvent(f, ChangeType.ADD);
-    watcher.suspend();
+    await watcher.suspend();
 
     await watcher.flushNow(); // suspend 中 → no-op
     expect(await db.getAvailableSongs(), isEmpty);
@@ -107,7 +109,7 @@ void main() {
   test('resumeAfterScan 跳过本次扫描已处理文件的 upsert', () async {
     final f = await addFile('skip.mp3');
     watcher.recordEvent(f, ChangeType.ADD);
-    watcher.suspend();
+    await watcher.suspend();
 
     // 模拟：f 已被本次扫描解析过 → 跳过，不再重复入库。
     watcher.resumeAfterScan({f});
@@ -128,8 +130,28 @@ void main() {
     watcher.recordEvent(p, ChangeType.ADD);
     expect(watcher.hasPending, isTrue);
     // 取消定时器（避免散落 Timer），再验证丢弃。
-    watcher.suspend();
+    await watcher.suspend();
     watcher.discardPendingUnder(sub.path);
     expect(watcher.hasPending, isFalse);
+  });
+
+  test('文件仍在磁盘时忽略 remove（覆盖写乱序防护）', () async {
+    final p = await addFile('rewrite.mp3');
+    await insertAvailable(p);
+
+    watcher.recordEvent(p, ChangeType.REMOVE); // 文件其实还在
+    await watcher.flushNow();
+
+    expect(await db.getAvailableSongs(), hasLength(1));
+  });
+
+  test('扫描期间到达的编辑不会被 resumeAfterScan 跳过', () async {
+    final f = await addFile('edited.mp3');
+    await watcher.suspend(); // 扫描开始
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    watcher.recordEvent(f, ChangeType.MODIFY); // 扫描期间到达
+    watcher.resumeAfterScan({f}); // force 扫描把全部文件算作已解析
+
+    expect(watcher.hasPending, isTrue, reason: '扫描期间的编辑必须保留');
   });
 }
