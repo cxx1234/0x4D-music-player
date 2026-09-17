@@ -53,6 +53,7 @@ dependencies:
   flutter_lyric: ^3.0.0
   # 运行时读取 pubspec.yaml 的应用版本号（设置页/关于页统一来源）。
   package_info_plus: ^10.2.1
+  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:
