@@ -133,7 +133,10 @@ class _ShellPageState extends State<ShellPage> {
             child: IndexedStack(
               index: _selected.index,
               children: [
-                for (final item in NavigationItem.values) _pageFor(item),
+                for (final item in NavigationItem.values)
+                  // 非选中页关掉动画时钟：IndexedStack 只是不绘制，不会停 ticker，
+                  // 否则「播放中」等化器图标之类的动画会在后台以 60fps 空转。
+                  TickerMode(enabled: _selected == item, child: _pageFor(item)),
               ],
             ),
           ),

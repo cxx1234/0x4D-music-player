@@ -297,6 +297,7 @@ class _QueueViewState extends State<QueueView> {
     for (final i in sorted) {
       await vm.removeFromQueue(i);
     }
+    if (!mounted) return;
     setState(() {
       _selectedIndices.clear();
       _deleteMode = false;

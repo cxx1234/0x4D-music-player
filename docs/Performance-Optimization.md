@@ -13,15 +13,14 @@
 - ~~1.4 `NowPlayingBar` 订阅收窄 + 底栏背景进度填充（可开关：设置 › 外观）~~
 - ~~用户自规划：全局底栏「按播放进度填充」效果（整体背景色从左向右，可开关）~~
 - ~~L3 收藏跨视图不一致（当前曲改走 `toggleFavoriteForCurrent`，队列快照同步；2026-09-17 ✅）~~
+- ~~U3 `SongTile` build 内真构建菜单（改判 `menuBuilder != null`，菜单仍在 `itemBuilder` 内按需构建；2026-09-17 ✅）~~
+- ~~U5 非选中页动画空转（`shell_page` 给 IndexedStack 子项包 `TickerMode(enabled: active)`；2026-09-17 ✅）~~
+- ~~L1/L2 await 后未复查 mounted（`queue_view` 批量删除、`library_page` 导入/移除/重授权；2026-09-17 ✅）~~
 
 ### 1.x 待办（行号按 2026-09-17）
 - U1 进度条拖动每 tick seek（无 onChangeEnd 落点）— `player_progress_bar.dart:47`。仿 `_VolumeSlider`：拖动中预览、结束提交一次。
 - U2 音乐库每次播放/暂停/切歌整页 setState（行内播放图标）— `library_page.dart:105-107`。行内图标局部订阅。
-- U3 ⚠️半完成（`be38900` 已修「菜单陈旧」）：`song_tile.dart:151-152` build 内仍真跑 `menuBuilder.call`（含 O(n) 队列查）。`hasMenu` 改判 `menuBuilder != null`。
 - U4 菜单动作后无条件整表重查（四个动作都不改变列表内容）— `album_page.dart:340` / `artist_page.dart:364` / `library_page.dart:606`。
-- U5 播放中行图标 60fps 动画在 offstage 页仍跑 — `song_tile.dart:117/246`（IndexedStack 保活不关 ticker）。
-- L1 `queue_view` 批量删除后 await 中 setState 未复查 mounted — `queue_view.dart:292-303`。
-- L2 `library_page` 多处 await 后 setState 未复查 mounted — `:173/179/368`（`_removeFolder` 全程无守卫）。
 - L4 设置页缓存大小只在 initState 载、无 `active`/`didUpdateWidget`，保活切回不刷新 — `settings_page.dart:39-50`。
 
 ---
@@ -98,9 +97,10 @@
 
 ## 4. 后台 / 服务类
 
-### 4.1 每秒重读封面文件 + 整包 push
-- 位置：`media_control_service.dart:40-44/78-95` + `macos/Runner/MediaControlsPlugin.swift:119-125`（每秒 `fileExists` + `NSImage(contentsOfFile:)` 重建 `MPMediaItemArtwork`）。
-- 改法：切歌才传封面；播放中走独立的轻量 `ElapsedPlaybackTime` 更新通道。
+- ~~4.1 每秒重读封面 + 整包 push（拆为「全量元数据推送」与新增的 `updateElapsed` 轻量进度通道；Swift 侧只改 elapsed/rate，不再每秒 `NSImage` 重解码；2026-09-17 ✅）~~
+- ~~4.4 媒体键 EventChannel `onError` 静默（改为 `AppLogger.warning`；2026-09-17 ✅）~~
+- ~~4.5 folder watcher 无防抖 + 扫描期并发触发（已改 500ms 去抖批量 + `suspend()` 扫描期缓冲 + `resumeAfterScan`；`folder_watcher_service.dart:56/127/181`，2026-09-08 ✅）~~
+- ~~4.6 watcher 残留问题（`suspend()` 改为 async 并等待在途 flush；跳过项按「事件时间 vs 扫描开始」过滤（force 扫描不再吞掉扫描期间的编辑）；扫描期间已落库的变更在 resume 时补发汇总通知；remove 落库前校验文件确实已不在；2026-09-17 ✅）~~
 
 ### 4.2 日志每行 flush
 - 位置：`lib/core/utils/logger.dart:229-232`。
@@ -109,13 +109,6 @@
 ### 4.3 媒体键操作 fire-and-forget 未串行
 - 位置：`media_control_service.dart:49-64`。⚠️ 原依据「与扫描 `_rebuildSequence` 并发」已失效（该方法随引擎迁移删除）；现并发载体为 `PlayerService._loadCurrent`——已加代际守卫（5.6 ✅），剩余风险为连击时的重复下发。
 - 改法：给引擎操作加操作串行/统一入口。
-
-### 4.4 媒体键 EventChannel `onError` 静默吞
-- 位置：`lib/core/audio/macos_media_controls.dart:30`。
-- 改法：至少 `AppLogger.warning`。
-
-- ~~4.5 folder watcher 无防抖 + 扫描期并发触发（已改 500ms 去抖批量 + `suspend()` 扫描期缓冲 + `resumeAfterScan`；`folder_watcher_service.dart:56/127/181`，2026-09-08 ✅）~~
-- ~~4.6 watcher 残留问题（`suspend()` 改为 async 并等待在途 flush；跳过项按「事件时间 vs 扫描开始」过滤（force 扫描不再吞掉扫描期间的编辑）；扫描期间已落库的变更在 resume 时补发汇总通知；remove 落库前校验文件确实已不在；2026-09-17 ✅）~~
 
 ## 5. 播放引擎 / 播放器 / 持久化
 
@@ -170,7 +163,7 @@
 
 1. ~~**立即（数据/状态风险）**：2.9（扫描根失败误标）、2.10（LIKE 未转义）、3.10（force purge 误删）、5.4/5.8（settings 写盘）~~ —— 2026-09-17 已全部修复 ✅
 2. **发布前必须**：R1、R2、R3、R9；`docs/TODO.md` 其余发布项（Windows 最小尺寸/SMTC、菜单栏勾选）。
-3. **中风险（建议排期）**：U1、U4、3.6、4.1、5.7b。
-4. **低风险顺手**：U3、U5、L1、L2、2.4、2.6、2.7、3.5、3.7、3.8、4.4、5.3、6.2、6.3、R4、R10、R12。
+3. **中风险（建议排期）**：U1、U4、3.6、5.7b。
+4. **低风险顺手**：2.4、2.6、2.7、3.5、3.7、3.8、4.2、4.3、5.3、6.2、6.3、R4、R10、R12。
 5. **第二轮架构**：2.1、2.2、2.3、2.8、R7、R8。
 

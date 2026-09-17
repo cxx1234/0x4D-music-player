@@ -38,6 +38,9 @@ public class MediaControlsPlugin: NSObject, FlutterPlugin {
       }
       updateNowPlaying(args)
       result(nil)
+    case "updateElapsed":
+      updateElapsed(call.arguments as? [String: Any] ?? [:])
+      result(nil)
     case "clearNowPlaying":
       clearNowPlaying()
       result(nil)
@@ -124,6 +127,19 @@ public class MediaControlsPlugin: NSObject, FlutterPlugin {
       ) { _ in image }
     }
 
+    MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+  }
+
+  /// 只更新进度与播放速率：不重传标题/封面，因此不会触发 NSImage 重解码。
+  private func updateElapsed(_ args: [String: Any]) {
+    guard var info = MPNowPlayingInfoCenter.default().nowPlayingInfo else {
+      return
+    }
+    if let positionMs = args["positionMs"] as? Int, positionMs >= 0 {
+      info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = Double(positionMs) / 1000.0
+    }
+    let isPlaying = (args["isPlaying"] as? Bool) ?? false
+    info[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? 1.0 : 0.0
     MPNowPlayingInfoCenter.default().nowPlayingInfo = info
   }
 

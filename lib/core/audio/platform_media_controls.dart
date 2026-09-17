@@ -25,6 +25,16 @@ abstract class PlatformMediaControls {
   /// Push [info] to the system's Now Playing UI.
   Future<void> updateNowPlaying(NowPlayingInfo info);
 
+  /// 只更新播放进度与播放态（不动标题/封面等元数据）。
+  ///
+  /// 系统 Now Playing 的进度条需要每秒刷新，而完整推送会让原生侧**重新读盘并
+  /// 解码封面**（`NSImage(contentsOfFile:)`）——因此播放中的高频刷新走这条轻量
+  /// 通道，元数据只在切歌/播放态变化时推送。
+  Future<void> updateElapsed({
+    required Duration position,
+    required bool isPlaying,
+  });
+
   /// Clear the Now Playing info (e.g. queue emptied, playback stopped).
   Future<void> clearNowPlaying();
 

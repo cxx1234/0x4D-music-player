@@ -170,12 +170,14 @@ class _LibraryPageState extends State<LibraryPage> {
     // accessible after app restarts.
     final bookmark = await ServiceLocator.sandbox.createBookmark(path);
     await ServiceLocator.settings.addMusicFolder(path, bookmark: bookmark);
+    if (!mounted) return;
     setState(() => _musicFolders = ServiceLocator.settings.musicFolders);
     _viewModel.startScan();
   }
 
   Future<void> _removeFolder(String path) async {
     await _viewModel.removeFolder(path);
+    if (!mounted) return;
     setState(() => _musicFolders = ServiceLocator.settings.musicFolders);
   }
 
@@ -365,6 +367,7 @@ class _LibraryPageState extends State<LibraryPage> {
     final bookmark = await ServiceLocator.sandbox.createBookmark(path);
     await ServiceLocator.settings.updateMusicFolderBookmark(path, bookmark);
     ServiceLocator.clearSandboxRestoreFailures();
+    if (!mounted) return;
     setState(() => _musicFolders = ServiceLocator.settings.musicFolders);
     _viewModel.startScan();
   }

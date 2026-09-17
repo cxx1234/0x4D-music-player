@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import '../utils/logger.dart';
 import 'media_control_event.dart';
 import 'now_playing_info.dart';
 import 'platform_media_controls.dart';
@@ -27,7 +28,15 @@ class MacOsMediaControls implements PlatformMediaControls {
   Future<void> setup() async {
     _eventSub ??= _eventChannel.receiveBroadcastStream().listen(
       _onNativeEvent,
-      onError: (_) {},
+      onError: (Object e, StackTrace s) {
+        // 事件通道断流/异常会让媒体键静默失效 —— 至少留下日志。
+        AppLogger.warning(
+          'MediaControl',
+          'Media control event stream error',
+          e,
+          s,
+        );
+      },
     );
     await _methodChannel.invokeMethod<void>('setup');
   }
@@ -61,6 +70,17 @@ class MacOsMediaControls implements PlatformMediaControls {
       'positionMs': info.position?.inMilliseconds,
       'isPlaying': info.isPlaying,
       'coverFilePath': info.coverFilePath,
+    });
+  }
+
+  @override
+  Future<void> updateElapsed({
+    required Duration position,
+    required bool isPlaying,
+  }) async {
+    await _methodChannel.invokeMethod<void>('updateElapsed', {
+      'positionMs': position.inMilliseconds,
+      'isPlaying': isPlaying,
     });
   }
 

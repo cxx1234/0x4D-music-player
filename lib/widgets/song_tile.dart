@@ -148,8 +148,10 @@ class SongTile extends StatelessWidget {
         ? '${(duration / 60000).floor()}:${((duration % 60000) / 1000).round().toString().padLeft(2, '0')}'
         : null;
     final primaryColor = theme.colorScheme.primary;
-    final menu = menuBuilder?.call(song);
-    final hasMenu = menu != null && menu.isNotEmpty;
+    // 只判断「有没有菜单回调」：菜单内容依赖实时播放状态（随机开关/是否已在
+    // 队列），已在 itemBuilder 内按需构建；若在这里真构建一次，会为每行每次
+    // 重建都跑 songMenuItems（内含 O(n) 队列查）。
+    final hasMenu = menuBuilder != null;
     final hasSubtitle =
         (song.artist != null && song.artist!.isNotEmpty) || song.album != null;
     // title 槽位会统一应用标题样式，副标题需显式回退为小一号、偏灰
