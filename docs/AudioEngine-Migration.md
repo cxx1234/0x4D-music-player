@@ -440,3 +440,129 @@ class PreloadingAudioEngine implements AudioEngine { /* ... */ }
 前提是 §4 的约束"实现必须可多实例化"被遵守。届时需要给接口再加一个**带默认 no-op 的**可选方法（例如 `Future<void> hintNext(String? path) async {}`）来告知"下一首是谁"——非破坏性变更，现有实现不受影响。
 
 > ⚠️ 硬性约束：该方法的**默认实现必须是 no-op**；绝不能让 just_audio 实现去"把整个队列交给引擎"，否则镜像队列问题会立刻回归（这正是 §0.4 描述的互斥性）。
+
+## 附录 D：加固记录 —— ScrollPosition 断言（2026-09-17）
+
+### 现象
+
+播放页从「歌词」切到「播放队列」时（面板挂载）偶发：
+
+```
+'package:flutter/src/widgets/scroll_position.dart': Failed assertion: line 643 pos 12:
+'haveDimensions == (_lastMetrics != null)': is not true.
+#2 ScrollPosition.applyContentDimensions
+#3 RenderViewport.performLayout
+```
+
+当次队列长度从 **65 首被替换为 42 首**（即队列在两次打开之间换过）。仅出现一次，之后不再复现。
+
+### 机制（框架层，非本项目的直接调用）
+
+* `_lastMetrics` **只在** `applyContentDimensions()` 内更新（`scroll_position.dart:679`）；
+* `_haveDimensions = true` 还会在 `ScrollPositionWithSingleContext.absorb()` 中被置位
+  （`scroll_position_with_single_context.dart:58`）——即"滚动位置被重建并吸收旧位置"时；
+* 两者因此存在一个不一致窗口：`haveDimensions == true` 而 `_lastMetrics == null`，
+  下一次 layout 进入 `applyContentDimensions()` 即断言失败。
+
+### 本项目侧的触发路径
+
+`QueueView` 挂载时用 `uiState.queueScrollOffset`（上次会话遗留、属于 **65 首**的队列）去初始化
+一个只有 **42 首**的 `ScrollController`：偏移超出新内容范围 → 在 layout 中走
+`correctForNewDimensions` 纠正路径；同时点歌时引擎连发多次通知
+（`setVolume` → `setLoopSingle` → `load` → `duration` → `state` → `play`），放大了重建密度。
+
+### 加固（三处）
+
+1. **`PlayerUiState.queueScrollItemCount` + `QueueView` 恢复条件**：保存偏移时一并记录队列长度；
+   `QueueView` 挂载时只在"队列长度与保存时一致 **且** 不需要跟随当前歌"时才恢复旧偏移，
+   否则从 0 开始（交由既有的 post-frame 定位逻辑处理）。
+2. **`QueueView` 护栏**：`_scheduleScrollToCurrent()` 做帧内去重；`_scrollToCurrent()` /
+   `_refreshFadeState()` 增加 `position.hasContentDimensions` 判断——尚未拿到滚动范围时
+   不发起 `animateTo`、不读 extent。
+3. **`PlayerService` 加载事务**（`_loadDepth` / `_notifyPending`）：把一次加载期间的多次
+   `notifyListeners()` 合并为一次 → 点歌引起的重建从 5~6 次降到 1~2 次。
+
+验证：`flutter analyze lib` 0 告警、198 测试通过。
+
+### 未决
+
+若再次出现，说明还存在别的路径让 ScrollPosition 在同一帧被重建/吸收；届时需按
+"哪个滚动视图 + 哪个操作"精确定位（可在 `QueueView.initState` 与 `_scrollToCurrent` 打点确认时序）。
+
+## 附录 E：错误路径实测问题与修复（2026-09-17，坏文件实测）
+
+测试素材：`tool/make_bad_audio.py` 生成（0 字节 / 随机字节 / ID3+垃圾 / 截断的真实 mp3 /
+flac 改名 .mp3，外加两份真实 mp3 作对照）。
+
+### 实测现象
+
+1. 点坏的 `06` 时**直接跳到 `08`**，漏掉了本应在中间的 `07`（好文件）；
+2. 跳过后音频在播，但**进度条与播放/暂停按钮不刷新**，切页面才恢复；
+3. 连跳时错误提示**排队逐条弹出**；
+4. 到达某个坏文件后卡住不能播。
+
+### 根因（一条链）
+
+**一个底层失败被上报两次**：audioplayers 的 darwin 实现既把错误发到 event stream
+（适配器订阅了），又让 `setSourceDeviceFile` 的 future 抛异常（适配器 catch 里再报一次）。
+于是：
+
+```
+1 次失败 → 2 × _onEngineError → 2 条提示 + 2 条 600ms 跳过链
+        → 两个并发 next() ⇒ 连跳两首（漏歌）
+        → 对同一文件并发 load ⇒ 其中一个 prepared future 拿不到事件，卡到引擎超时
+        → 期间 _loadDepth > 0 ⇒ 通知被合并压制 ⇒ 进度/播放态"冻结"（切页面才恢复）
+```
+
+### 修复
+
+| # | 位置 | 内容 |
+|---|---|---|
+| 1 | `PlayerService._onEngineError` | **同一首歌的失败只处理一次**（`_failingPath`，成功加载下一首时复位） |
+| 2 | `PlayerService._skipOnFailure` | 600ms 后校验"当前曲目是否仍是失败的那首"，**用户已手动切歌则放弃这次跳过** |
+| 3 | `PlayerService._notify` | 通知合并加上限（`_kNotifyCoalesceWindow = 250ms`）：即使某个加载卡住，UI 也不会被永久冻结 |
+| 4 | `app.dart` `_PlaybackErrorConsumer` | 错误提示**替换**当前提示而非排队（`removeCurrentSnackBar()`） |
+
+验证：`flutter analyze` 0 告警、全量 **208 测试通过**（队列测试 10 例，新增：重复上报只算一次失败 /
+跳过期间手动切歌放弃跳过 / 连续 3 首坏文件后停止）。
+
+### 已知取舍
+
+去重按**路径**判定，因此在极窄场景下（队列里只有这一首坏文件 + 列表循环）失败只会触发一次、
+之后不再继续跳，表现为停在该曲 —— 比"每 600ms 无限重试同一文件"更可取。
+
+### 观察项结论
+
+* `08-obs-truncated.mp3`（真实 mp3 前 64KB）：**扫描期即解析失败**、播放也不可播，属真损坏，符合预期。
+* `09-obs-flac-renamed.mp3`（flac 改名 .mp3）：扫描未报错 → AVFoundation 按内容探测成功，未按坏文件处理。
+* 扫描报告"6 处失败"是既有设计（解析失败仍以文件名兜底入库），不是本次迁移引入的问题。
+
+### 第二轮复测发现的问题与修复（同日）
+
+上一轮修复后仍有两种"跳过链走完却不播"：
+
+**P1 — 音乐库点歌时：跳两次但不开始播放**
+`_skipToSlot` 用引擎的瞬时状态决定下一首是否自动播：
+
+```dart
+final wasPlaying = autoPlay ?? _engine.isPlaying;   // ✗
+```
+
+加载失败的曲目会让引擎处于"未播放"，于是跳过链上每一首都变成**静默加载不播放**，
+走到好文件上也不会起播（若此前是暂停/停止状态同样如此）。
+**修复**：引入播放**意图** `_shouldPlay`（在 `_loadCurrent` 里记录本次是否需要播放），
+`_skipToSlot` / `removeFromQueue` / `pruneQueue` 一律以意图为准；`pause` / `stop` /
+`stopPlayback` / `clearQueue` / `_finishQueue` 清除意图。
+
+**P2 — 正在播放页点歌时：音频在播但控件显示"播放"（偶发）**
+audioplayers 的 Dart 侧状态**滞后于原生**：`setSourceDeviceFile` 在"正在播放"时会内部
+`_stopWithoutDesire()`（原生停止），而 `playing → false` 事件尚未送达。此时 Dart 侧
+`state` 仍是 `playing` → 随后的 `resume()` 命中 `if (state == playerState) return;`
+**提前返回、根本没下发起播命令**；那个迟到的 stopped 事件随后又把 UI 刷成"未播放"。
+**修复**：`AudioplayersEngine.load()` 换源前**显式 `await pause()`** —— `pause()` 会等待
+原生的确认事件，await 之后两侧状态一致，`resume()` 必然真正下发。
+
+验证：analyze 0 告警、全量 **209 测试通过**（新增"坏文件跳过链走完好文件后必须真的开始播放"）。
+
+> ⚠️ P2 属引擎时序问题，**无法用假引擎单测覆盖**（依赖 audioplayers 的真实状态机），
+> 只能靠真机复测；若再次出现，优先怀疑"状态滞后"这一类竞态。
