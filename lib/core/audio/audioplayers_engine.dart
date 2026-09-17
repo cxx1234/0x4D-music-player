@@ -7,10 +7,10 @@ import 'audio_engine.dart';
 
 /// [AudioEngine] 的 `audioplayers` 实现（单曲）。
 ///
-/// audioplayers 本身就没有队列概念，因此这里只需专注"播放一个文件"，
-/// 并与 `just_audio` 在语义上对齐（差异全部在本类内部消化，见下）。
+/// audioplayers 本身就没有队列概念，因此这里只需专注“播放一个文件”：
+/// 队列语义（顺序、随机、重复、队尾收尾）全在 `PlayerService`。
 ///
-/// ### 本类处理的引擎差异（`docs/AudioEngine-Migration.md` 附录 B）
+/// ### 本类消化的引擎细节（`docs/AudioEngine-Migration.md` 附录 B）
 ///
 /// * **释放模式**：用 `ReleaseMode.stop` 而非默认的 `ReleaseMode.release`
 ///   —— 后者在播完后会释放资源并清空 source，导致"已加载"状态失真。
@@ -21,7 +21,7 @@ import 'audio_engine.dart';
 /// * **进度节流**：默认 `FramePositionUpdater` 每帧调用一次原生方法（60 次/秒），
 ///   这里改为 200ms，与项目既有的进度/性能假设一致。
 /// * **热重启**：6.2.0 起 audioplayers 会在热重启时自行 dispose 遗留播放器，
-///   因此无需 `just_audio` 那样的全局 `disposeAllPlayers` 调用。
+///   因此无需额外的全局清理调用。
 class AudioplayersEngine implements AudioEngine {
   AudioplayersEngine() {
     // 位置流按 ~200ms 节流（默认实现是每帧一次原生调用）。

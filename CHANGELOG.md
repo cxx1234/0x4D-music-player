@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.0] - 2026-09-17
+### Changed
+- Replace `just_audio` with `audioplayers`, behind a new single-track `AudioEngine`
+  abstraction: queue sequencing, shuffle order, repeat modes and auto-skip now live
+  in `PlayerService` (no engine-side queue mirror)
+### Fixed
+- Player: a failed track no longer auto-skips twice (one underlying failure is
+  reported through two channels by the engine), and the skip chain now keeps
+  playing after reaching a playable file
+- Player page: queue scroll offset is only restored when it belongs to the current
+  queue; auto-scroll waits until the list has content dimensions
+
 ## [0.1.0] - 2026-08-25
 ### Changed
 - Replace `Card` elevation shadows with a cheap 3-line drop shadow (`CardSurface`, `blurRadius: 0`) to avoid Impeller SDF shadow raster cost on weak GPUs (esp. Intel macOS)

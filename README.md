@@ -15,7 +15,7 @@ A local music player built with **Flutter**.
 - **Playlists** — create / rename / delete playlists, add songs from the library, drag to reorder, import / export **M3U8**, plus a built-in **Favorites** view.
 - **In-page search** — live filtering with match counts across Library, Albums, Artists and Playlists.
 - **Playback queue** — play next, reorder, repeat modes and shuffle, with the queue, repeat/shuffle state and playback position persisted across restarts.
-- **Hi-Res audio** — playback via `just_audio`, including lossless formats like FLAC.
+- **Hi-Res audio** — playback via `audioplayers`, including lossless formats like FLAC.
 - **Lyrics** — synced `.lrc` lyrics on the Now Playing page, auto-detected next to the audio file, with bilingual (e.g. Chinese-Japanese) line splitting and adjustable text size.
 - **System media controls** (macOS) — lock-screen / media-key controls (play, pause, next, previous, seek) with Now Playing metadata and cover art; dock menu and window restore after close.
 - **Smart sorting** — pinyin and Japanese kana based sort keys for natural ordering in the library.
@@ -63,7 +63,7 @@ See [docs/Architecture.md](docs/Architecture.md) for the full architecture and [
 
 - **Flutter / Dart**
 - **drift** — SQLite ORM for the local library database
-- **just_audio** — audio playback
+- **audioplayers** — audio playback (single-track; queue logic lives in the app)
 - **audio_metadata_reader** — metadata & embedded cover art parsing (pure Dart, fork version)
 - **flutter_lyric** — `.lrc` lyric rendering
 - **file_picker / watcher** — folder selection & library change watching

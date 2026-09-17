@@ -211,7 +211,7 @@ class ServiceLocator {
     _playQueue = PlayQueue();
     await _playQueue!.restoreQueue(_database!);
     _player = PlayerService(
-      await createAudioEngine(),
+      createAudioEngine(),
       playQueue: _playQueue!,
       resumePlaybackPosition: _settings!.settings.resumePlaybackPosition,
       volume: _settings!.settings.volume,

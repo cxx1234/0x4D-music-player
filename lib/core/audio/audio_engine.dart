@@ -58,8 +58,8 @@ abstract class AudioEngine {
 
   /// 开始/继续播放（[loadedPath] 为 `null` 时 no-op）。
   ///
-  /// ⚠️ 实现必须**立即返回**：`just_audio` 的 `play()` 直到暂停/播完才 complete，
-  /// 直接 await 会阻塞调用方。
+  /// ⚠️ 实现必须**立即返回**：某些引擎的 `play()` 会一直等到“暂停/播完”才 complete，
+  /// 直接 await 会阻塞调用方（队列推进、UI）。
   Future<void> play();
 
   Future<void> pause();

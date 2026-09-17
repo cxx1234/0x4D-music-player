@@ -157,7 +157,8 @@ class PlayerService extends ChangeNotifier {
   /// 播放顺序：`_order[slot]` = 逻辑队列索引。
   ///
   /// 始终是 `0..length-1` 的一个排列（未开启随机时为恒等排列）。
-  /// 取代了重构前由 just_audio 引擎维护的 `effectiveIndices`。
+  /// 取代了“把播放顺序交给音频引擎维护”的旧做法（见
+  /// `docs/AudioEngine-Migration.md`）。
   List<int> _order = [];
 
   // ─── 轻量去重通知器 ────────────────────────────────────
@@ -622,9 +623,8 @@ class PlayerService extends ChangeNotifier {
   /// 与 [stop]（停止并清空队列）不同：这里只停引擎、保留队列与当前曲目，
   /// 并把播放位置归零——再点播放会从当前曲目**开头**继续。
   ///
-  /// 重构前需要 4 步 hack 才能实现（just_audio 的 `stop()` 会保留位置，下次
-  /// `play()` 从原处恢复，因此必须把"序列标记未加载 + 续播位置置零 + 保存进度
-  /// 清零"叠加起来）；现在引擎的 [AudioEngine.release] 语义天然匹配。
+  /// 引擎只需提供 [AudioEngine.release]（停止且不可续），归零由本类负责；
+  /// 这正是引擎接口“只做一件事”的收益。
   Future<void> stopPlayback() async {
     _shouldPlay = false;
     _loadedIndex = null;

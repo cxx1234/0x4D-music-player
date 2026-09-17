@@ -47,8 +47,6 @@ dependencies:
       url: https://github.com/cxx1234/audio_metadata_reader.git
       ref: feat/album-artist
   watcher: ^1.1.0
-  just_audio: ^0.10.6
-  just_audio_platform_interface: ^4.6.0
   lpinyin: ^2.0.3
   flutter_lyric: ^3.0.0
   # 运行时读取 pubspec.yaml 的应用版本号（设置页/关于页统一来源）。
