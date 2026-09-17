@@ -102,3 +102,19 @@
 - 播放页：保留其 `AppBar`，结构改为「顶部红绿灯预留 `playerTopBarTopReserve`（macOS 45）+ 下方 56 控件区」，控件固定在下方；标题字号与 `DetailTopBar` 一致（2026-08-05）。
 - 仍待处理：歌词全屏页（`LyricsPage`，M3 `AppBar`≈56 会与红绿灯重叠）；其窄窗歌词展示方案后续另行讨论。(页面已完全重做，没有这个问题了)
 - 详情页按钮回归（2026-08-05）：专辑/播放列表/我的收藏 详情的「播放全部」统一用 `PlayAllButton` 椭圆形文本按钮（▶ 播放全部），置于**详情块信息文本下方**；详情块底部**底边线**分隔列表（2026-08-25 起，弃用 Material 阴影，见 4.3）；播放列表详情的「添加歌曲/更多」放回 `DetailTopBar` actions；歌手详情用「歌曲」区块标题右侧的同一 `PlayAllButton`。收藏页 `_playAll` unused 告警已清零。
+
+## 6. 列表行高与垂直居中（SongTile / ListItemTile）
+
+- 组件：`lib/widgets/song_tile.dart`（歌曲行）、`lib/widgets/list_item_tile.dart`（歌手等实体行）。
+- **固定行高 72**：各页列表用 `ListView(itemExtent: 72)`（音乐库/歌手/队列 `_kQueueTileExtent`），
+  `IndexScrollbar` 的 `itemExtent` 也按 72 换算滚动位置 —— 三者必须与
+  `SongTile.kRowHeight`（72）一致。
+- ⚠️ **必须在 `ListTile` 上显式写 `minTileHeight: SongTile.kRowHeight`**：
+  两个组件都把「副标题」放进 `title` 的 `Column` 里，`ListTile.subtitle` 恒为 null，
+  于是 ListTile 始终按**单行**模式（默认行高 56）计算 `titleY`/`leadingY` 并居中。
+  外层 `itemExtent: 72` 把行高紧约束成 72 后，内容整体偏上 `(72-56)/2 = 8px`
+  —— 表现为**没有 ID3（无歌手/专辑）的歌曲行内容与封面整体偏上**（2026-09-17 修复）。
+- **回归测试**：`test/song_tile_layout_test.dart`（真实 `itemExtent: 72` 列表里断言
+  标题/行首槽位/封面相对行中心居中，宽度 0.5px 内）。
+- 注意：`itemExtent` 是硬约束，超大字号（系统文字缩放）下行内容高于 72 时仍会被挤，
+  属固定行高列表的固有取舍。

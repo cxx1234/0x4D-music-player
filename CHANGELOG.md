@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   abstraction: queue sequencing, shuffle order, repeat modes and auto-skip now live
   in `PlayerService` (no engine-side queue mirror)
 ### Fixed
+- List rows without ID3 tags (no artist/album) no longer sit 8px too high: `SongTile`
+  and `ListItemTile` pin `ListTile.minTileHeight` to the 72 row extent used by the
+  surrounding lists, instead of letting ListTile center the content in its default
+  56-tall single-line box
 - Player: a failed track no longer auto-skips twice (one underlying failure is
   reported through two channels by the engine), and the skip chain now keeps
   playing after reaching a playable file
