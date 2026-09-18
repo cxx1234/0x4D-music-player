@@ -5,13 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.4] - 2026-09-18
 
 ### Added
-- Floating HUD for actions that have no visible control: volume, track skips,
-  play/pause and stop coming from the macOS menu or the media keys now show what happened
-  for 1.2s. It sits bottom-centre, above the SnackBar, and repeated presses update it in
-  place instead of queueing up
+- Feedback for actions that have no visible control: volume, track skips, play/pause
+  and stop coming from the macOS menu or the media keys now report what happened. The
+  HUD sits bottom-centre, above the SnackBar, for 1.2s, and repeated presses update it
+  in place instead of queueing up
 - Control pulse: those same shortcuts light up the matching button on the player page
   and in the now-playing bar for 180ms, so the controls mirror the action
 
