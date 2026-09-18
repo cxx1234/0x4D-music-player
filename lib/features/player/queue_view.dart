@@ -629,6 +629,9 @@ class _QueueViewState extends State<QueueView> {
         key: key,
         song: song,
         isCurrentSong: isCurrent,
+        // 队列行以 leading（播放图标/序号）指示当前项，且不显示封面，
+        // 故 isPlaying 实际不参与绘制；仍按统一约定传入。
+        isPlaying: isCurrent && vm.isPlaying,
         // 队列用 leading 指示当前项（播放图标/序号），隐藏行尾音量图标避免重复
         showCurrentIndicator: false,
         onTap: _deleteMode

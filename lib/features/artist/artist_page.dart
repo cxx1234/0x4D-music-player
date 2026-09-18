@@ -225,10 +225,10 @@ class ArtistDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: DetailTopBar(title: artist.name),
-      // 监听"当前歌曲"去重通知器：切歌时实时刷新行内 isCurrent 高亮，与其他
-      // 详情页（专辑/播放列表/我的收藏）的 ListenableBuilder 用法保持一致。
+      // uiListenable（切歌 / 播放态 / 队列）：切歌与播放/暂停翻转都要刷新行内
+      // 高亮，与其他详情页（专辑/播放列表/我的收藏）用法保持一致。
       body: ListenableBuilder(
-        listenable: ServiceLocator.player.currentSongNotifier,
+        listenable: ServiceLocator.player.uiListenable,
         builder: (context, _) => _ArtistDetailContent(artist: artist),
       ),
     );
@@ -346,7 +346,9 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
             ),
           ),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 8, 16),
+            // 与其他歌曲列表（音乐库/专辑详情/收藏/播放列表详情）一致：
+            // 16/4/16/16，否则当前播放行的高亮底色条宽窄不一。
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate((context, index) {
                 final song = _songs[index];
@@ -355,6 +357,7 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
                 return SongTile(
                   song: song,
                   isCurrentSong: isCurrent,
+                  isPlaying: isCurrent && player.isPlaying,
                   onTap: () => ServiceLocator.player.playFromList(
                     _songs,
                     startIndex: index,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../core/services/player_service.dart';
@@ -92,8 +94,15 @@ class _VolumeSliderState extends State<_VolumeSlider> {
   PlayerService get player => widget.player;
   ThemeData get theme => widget.theme;
 
+  /// 外部调音（菜单 ⌘↑/⌘↓ 等）后百分比提示的保留时长。
+  static const Duration _kHintDuration = Duration(milliseconds: 1200);
+
   /// 拖动中的音量值（null = 未拖动，隐藏百分比提示）。
   double? _dragValue;
+
+  /// 外部调音后短暂展示的音量值（null = 不展示提示）。
+  double? _hintValue;
+  Timer? _hintTimer;
 
   /// 最近一次引擎音量（用于检测外部音量变化，如 macOS 菜单 ⌘↑/⌘↓）。
   late double _lastVolume;
@@ -109,6 +118,7 @@ class _VolumeSliderState extends State<_VolumeSlider> {
 
   @override
   void dispose() {
+    _hintTimer?.cancel();
     player.removeListener(_onPlayerChanged);
     super.dispose();
   }
@@ -119,7 +129,16 @@ class _VolumeSliderState extends State<_VolumeSlider> {
     _lastVolume = v;
     if (!mounted) return;
     // 拖动中 UI 已由 onChanged 的 setState 驱动，无需重复重建。
-    if (_dragValue == null) setState(() {});
+    if (_dragValue != null) return;
+    // 外部调音（菜单 ⌘↑/⌘↓）：滑块位置本就会同步，但百分比提示原先只在拖动时
+    // 出现，快捷键调音看不到数值。这里补一个短时提示，并在连续按键时重新计时
+    // （长按 ⌘↑ 自动重复期间提示不会闪烁）。
+    setState(() => _hintValue = v);
+    _hintTimer?.cancel();
+    _hintTimer = Timer(_kHintDuration, () {
+      if (!mounted) return;
+      setState(() => _hintValue = null);
+    });
   }
 
   IconData _iconFor(double v) {
@@ -133,6 +152,8 @@ class _VolumeSliderState extends State<_VolumeSlider> {
     // 音量只在用户拖动/启动恢复时变化，不随播放进度刷新，
     // 无需订阅整个 service（否则播放中每 ~200ms 重建滑块）。
     final volume = _dragValue ?? player.volume;
+    // 百分比提示：拖动中跟手，外部调音（快捷键）后短暂显示。
+    final hintValue = _dragValue ?? _hintValue;
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -172,7 +193,7 @@ class _VolumeSliderState extends State<_VolumeSlider> {
             ),
           ],
         ),
-        if (_dragValue != null)
+        if (hintValue != null)
           // 提示贴音量条上方（文本高 ~16 + 间距 ~3），水平居中。
           Positioned(
             top: -10,
@@ -181,7 +202,7 @@ class _VolumeSliderState extends State<_VolumeSlider> {
             child: IgnorePointer(
               child: Center(
                 child: Text(
-                  '${(_dragValue! * 100).round()}%',
+                  '${(hintValue * 100).round()}%',
                   style: theme.textTheme.bodySmall,
                 ),
               ),

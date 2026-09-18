@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Song lists: the "now playing" highlight is now identical in every list. Only the library
+  passed `isPlaying`, so the dimmed cover with the equalizer appeared there alone while the
+  other lists kept the corner note badge and a pause glyph even while playing; and none of
+  them rebuilt on play/pause because they subscribed to track changes alone
+- Song lists: a stray `isPlaying` can no longer light up a row that is not the current track
+- Artist detail: song list padding brought in line with the other lists (was 24/0/8/16), so the
+  selected-row highlight is no longer a different width there
+- Song rows: the play-state icon sits 12px from the duration text instead of 8, which read as
+  one blob
+- Volume: changes made with the menu shortcuts now surface the new value for 1.2s, the same
+  way dragging the slider does (a held key restarts that timer instead of flickering)
+
 ## [0.2.3] - 2026-09-17
 
 ### Added

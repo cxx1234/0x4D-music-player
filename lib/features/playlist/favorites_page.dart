@@ -53,7 +53,8 @@ class _FavoritesPageState extends State<FavoritesPage> {
     return Scaffold(
       appBar: const DetailTopBar(title: '我的收藏'),
       body: ListenableBuilder(
-        listenable: player.currentSongNotifier,
+        // uiListenable：切歌/播放态/队列变化均会重建列表高亮。
+        listenable: player.uiListenable,
         builder: (context, _) {
           if (_loading) {
             return const Center(child: CircularProgressIndicator());
@@ -93,6 +94,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
                         return SongTile(
                           song: song,
                           isCurrentSong: isCurrent,
+                          isPlaying: isCurrent && player.isPlaying,
                           onTap: () => ServiceLocator.player.playFromList(
                             _songs,
                             startIndex: index,
