@@ -15,6 +15,7 @@ import '../features/player/player_page.dart';
 import '../features/player/player_ui_state.dart';
 import '../features/shell/now_playing_bar.dart';
 import '../features/shell/shell_page.dart';
+import '../widgets/hud_overlay.dart';
 
 class App extends StatefulWidget {
   const App({super.key});
@@ -236,6 +237,27 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                         }
                         return NowPlayingBar(onTap: _openPlayer);
                       },
+                    ),
+                  ),
+                ),
+                // 底部浮动提示（HUD）：**单独一条 entry**，比 Scaffold（连同其上的
+                // SnackBar）晚绘制，所以天然浮在最上层，不用往页面树里塞 Stack。
+                // `_showBar` 为 false 即「正在播放页在最上层」——那里已有音量滑块、
+                // 信息卡与控制按钮，HUD 只会是重复信息，故整层禁用。
+                OverlayEntry(
+                  builder: (context) => Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.only(
+                        bottom: HudOverlay.kBottomInset,
+                      ),
+                      child: ValueListenableBuilder<bool>(
+                        valueListenable: _showBar,
+                        builder: (context, showBar, _) => HudOverlay(
+                          hud: ServiceLocator.hud,
+                          enabled: showBar,
+                        ),
+                      ),
                     ),
                   ),
                 ),

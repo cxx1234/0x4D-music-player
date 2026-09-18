@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../core/services/playback_feedback_service.dart';
 import '../core/services/player_service.dart';
 import '../core/services/service_locator.dart';
 import 'player_controls.dart';
@@ -16,12 +18,16 @@ class PlayerBar extends StatelessWidget {
   final ValueChanged<Duration> onSeek;
   final bool compact;
 
+  /// 外部操作（快捷键/媒体键）的脉冲源，透传给 [PlayerControls]。
+  final ValueListenable<PlaybackPulse?>? pulses;
+
   const PlayerBar({
     super.key,
     required this.player,
     required this.theme,
     required this.onSeek,
     this.compact = false,
+    this.pulses,
   });
 
   @override
@@ -59,6 +65,7 @@ class PlayerBar extends StatelessWidget {
                     player: player,
                     theme: theme,
                     compact: compact,
+                    pulses: pulses,
                   ),
                 ),
                 SizedBox(

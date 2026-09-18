@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Floating HUD for actions that have no visible control: volume, track skips,
+  play/pause and stop coming from the macOS menu or the media keys now show what happened
+  for 1.2s. It sits bottom-centre, above the SnackBar, and repeated presses update it in
+  place instead of queueing up
+- Control pulse: those same shortcuts light up the matching button on the player page
+  and in the now-playing bar for 180ms, so the controls mirror the action
+
+### Changed
+- Menu and media-control actions now go through one `PlaybackFeedbackService`, so both
+  entry points share the same copy; at the end of the queue the HUD says "已是最后一首"
+  (and "已是第一首" when going back) instead of silently doing nothing
+- The HUD stays off on the player page: the volume slider, info card and controls
+  already show that state there
+
 ### Fixed
 - Song lists: the "now playing" highlight is now identical in every list. Only the library
   passed `isPlaying`, so the dimmed cover with the equalizer appeared there alone while the

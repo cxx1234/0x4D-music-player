@@ -137,3 +137,30 @@
   高亮底色条宽度不一致（歌手详情原为 24/0/8/16）。队列保持通栏（右栏面板，故意不加）。
 - 行尾间距：播放态图标 → 时长文本 `right: 12`（原 8，读起来像一体），时长 → 更多菜单 `6`。
 - 回归测试：`test/song_tile_current_state_test.dart`（7 例，覆盖上述契约与两种 leading）。
+
+## 7. 外部播放操作的反馈（HUD / 控件脉冲，2026-09-18）
+
+- **入口**：macOS 原生菜单（`menu_service.dart`）与媒体键 / 系统「正在播放」面板
+  （`media_control_service.dart`）。两者都**不直接调 `PlayerService`**，统一经
+  `ServiceLocator.feedback`（`PlaybackFeedbackService`）转发 —— 文案与反馈只有一份。
+- **范围**：仅 音量 / 切歌 / 播放暂停 / 停止。循环模式、随机不纳入（它们在界面上的图标本身
+  就是状态，再叠提示只是噪音）；「停止」只有 HUD——应用里没有停止按钮可脉冲，
+  原生菜单项会自己高亮。
+- **两条反馈通道**：
+  - **HUD**（`lib/widgets/hud_overlay.dart`）：底部居中，距窗口底
+    `HudOverlay.kBottomInset = 124`（底栏 64 + SnackBar 单行 48 + 间隙 12），
+    **必须整条让开 SnackBar**；挂根 Overlay 的**第二条 entry**（比 Scaffold 晚绘制，
+    天然在最上层），并 `IgnorePointer` 不吃点击。
+  - **控件脉冲**（`lib/widgets/control_pulse.dart`）：播放页 `PlayerControls` 与
+    底栏 `NowPlayingBar` 的对应按钮亮 180ms。**播放页没有 HUD**，脉冲是那里的
+    唯一反馈。
+- **播放页禁用 HUD**：`app.dart` 用 `_showBar`（false = 播放页在最上层）作 `enabled`；
+  禁用期间到达的消息**就地丢弃**，否则离开播放页时会延迟弹出。
+- **文案**：结果态（播放中 / 已暂停）、`下一首 · 歌名`、`上一首 · 歌名`；
+  队尾 `已是最后一首`、队首 `已是第一首`、无曲 `没有播放中的歌曲`。
+  判定「是否真的切了」= 索引或歌曲 id 变化 **或** 列表循环（单曲队列绕回同一首也算）。
+- ⚠️ **不要用 SnackBar 做这类反馈**：它是队列式的（连按 ⌘↑ 会攒一串）、底部锚定、
+  带 action 语义，定位是「通知」（播放错误、导入导出结果）。HUD 是「操作回显」，
+  连续操作必须原地更新。
+- 回归测试：`test/hud_service_test.dart`（4）、`test/hud_overlay_test.dart`（5）、
+  `test/playback_feedback_test.dart`（8）、`test/control_pulse_test.dart`（4）。

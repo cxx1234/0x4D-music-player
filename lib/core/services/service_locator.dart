@@ -7,10 +7,12 @@ import '../audio/platform_media_controls.dart';
 import '../database/database.dart';
 import '../utils/logger.dart';
 import 'folder_watcher_service.dart';
+import 'hud_service.dart';
 import 'lyrics_view_model.dart';
 import 'media_control_service.dart';
 import 'menu_service.dart';
 import 'play_queue.dart';
+import 'playback_feedback_service.dart';
 import 'player_service.dart';
 import 'sandbox_service.dart';
 import 'settings_service.dart';
@@ -33,6 +35,13 @@ class ServiceLocator {
   static MediaControlService? _mediaControls;
   static MenuService? _menuService;
   static SystemAccentService? _systemAccent;
+  static PlaybackFeedbackService? _feedback;
+
+  /// HUD（底部浮动提示）状态源。
+  ///
+  /// **不随 [initialize] 创建**：它不依赖任何其他服务，而根 Overlay 在初始化
+  /// 完成前就已经在构建了（HudOverlay 需要读它），早创建省掉一轮就绪判断。
+  static final HudService hud = HudService();
 
   /// 歌词视图模型（常驻，2026-09-03 起）：与 [PlayerService] 同生命周期。
   ///
@@ -148,6 +157,17 @@ class ServiceLocator {
   /// 系统强调色桥接服务（仅 macOS；其他平台为 null，跟随系统回退默认色）。
   static SystemAccentService? get systemAccent => _systemAccent;
 
+  /// 外部播放入口（原生菜单 / 媒体键 / 系统「正在播放」面板）的统一出口，
+  /// 负责执行动作并发出 HUD 与控件脉冲反馈。
+  static PlaybackFeedbackService get feedback {
+    if (_feedback == null) {
+      throw StateError(
+        'PlaybackFeedbackService not initialized. Call ServiceLocator.initialize() first.',
+      );
+    }
+    return _feedback!;
+  }
+
   /// 常驻歌词视图模型（驱动 flutter_lyric controller，含歌词内容/内嵌缓存）。
   static LyricsViewModel get lyrics {
     if (_lyrics == null) {
@@ -218,6 +238,10 @@ class ServiceLocator {
     );
     _sandbox = SandboxService();
 
+    // 外部操作（菜单/媒体键）的统一出口：菜单与媒体控制都经它转发，
+    // 从而共享同一套 HUD 文案与控件脉冲。
+    _feedback = PlaybackFeedbackService(_player!, hud);
+
     // macOS 沙箱：恢复 security-scoped bookmarks（与 UI 生命周期解耦，
     // 保证每次启动都无条件执行，不依赖音乐库页面是否成功渲染）。
     await _restoreSandboxAccess();
@@ -225,6 +249,7 @@ class ServiceLocator {
     _mediaControls = MediaControlService(
       _player!,
       PlatformMediaControls.create(),
+      _feedback!,
     );
     await _mediaControls!.initialize();
 
@@ -239,7 +264,7 @@ class ServiceLocator {
     // macOS 菜单桥接：Dart 侧接收原生菜单动作、推送播放状态。
     // 其他平台无原生菜单，不创建（避免通道噪音）。
     if (Platform.isMacOS) {
-      _menuService = MenuService.attach(_player!);
+      _menuService = MenuService.attach(_player!, _feedback!);
     }
 
     // 系统强调色桥接（仅 macOS；attach 内触发首次读取，失败不抛）。

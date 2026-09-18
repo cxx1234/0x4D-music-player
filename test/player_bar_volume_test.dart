@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:txvziwm/core/audio/audio_engine.dart';
 import 'package:txvziwm/core/services/play_queue.dart';
 import 'package:txvziwm/core/services/player_service.dart';
 import 'package:txvziwm/widgets/player_bar.dart';
+
+import 'helpers/silent_audio_engine.dart';
 
 /// 音量条的百分比提示：拖动与「快捷键/菜单调音量」两种入口都必须看得见数值。
 ///
@@ -13,11 +14,11 @@ import 'package:txvziwm/widgets/player_bar.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  late _SilentEngine engine;
+  late SilentAudioEngine engine;
   late PlayerService player;
 
   setUp(() {
-    engine = _SilentEngine();
+    engine = SilentAudioEngine();
     player = PlayerService(engine, playQueue: PlayQueue());
   });
 
@@ -77,60 +78,4 @@ void main() {
 
     expect(find.text('0%'), findsOneWidget);
   });
-}
-
-/// 最小假引擎：这些用例只关心音量通路，其余成员按 no-op / 空值处理。
-class _SilentEngine implements AudioEngine {
-  double volume = 1.0;
-
-  @override
-  String? get loadedPath => null;
-
-  @override
-  bool get isPlaying => false;
-
-  @override
-  Duration get position => Duration.zero;
-
-  @override
-  Duration? get duration => null;
-
-  @override
-  Stream<Duration> get positionStream => Stream<Duration>.empty();
-
-  @override
-  Stream<Duration?> get durationStream => Stream<Duration?>.empty();
-
-  @override
-  Stream<bool> get playingStream => Stream<bool>.empty();
-
-  @override
-  Stream<void> get completionStream => Stream<void>.empty();
-
-  @override
-  Stream<AudioEngineError> get errorStream => Stream<AudioEngineError>.empty();
-
-  @override
-  Future<void> load(String path, {Duration? initialPosition}) async {}
-
-  @override
-  Future<void> play() async {}
-
-  @override
-  Future<void> pause() async {}
-
-  @override
-  Future<void> release() async {}
-
-  @override
-  Future<void> seek(Duration position) async {}
-
-  @override
-  Future<void> setVolume(double volume) async => this.volume = volume;
-
-  @override
-  Future<void> setLoopSingle(bool loop) async {}
-
-  @override
-  Future<void> dispose() async {}
 }

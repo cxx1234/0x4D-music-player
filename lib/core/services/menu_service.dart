@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../utils/logger.dart';
+import 'playback_feedback_service.dart';
 import 'player_service.dart';
 
 /// 桥接 macOS 原生菜单（`AppDelegate.swift`）与播放器 / 导航。
@@ -16,11 +17,14 @@ import 'player_service.dart';
 ///
 /// 仅 macOS 生效（其他平台无原生菜单通道，不创建实例，避免通道噪音）。
 class MenuService {
-  MenuService._(this._player);
+  MenuService._(this._player, this._feedback);
 
   static const _channel = MethodChannel('com.jerryc.txvziwm/menu');
 
   final PlayerService _player;
+
+  /// 播放类动作经它转发：原生菜单与媒体键共享同一套 HUD / 控件脉冲反馈。
+  final PlaybackFeedbackService _feedback;
 
   /// 菜单「偏好设置…」(⌘,) 动作回调（由 App 注入：切到设置 tab）。
   void Function()? openSettings;
@@ -51,8 +55,11 @@ class MenuService {
   bool _disposed = false;
 
   /// 创建实例并注册通道 handler + 播放器 / 焦点监听。
-  factory MenuService.attach(PlayerService player) {
-    final service = MenuService._(player);
+  factory MenuService.attach(
+    PlayerService player,
+    PlaybackFeedbackService feedback,
+  ) {
+    final service = MenuService._(player, feedback);
     service._init();
     return service;
   }
@@ -73,17 +80,17 @@ class MenuService {
     if (action is! String) return null;
     switch (action) {
       case 'playPause':
-        await _player.togglePlay();
+        await _feedback.togglePlay();
       case 'previous':
-        await _player.previous();
+        await _feedback.previous();
       case 'next':
-        await _player.next();
+        await _feedback.next();
       case 'stop':
-        await _player.stopPlayback();
+        await _feedback.stop();
       case 'volumeUp':
-        await _player.adjustVolume(0.1);
+        await _feedback.adjustVolume(0.1);
       case 'volumeDown':
-        await _player.adjustVolume(-0.1);
+        await _feedback.adjustVolume(-0.1);
       case 'toggleSingleRepeat':
         _player.toggleSingleRepeat();
       case 'setPlayMode':
