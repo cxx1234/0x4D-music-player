@@ -285,7 +285,9 @@ abstract class AudioEngine {
 1. `pubspec.yaml`：`just_audio` / `just_audio_platform_interface` 改为 `audioplayers: ^6.8.1`（**保留 just_audio 至决策通过**，两者可共存，只在 A/B 阶段同时存在）。
 2. 新增 `lib/core/audio/audioplayers_engine.dart`，逐条处理附录 B 的坑：
    * `positionUpdater = TimerPositionUpdater(interval: 200ms)`
-   * `ReleaseMode.stop`（**不要用默认的 `release`**）+ 单曲循环用 `ReleaseMode.loop` 并**忽略其 completion**
+   * `ReleaseMode.stop`（**不要用默认的 `release`**）+ 单曲循环用 `ReleaseMode.loop`；
+     loop 下的 completion **照原样上报**，由 `PlayerService` 按重复模式忽略（2026-09-19：
+     睡眠定时「播完当前曲」也依赖这个事件）
    * `seek` 前置守卫（未加载 → 只记 pending，不调引擎）
    * 完成瞬间位置归零屏蔽（`_completedAt`）
    * 错误三路归并（`eventStream.onError` / `setSource*` future / `play()` future）→ `errorStream`
@@ -447,7 +449,7 @@ abstract class AudioEngine {
 | 1 | 无队列：`AudioPlayer` 一次只能有一个 source | 官方 getting_started | 架构按 §4 单曲接口设计 |
 | 2 | darwin 用单 `AVPlayer` + `replaceCurrentItem`，**无预取、无 gapless** | `audioplayers_darwin/.../WrappedMediaPlayer.swift` | Q1 决策；否则双 player 方案 |
 | 3 | `onPlayerComplete` 内部先 `_platform.stop()`（位置归零），`ReleaseMode.release` 下还 `release()` 并置 `_source = null` | `audioplayers/lib/src/audioplayer.dart` | 完成态屏蔽 `_completedAt`；用 `ReleaseMode.stop` |
-| 4 | `ReleaseMode.loop` **也会**触发 `onPlayerComplete` | 同上（文档明示） | loop 模式必须忽略 completion |
+| 4 | `ReleaseMode.loop` **也会**触发 `onPlayerComplete` | 同上（文档明示） | 引擎**不过滤**、原样上报；调用方按重复模式判断是否推进（`PlayerService._onCompleted` 在 one 时忽略，睡眠定时需要它） |
 | 5 | `seek()` 会 `await onSeekComplete.first.timeout(30s)`；darwin 在**无 currentItem 时直接 return 且不发该事件** → 未加载时 seek 会挂到超时 | `audioplayer.dart` + `WrappedMediaPlayer.swift` | 引擎层加守卫：未加载只记 pending |
 | 6 | `onPositionChanged` 默认 `FramePositionUpdater`（**每帧一次平台调用**） | `audioplayer.dart` 构造函数 | 换 `TimerPositionUpdater(200ms)`，保住现有性能假设 |
 | 7 | `setSourceUrl` 失败走 event stream 的 `onError`，**future 仍成功**；`preparationTimeout` / `seekingTimeout` 是静态 30s | darwin 插件 `catch` 分支 | 错误三路归并；必要时调小 timeout |

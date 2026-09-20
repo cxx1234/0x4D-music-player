@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/models/accent_color.dart';
@@ -35,8 +37,14 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 底栏播放进度填充开关（启动时从设置读取，默认开）。
   bool _nowPlayingBarFill = true;
 
+  /// 睡眠定时「到点先播完当前曲」开关（启动时从设置读取，默认关）。
+  bool _sleepTimerFinishCurrentTrack = false;
+
   /// 封面缓存大小（字节）；null = 尚未加载成功。
   int? _cacheSizeBytes;
+
+  /// 菜单（ShellController 广播）进来的页面动作，如「关于本软件」。
+  StreamSubscription<ShellAction>? _actionsSub;
 
   @override
   void initState() {
@@ -48,8 +56,19 @@ class _SettingsPageState extends State<SettingsPage> {
       _themeMode = ServiceLocator.settings.themeMode;
       _accent = ServiceLocator.settings.accentColor;
       _nowPlayingBarFill = ServiceLocator.settings.nowPlayingBarFill;
+      _sleepTimerFinishCurrentTrack =
+          ServiceLocator.settings.sleepTimerFinishCurrentTrack;
     }
     _loadCacheSize();
+    // 菜单动作（如 Help › 关于本软件）：设置页是 Shell 保活 tab，订阅常驻。
+    // 广播在切 tab 后的下一帧发出，此时订阅已建立（见 ShellController.request）。
+    _actionsSub = widget.controller?.actions.listen(_onShellAction);
+  }
+
+  @override
+  void dispose() {
+    _actionsSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -152,6 +171,15 @@ class _SettingsPageState extends State<SettingsPage> {
     ServiceLocator.settings.setNowPlayingBarFill(value);
   }
 
+  /// 切换睡眠定时「先播完当前曲再停」开关（UI 状态 + 写盘）。
+  ///
+  /// 播放中的定时每次到点都现读设置（`SleepTimerService.waitForTrackEnd`
+  /// 回调），因此改完立即生效，无需通知播放器。
+  void _setSleepTimerFinishCurrentTrack(bool value) {
+    setState(() => _sleepTimerFinishCurrentTrack = value);
+    ServiceLocator.settings.setSleepTimerFinishCurrentTrack(value);
+  }
+
   /// 跟随系统圆点的兜底监听源（非 macOS / 未就绪时无系统色服务）。
   static final ValueNotifier<Color?> _noSystemColor = ValueNotifier<Color?>(
     null,
@@ -198,6 +226,19 @@ class _SettingsPageState extends State<SettingsPage> {
     controller.request(NavigationItem.library, action: ShellAction.forceRescan);
   }
 
+  /// ShellController 广播的菜单动作。
+  void _onShellAction(ShellAction action) {
+    if (action == ShellAction.openAbout) _openAbout();
+  }
+
+  /// 打开「关于」页（「通用 › 关于」行与菜单「关于本软件」共用）。
+  void _openAbout() {
+    if (!mounted) return;
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const AboutPage()));
+  }
+
   /// 「音乐库」分组卡片：目前为强制刷新入口。无文件夹时禁用（ListTile 置灰）。
   Widget _buildLibraryCard() {
     final theme = Theme.of(context);
@@ -239,16 +280,34 @@ class _SettingsPageState extends State<SettingsPage> {
       surfaceTintColor: Colors.transparent,
       shadowColor: Colors.transparent,
       clipBehavior: Clip.antiAlias,
-      child: ListTile(
-        minVerticalPadding: 16,
-        leading: const Icon(Icons.replay_rounded),
-        title: _buildOptionText(theme, '续播上次播放位置', '启动后恢复上次播放进度'),
-        subtitle: null,
-        trailing: _buildCompactSwitch(
-          value: _resumePlayback,
-          onChanged: _setResumePlayback,
-        ),
-        onTap: () => _setResumePlayback(!_resumePlayback),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            minVerticalPadding: 16,
+            leading: const Icon(Icons.replay_rounded),
+            title: _buildOptionText(theme, '续播上次播放位置', '启动后恢复上次播放进度'),
+            subtitle: null,
+            trailing: _buildCompactSwitch(
+              value: _resumePlayback,
+              onChanged: _setResumePlayback,
+            ),
+            onTap: () => _setResumePlayback(!_resumePlayback),
+          ),
+          ListTile(
+            minVerticalPadding: 16,
+            leading: const Icon(Icons.timer_outlined),
+            title: _buildOptionText(theme, '睡眠定时先播完当前曲', '关闭则到点立即淡出暂停'),
+            subtitle: null,
+            trailing: _buildCompactSwitch(
+              value: _sleepTimerFinishCurrentTrack,
+              onChanged: _setSleepTimerFinishCurrentTrack,
+            ),
+            onTap: () => _setSleepTimerFinishCurrentTrack(
+              !_sleepTimerFinishCurrentTrack,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -546,9 +605,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             subtitle: null,
             trailing: Icon(Icons.chevron_right, color: chevronColor),
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const AboutPage())),
+            onTap: _openAbout,
           ),
         ],
       ),

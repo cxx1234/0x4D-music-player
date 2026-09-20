@@ -12,6 +12,8 @@ class AppDelegate: FlutterAppDelegate {
     var isShuffled = false
     var repeatMode = "off"  // "off" | "one" | "all"
     var isTextEditing = false
+    var sleepTimerMode = "off"  // "off" | "duration" | "endOfTrack" | "endOfQueue"
+    var sleepTimerMinutes = 0  // duration 模式下当初设定的分钟数（勾选预设项用）
   }
 
   private var menuState = MenuState()
@@ -99,6 +101,8 @@ class AppDelegate: FlutterAppDelegate {
     menuState.isShuffled = (args["isShuffled"] as? Bool) ?? false
     menuState.repeatMode = (args["repeatMode"] as? String) ?? "off"
     menuState.isTextEditing = (args["isTextEditing"] as? Bool) ?? false
+    menuState.sleepTimerMode = (args["sleepTimerMode"] as? String) ?? "off"
+    menuState.sleepTimerMinutes = (args["sleepTimerMinutes"] as? NSNumber)?.intValue ?? 0
     // 主动刷新所有菜单项（使能/标题/勾选随播放态即时同步）。
     refreshAllMenuItems()
   }
@@ -154,11 +158,26 @@ class AppDelegate: FlutterAppDelegate {
   @objc private func modeSequentialTapped(_ sender: Any?) { sendMenuAction("setPlayMode", value: "sequential") }
   @objc private func modeRepeatAllTapped(_ sender: Any?) { sendMenuAction("setPlayMode", value: "repeatAll") }
   @objc private func modeShuffleAllTapped(_ sender: Any?) { sendMenuAction("setPlayMode", value: "shuffleAll") }
+
+  /// 睡眠定时（子菜单项共用）：预设分钟项用 `tag` 传分钟数，其余项用
+  /// `representedObject` 传模式/取消字符串。
+  @objc private func sleepTimerTapped(_ sender: Any?) {
+    guard let menuItem = sender as? NSMenuItem else { return }
+    if let value = menuItem.representedObject as? String {
+      sendMenuAction("sleepTimer", value: value)
+    } else {
+      sendMenuAction("sleepTimer", value: menuItem.tag)
+    }
+  }
   @objc private func openSettingsTapped(_ sender: Any?) { sendMenuAction("openSettings") }
   @objc private func newPlaylistTapped(_ sender: Any?) { sendMenuAction("newPlaylist") }
   @objc private func importFolderTapped(_ sender: Any?) { sendMenuAction("importFolder") }
   @objc private func importPlaylistTapped(_ sender: Any?) { sendMenuAction("importPlaylist") }
   @objc private func exportPlaylistTapped(_ sender: Any?) { sendMenuAction("exportPlaylist") }
+
+  /// 帮助 ›「关于本软件」：打开应用内的关于页（版本 / 开源许可 / 仓库链接）。
+  /// 系统标准的「关于 %@」面板仍在 App 菜单里，两者并存。
+  @objc private func openAboutTapped(_ sender: Any?) { sendMenuAction("openAbout") }
 
   // MARK: - 菜单校验（使能 / 标题 / 勾选）
 
@@ -197,6 +216,29 @@ class AppDelegate: FlutterAppDelegate {
     case #selector(modeShuffleAllTapped(_:)):
       menuItem.state =
         (menuState.repeatMode == "all" && menuState.isShuffled) ? .on : .off
+      return menuState.hasTrack
+    case #selector(sleepTimerTapped(_:)):
+      // 「取消定时」只在有定时时可点；其余项要求有曲目（没歌时设定无意义）。
+      if let value = menuItem.representedObject as? String {
+        switch value {
+        case "endOfTrack":
+          menuItem.state = menuState.sleepTimerMode == "endOfTrack" ? .on : .off
+          return menuState.hasTrack
+        case "endOfQueue":
+          menuItem.state = menuState.sleepTimerMode == "endOfQueue" ? .on : .off
+          return menuState.hasTrack
+        case "cancel":
+          menuItem.state = .off
+          return menuState.sleepTimerMode != "off"
+        default:
+          return false
+        }
+      }
+      // 预设分钟项（tag = 分钟数）：与当初设定的时长一致时打勾。
+      let isActive =
+        menuState.sleepTimerMode == "duration"
+        && menuState.sleepTimerMinutes == menuItem.tag
+      menuItem.state = isActive ? .on : .off
       return menuState.hasTrack
     default:
       return true
@@ -416,6 +458,67 @@ class AppDelegate: FlutterAppDelegate {
     playModeItem.submenu = playModeMenu
     menu.addItem(playModeItem)
 
+    menu.addItem(.separator())
+    menu.addItem(sleepTimerSubmenuItem())
+
+    item.submenu = menu
+    return item
+  }
+
+  /// 睡眠定时子菜单：N 分钟 / 播完当前曲目 / 播完当前播放列表 / 取消定时。
+  ///
+  /// ⚠️ 预设分钟数必须与 Dart 侧 `SleepTimerButton.presets` 保持一致（两处各列一份，
+  /// 改一处要记得改另一处）；Dart 按"当初设定的分钟数"回推勾选态。
+  private func sleepTimerSubmenuItem() -> NSMenuItem {
+    let title = NSLocalizedString("menu.sleepTimer", comment: "Sleep Timer")
+    let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+    let menu = NSMenu(title: title)
+
+    for minutes in [5, 10, 15, 30, 45, 60, 90] {
+      let entry = NSMenuItem(
+        title: String(
+          format: NSLocalizedString("menu.sleepTimerMinutes", comment: "N Minutes"),
+          minutes
+        ),
+        action: #selector(sleepTimerTapped(_:)),
+        keyEquivalent: ""
+      )
+      entry.tag = minutes
+      entry.target = self
+      menu.addItem(entry)
+    }
+
+    menu.addItem(.separator())
+
+    let endOfTrack = NSMenuItem(
+      title: NSLocalizedString("menu.sleepTimerEndOfTrack", comment: "End of Track"),
+      action: #selector(sleepTimerTapped(_:)),
+      keyEquivalent: ""
+    )
+    endOfTrack.representedObject = "endOfTrack"
+    endOfTrack.target = self
+    menu.addItem(endOfTrack)
+
+    let endOfQueue = NSMenuItem(
+      title: NSLocalizedString("menu.sleepTimerEndOfQueue", comment: "End of Playlist"),
+      action: #selector(sleepTimerTapped(_:)),
+      keyEquivalent: ""
+    )
+    endOfQueue.representedObject = "endOfQueue"
+    endOfQueue.target = self
+    menu.addItem(endOfQueue)
+
+    menu.addItem(.separator())
+
+    let cancel = NSMenuItem(
+      title: NSLocalizedString("menu.sleepTimerCancel", comment: "Cancel Timer"),
+      action: #selector(sleepTimerTapped(_:)),
+      keyEquivalent: ""
+    )
+    cancel.representedObject = "cancel"
+    cancel.target = self
+    menu.addItem(cancel)
+
     item.submenu = menu
     return item
   }
@@ -564,6 +667,15 @@ class AppDelegate: FlutterAppDelegate {
     let title = NSLocalizedString("menu.help", comment: "Help")
     let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
     let menu = NSMenu(title: title)
+
+    let about = NSMenuItem(
+      title: NSLocalizedString("menu.aboutApp", comment: "About This App"),
+      action: #selector(openAboutTapped(_:)),
+      keyEquivalent: ""
+    )
+    about.target = self
+    menu.addItem(about)
+
     item.submenu = menu
     return item
   }

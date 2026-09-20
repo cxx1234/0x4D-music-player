@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] - 2026-09-20
+
+### Added
+- Sleep timer, reachable from the timer button on the left of the player bar and
+  from the macOS Playback menu: 5/10/15/30/45/60/90 minutes, "end of current
+  track", "end of playlist" and cancel. The remaining time sits next to the icon;
+  the timer is session-only and is not persisted across restarts
+- Sleep timer expiry fades the volume out over 5s and then pauses, so playback
+  stops mid-track without a click. The fade runs at engine level, so the volume
+  slider and the persisted volume never move; any new playback aborts it
+- Settings → Playback: a switch for "finish the current track first". With it on,
+  a countdown that expires while something is playing waits for that track to end
+  instead of stopping right away (it still stops immediately when paused)
+- macOS Help menu: "About This App" opens the in-app Settings → About page; the
+  standard system About panel stays in the App menu
+
+### Changed
+- The audio engine reports `onPlayerComplete` even while single-repeat is on, and
+  deciding whether that means "the track finished" is `PlayerService`'s job again.
+  That is what lets "end of current track" work with repeat-one enabled
+- Sleep-timer actions from the menu bar go through `PlaybackFeedbackService` like
+  the other external actions: they report through the HUD on every page except
+  the player page, where the button itself changes state
+
+### Fixed
+- Sleep-timer button: the hover highlight is a circle (a pill once the countdown
+  appears) instead of a square - child-mode `PopupMenuButton` wraps its child in
+  a bare `InkWell`, which needs an explicit `borderRadius`
+
 ## [0.2.4] - 2026-09-18
 
 ### Added

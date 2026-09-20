@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'hud_service.dart';
 import 'player_service.dart';
+import 'sleep_timer_service.dart';
 
 /// 需要「控件脉冲」反馈的外部播放操作。
 enum PlaybackAction { playPause, previous, next }
@@ -28,13 +29,16 @@ class PlaybackPulse {
 ///
 /// 文案集中在这里：本仓库没有 i18n，两个入口必须说同一句话，分开写迟早会跑偏。
 ///
-/// ⚠️ 范围刻意只有 音量 / 切歌 / 播放暂停 / 停止：循环模式、随机、列表内的动作都
-/// 已有可见的 UI 状态，再叠一层提示只是噪音。
+/// ⚠️ 范围刻意只有 音量 / 切歌 / 播放暂停 / 停止 / **睡眠定时**：循环模式、随机、列表
+/// 内的动作都已有可见的 UI 状态，再叠一层提示只是噪音。睡眠定时是例外——那个
+/// 按钮只在播放页有，而 HUD **恰好在播放页被禁用**，所以两条入口互不重叠：
+/// 播放页上靠按钮自身变样，其它页面上靠 HUD。
 class PlaybackFeedbackService {
-  PlaybackFeedbackService(this._player, this._hud);
+  PlaybackFeedbackService(this._player, this._hud, this._sleepTimer);
 
   final PlayerService _player;
   final HudService _hud;
+  final SleepTimerService _sleepTimer;
 
   int _seq = 0;
 
@@ -139,6 +143,38 @@ class PlaybackFeedbackService {
         kind: HudKind.volume,
       ),
     );
+  }
+
+  /// 睡眠定时：倒计时 [minutes] 分钟后停止（原生菜单「睡眠定时」子菜单）。
+  ///
+  /// 不发控件脉冲——播放条上的定时按钮自己会变成激活态，而在没有那个按钮的
+  /// 页面上 HUD 是唯一反馈。
+  void startSleepTimer(int minutes) {
+    _sleepTimer.startForDuration(Duration(minutes: minutes));
+    _showSleepTimer('睡眠定时 · $minutes 分钟', Icons.timer_outlined);
+  }
+
+  /// 睡眠定时：播完当前曲目 / 播完当前播放列表后停止。
+  void startSleepTimerAtEnd({required bool atQueueEnd}) {
+    if (atQueueEnd) {
+      _sleepTimer.startForEndOfQueue();
+    } else {
+      _sleepTimer.startForEndOfTrack();
+    }
+    _showSleepTimer(
+      atQueueEnd ? '睡眠定时 · 播完当前播放列表' : '睡眠定时 · 播完当前曲目',
+      Icons.timer_outlined,
+    );
+  }
+
+  /// 睡眠定时：取消。
+  void cancelSleepTimer() {
+    _sleepTimer.cancel();
+    _showSleepTimer('已取消睡眠定时', Icons.timer_off_outlined);
+  }
+
+  void _showSleepTimer(String text, IconData icon) {
+    _hud.show(HudMessage(icon: icon, text: text, kind: HudKind.playback));
   }
 
   /// 切歌后的提示：真的换歌了显示「下一首 · 歌名」，否则说明为什么没动。

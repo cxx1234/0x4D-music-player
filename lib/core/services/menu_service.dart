@@ -6,18 +6,20 @@ import 'package:flutter/widgets.dart';
 import '../utils/logger.dart';
 import 'playback_feedback_service.dart';
 import 'player_service.dart';
+import 'sleep_timer_service.dart';
 
 /// 桥接 macOS 原生菜单（`AppDelegate.swift`）与播放器 / 导航。
 ///
 /// 职责：
-/// - 把播放状态（是否有曲目 / 播放中 / 随机 / 循环 / 文本编辑中）推给原生，
-///   驱动菜单项使能、标题（播放↔暂停）、勾选态（单曲循环、播放模式三选一）；
+/// - 把播放状态（是否有曲目 / 播放中 / 随机 / 循环 / 文本编辑中 / 睡眠定时）
+///   推给原生，驱动菜单项使能、标题（播放↔暂停）、勾选态（单曲循环、播放模式
+///   三选一、睡眠定时）；
 /// - 接收原生菜单动作（播放·暂停 / 上一首 / 下一首 / 单曲循环 / 播放模式 /
-///   打开设置），转发给 [PlayerService] 或 [openSettings] 回调。
+///   睡眠定时 / 打开设置），转发给 [PlayerService] 或 [openSettings] 回调。
 ///
 /// 仅 macOS 生效（其他平台无原生菜单通道，不创建实例，避免通道噪音）。
 class MenuService {
-  MenuService._(this._player, this._feedback);
+  MenuService._(this._player, this._feedback, this._sleepTimer);
 
   static const _channel = MethodChannel('com.jerryc.txvziwm/menu');
 
@@ -26,8 +28,14 @@ class MenuService {
   /// 播放类动作经它转发：原生菜单与媒体键共享同一套 HUD / 控件脉冲反馈。
   final PlaybackFeedbackService _feedback;
 
+  /// 只读它的状态（推给原生打勾）；动作仍经 [_feedback] 执行。
+  final SleepTimerService _sleepTimer;
+
   /// 菜单「偏好设置…」(⌘,) 动作回调（由 App 注入：切到设置 tab）。
   void Function()? openSettings;
+
+  /// 菜单「关于本软件」动作回调（由 App 注入：切到设置 tab 并打开关于页）。
+  void Function()? openAbout;
 
   /// 菜单「新建播放列表…」(⌘N) 动作回调（由 App 注入：切到播放列表 tab）。
   void Function()? openPlaylists;
@@ -48,18 +56,21 @@ class MenuService {
     bool isShuffled,
     String repeatMode,
     bool isTextEditing,
+    String sleepTimerMode,
+    int sleepTimerMinutes,
   })?
   _lastPushed;
 
   bool _attached = false;
   bool _disposed = false;
 
-  /// 创建实例并注册通道 handler + 播放器 / 焦点监听。
+  /// 创建实例并注册通道 handler + 播放器 / 焦点 / 睡眠定时监听。
   factory MenuService.attach(
     PlayerService player,
     PlaybackFeedbackService feedback,
+    SleepTimerService sleepTimer,
   ) {
-    final service = MenuService._(player, feedback);
+    final service = MenuService._(player, feedback, sleepTimer);
     service._init();
     return service;
   }
@@ -68,6 +79,7 @@ class MenuService {
     _channel.setMethodCallHandler(_handleCall);
     _attached = true;
     _player.addListener(_onPlayerChanged);
+    _sleepTimer.state.addListener(_onPlayerChanged);
     _push();
     FocusManager.instance.addListener(_onFocusChanged);
   }
@@ -95,8 +107,12 @@ class MenuService {
         _player.toggleSingleRepeat();
       case 'setPlayMode':
         _applySetPlayMode(args['value']);
+      case 'sleepTimer':
+        _applySleepTimer(args['value']);
       case 'openSettings':
         openSettings?.call();
+      case 'openAbout':
+        openAbout?.call();
       case 'newPlaylist':
         openPlaylists?.call();
       case 'importFolder':
@@ -120,6 +136,24 @@ class MenuService {
     }
   }
 
+  /// 原生菜单「睡眠定时」子菜单：预设分钟项用 `NSMenuItem.tag` 传分钟数（通道里
+  /// 是 int），两个"播完…"与取消项用 `representedObject` 传字符串。
+  void _applySleepTimer(Object? value) {
+    switch (value) {
+      case 'endOfTrack':
+        _feedback.startSleepTimerAtEnd(atQueueEnd: false);
+      case 'endOfQueue':
+        _feedback.startSleepTimerAtEnd(atQueueEnd: true);
+      case 'cancel':
+        _feedback.cancelSleepTimer();
+      default:
+        final minutes = value is num ? value.toInt() : int.tryParse('$value');
+        if (minutes != null && minutes > 0) {
+          _feedback.startSleepTimer(minutes);
+        }
+    }
+  }
+
   void _onPlayerChanged() => _push();
 
   void _onFocusChanged() => _push();
@@ -134,12 +168,17 @@ class MenuService {
 
   void _push() {
     if (_disposed || !_attached) return;
+    // 睡眠定时：只推"模式 + 当初设定的分钟数"（倒计时每秒都在变，但那不参与
+    // 去重比较，所以不会每秒推一次通道）。
+    final timerState = _sleepTimer.state.value;
     final state = (
       hasTrack: _player.currentSong != null,
       isPlaying: _player.isPlaying,
       isShuffled: _player.isShuffled,
       repeatMode: _player.repeatMode.name,
       isTextEditing: _isTextEditing(),
+      sleepTimerMode: timerState?.mode.name ?? 'off',
+      sleepTimerMinutes: timerState?.requested?.inMinutes ?? 0,
     );
     final last = _lastPushed;
     if (last != null &&
@@ -147,7 +186,9 @@ class MenuService {
         last.isPlaying == state.isPlaying &&
         last.isShuffled == state.isShuffled &&
         last.repeatMode == state.repeatMode &&
-        last.isTextEditing == state.isTextEditing) {
+        last.isTextEditing == state.isTextEditing &&
+        last.sleepTimerMode == state.sleepTimerMode &&
+        last.sleepTimerMinutes == state.sleepTimerMinutes) {
       return;
     }
     _lastPushed = state;
@@ -159,6 +200,8 @@ class MenuService {
             'isShuffled': state.isShuffled,
             'repeatMode': state.repeatMode,
             'isTextEditing': state.isTextEditing,
+            'sleepTimerMode': state.sleepTimerMode,
+            'sleepTimerMinutes': state.sleepTimerMinutes,
           })
           .catchError((Object e) {
             AppLogger.warning('Menu', 'Failed to push menu state', e);
@@ -170,6 +213,7 @@ class MenuService {
     _disposed = true;
     if (_attached) {
       _player.removeListener(_onPlayerChanged);
+      _sleepTimer.state.removeListener(_onPlayerChanged);
       FocusManager.instance.removeListener(_onFocusChanged);
     }
   }

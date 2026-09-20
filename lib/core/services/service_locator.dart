@@ -16,6 +16,7 @@ import 'playback_feedback_service.dart';
 import 'player_service.dart';
 import 'sandbox_service.dart';
 import 'settings_service.dart';
+import 'sleep_timer_service.dart';
 import 'song_repository.dart';
 import 'system_accent_service.dart';
 
@@ -31,6 +32,7 @@ class ServiceLocator {
   static FolderWatcherService? _folderWatcher;
   static PlayQueue? _playQueue;
   static PlayerService? _player;
+  static SleepTimerService? _sleepTimer;
   static SandboxService? _sandbox;
   static MediaControlService? _mediaControls;
   static MenuService? _menuService;
@@ -178,6 +180,17 @@ class ServiceLocator {
     return _lyrics!;
   }
 
+  /// 睡眠定时（会话态：到点淡出暂停；不落盘，重启即失效）。
+  static SleepTimerService get sleepTimer {
+    if (_sleepTimer == null) {
+      throw StateError(
+        'SleepTimerService not initialized. Call ServiceLocator.initialize() '
+        'first.',
+      );
+    }
+    return _sleepTimer!;
+  }
+
   /// Whether [initialize] has completed.
   static bool get isReady => _player != null;
 
@@ -238,9 +251,18 @@ class ServiceLocator {
     );
     _sandbox = SandboxService();
 
+    // 睡眠定时（会话态）：与 PlayerService 同生命周期——它把"曲目自然播完"
+    // 的钩子挂在播放器上，播放条按钮与原生菜单都只是它的视图。紧跟 player
+    // 创建，保证 [isReady] 为真时它必定已就绪（UI 在 build 里就会读它）。
+    // 「到点先播完当前曲」的真值在 settings 里 → 传回调现读，避免两处状态同步。
+    _sleepTimer = SleepTimerService(
+      _player!,
+      waitForTrackEnd: () => _settings!.settings.sleepTimerFinishCurrentTrack,
+    );
+
     // 外部操作（菜单/媒体键）的统一出口：菜单与媒体控制都经它转发，
-    // 从而共享同一套 HUD 文案与控件脉冲。
-    _feedback = PlaybackFeedbackService(_player!, hud);
+    // 从而共享同一套 HUD 文案与控件脉冲；睡眠定时动作也经它（原生菜单入口）。
+    _feedback = PlaybackFeedbackService(_player!, hud, _sleepTimer!);
 
     // macOS 沙箱：恢复 security-scoped bookmarks（与 UI 生命周期解耦，
     // 保证每次启动都无条件执行，不依赖音乐库页面是否成功渲染）。
@@ -264,7 +286,7 @@ class ServiceLocator {
     // macOS 菜单桥接：Dart 侧接收原生菜单动作、推送播放状态。
     // 其他平台无原生菜单，不创建（避免通道噪音）。
     if (Platform.isMacOS) {
-      _menuService = MenuService.attach(_player!, _feedback!);
+      _menuService = MenuService.attach(_player!, _feedback!, _sleepTimer!);
     }
 
     // 系统强调色桥接（仅 macOS；attach 内触发首次读取，失败不抛）。

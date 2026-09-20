@@ -5,6 +5,7 @@ import 'package:txvziwm/core/database/database.dart';
 import 'package:txvziwm/core/services/hud_service.dart';
 import 'package:txvziwm/core/services/playback_feedback_service.dart';
 import 'package:txvziwm/core/services/player_service.dart';
+import 'package:txvziwm/core/services/sleep_timer_service.dart';
 
 import 'helpers/silent_audio_engine.dart';
 
@@ -15,16 +16,19 @@ void main() {
 
   late _StubPlayer player;
   late HudService hud;
+  late SleepTimerService sleepTimer;
   late PlaybackFeedbackService feedback;
 
   setUp(() {
     player = _StubPlayer();
     hud = HudService();
-    feedback = PlaybackFeedbackService(player, hud);
+    sleepTimer = SleepTimerService(player);
+    feedback = PlaybackFeedbackService(player, hud, sleepTimer);
   });
 
   tearDown(() {
     feedback.dispose();
+    sleepTimer.dispose();
     hud.dispose();
     player.dispose();
   });
@@ -139,6 +143,25 @@ void main() {
     await feedback.next();
 
     expect(seqs, [1, 2], reason: 'ValueNotifier 相同值不通知，负载必须每次都是新对象');
+  });
+
+  test('睡眠定时：设定/结束模式/取消都执行动作并回显 HUD', () {
+    feedback.startSleepTimer(30);
+    expect(sleepTimer.mode, SleepTimerMode.duration);
+    expect(sleepTimer.remaining, const Duration(minutes: 30));
+    expect(hud.message?.text, '睡眠定时 · 30 分钟');
+
+    feedback.startSleepTimerAtEnd(atQueueEnd: false);
+    expect(sleepTimer.mode, SleepTimerMode.endOfTrack);
+    expect(hud.message?.text, '睡眠定时 · 播完当前曲目');
+
+    feedback.startSleepTimerAtEnd(atQueueEnd: true);
+    expect(sleepTimer.mode, SleepTimerMode.endOfQueue);
+    expect(hud.message?.text, '睡眠定时 · 播完当前播放列表');
+
+    feedback.cancelSleepTimer();
+    expect(sleepTimer.isActive, isFalse);
+    expect(hud.message?.text, '已取消睡眠定时');
   });
 }
 

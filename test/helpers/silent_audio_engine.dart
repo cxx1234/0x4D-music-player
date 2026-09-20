@@ -2,8 +2,8 @@ import 'package:txvziwm/core/audio/audio_engine.dart';
 
 /// 最小假引擎：所有成员 no-op / 空流，供只关心上层逻辑（反馈、UI）的测试使用。
 ///
-/// 需要真实队列语义的用例请用 `player_service_queue_test.dart` 里那个带
-/// 完成/报错驱动的 FakeAudioEngine。
+/// 需要真实队列语义（顺序推进 / 收尾 / 失败跳过 / 睡眠定时钩子）的用例请用
+/// `helpers/fake_audio_engine.dart` 里那个带完成/报错驱动的 FakeAudioEngine。
 class SilentAudioEngine implements AudioEngine {
   /// 最后一次 `setVolume` 的值（仅供需要断言的用例读取）。
   double volume = 1.0;

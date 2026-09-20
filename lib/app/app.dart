@@ -10,6 +10,7 @@ import '../core/models/accent_color.dart';
 import '../core/navigation/route_observer.dart';
 import '../core/services/player_service.dart';
 import '../core/services/service_locator.dart';
+import '../core/services/sleep_timer_service.dart';
 import '../core/utils/logger.dart';
 import '../features/player/player_page.dart';
 import '../features/player/player_ui_state.dart';
@@ -63,6 +64,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       if (defaultTargetPlatform == TargetPlatform.macOS) {
         final menu = ServiceLocator.menu;
         menu.openSettings = _openSettingsFromMenu;
+        menu.openAbout = _openAboutFromMenu;
         menu.openPlaylists = () => _shellController.request(
           NavigationItem.playlists,
           action: ShellAction.newPlaylist,
@@ -121,6 +123,19 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       nav.popUntil((route) => route.isFirst);
     }
     _shellController.tab.value = NavigationItem.settings;
+  }
+
+  /// 菜单「关于本软件」(Help) 动作：与 ⌘, 一样先退回主界面，再切设置 tab
+  /// 并让设置页推入「关于」（经 ShellController 广播动作，页面订阅执行）。
+  void _openAboutFromMenu() {
+    final nav = _navKey.currentState;
+    if (nav != null) {
+      nav.popUntil((route) => route.isFirst);
+    }
+    _shellController.request(
+      NavigationItem.settings,
+      action: ShellAction.openAbout,
+    );
   }
 
   void _openPlayer() {
@@ -224,7 +239,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                     // 所有页面（Shell + 子页面 + 播放页）都渲染在底栏上方，底栏不被
                     // 子页面盖住。顶部不再有全局顶栏，改由各页面自行避让（左侧边栏
                     // 顶部预留 45 给红绿灯，右侧内容区用统一高度的 PageToolbar）。
-                    body: _PlaybackErrorConsumer(
+                    body: _PlayerNoticeConsumer(
                       child: child ?? const SizedBox.shrink(),
                     ),
                     bottomNavigationBar: ValueListenableBuilder<bool>(
@@ -270,29 +285,36 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   }
 }
 
-/// 全局消费播放错误并用 SnackBar 提示。
+/// 全局消费播放错误 / 睡眠定时到点提示，并用 SnackBar 提示。
 ///
 /// 挂在 MaterialApp.builder 的根 Scaffold body 内：任何页面触发播放失败
-/// (文件缺失/损坏/权限)都会弹出提示,不依赖某个页面是否打开。
-class _PlaybackErrorConsumer extends StatefulWidget {
-  const _PlaybackErrorConsumer({required this.child});
+/// (文件缺失/损坏/权限)或者睡眠定时到点都会弹出提示,不依赖某个页面是否打开。
+class _PlayerNoticeConsumer extends StatefulWidget {
+  const _PlayerNoticeConsumer({required this.child});
 
   final Widget child;
 
   @override
-  State<_PlaybackErrorConsumer> createState() => _PlaybackErrorConsumerState();
+  State<_PlayerNoticeConsumer> createState() => _PlayerNoticeConsumerState();
 }
 
-class _PlaybackErrorConsumerState extends State<_PlaybackErrorConsumer> {
+class _PlayerNoticeConsumerState extends State<_PlayerNoticeConsumer> {
   PlayerService? _player;
+  SleepTimerService? _sleepTimer;
 
-  /// 惰性挂接播放器监听:启动初始化完成(ServiceLocator 就绪)前不挂。
+  /// 惰性挂接监听:启动初始化完成(ServiceLocator 就绪)前不挂。
   ///
   /// 在 [build] 中调用以利用 _AppState 初始化完成后的重建时机自动挂上。
   void _maybeAttach() {
-    if (_player != null || !ServiceLocator.isReady) return;
-    _player = ServiceLocator.player;
-    _player!.addListener(_onPlayerChanged);
+    if (!ServiceLocator.isReady) return;
+    if (_player == null) {
+      _player = ServiceLocator.player;
+      _player!.addListener(_onPlayerChanged);
+    }
+    if (_sleepTimer == null) {
+      _sleepTimer = ServiceLocator.sleepTimer;
+      _sleepTimer!.notice.addListener(_onSleepTimerNotice);
+    }
   }
 
   void _onPlayerChanged() {
@@ -305,9 +327,19 @@ class _PlaybackErrorConsumerState extends State<_PlaybackErrorConsumer> {
       ..showSnackBar(SnackBar(content: Text(err)));
   }
 
+  /// 睡眠定时到点：提示一次（到点时可能不在播放页，按钮状态的变化未必看得到）。
+  void _onSleepTimerNotice() {
+    final message = _sleepTimer!.takeNotice();
+    if (message == null || !mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   void dispose() {
     _player?.removeListener(_onPlayerChanged);
+    _sleepTimer?.notice.removeListener(_onSleepTimerNotice);
     super.dispose();
   }
 

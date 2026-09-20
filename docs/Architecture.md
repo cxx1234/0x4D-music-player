@@ -135,6 +135,28 @@ with `AudioplayersEngine` as the only implementation). The engine plays **one fi
 at a time**; queue sequencing, shuffle order, repeat modes and auto-skip live in
 `PlayerService`. See `AudioEngine-Migration.md`.
 
+### Sleep timer (session-only)
+
+`SleepTimerService` (`lib/core/services/sleep_timer_service.dart`) owns both trigger
+kinds and is **never persisted** (重启即失效):
+
+* **duration** — its own tick; on expiry it calls
+  `PlayerService.fadeOutAndPause()` (engine-level volume ramp, then pause — the
+  user's `volume` / slider position are deliberately left untouched).
+  If the `sleepTimerFinishCurrentTrack` setting is on **and playback is actually
+  running**, expiry instead switches the mode to `endOfTrack` (\"等这一首播完再停\");
+  the button then shows no countdown, it shows the waiting mode.
+* **end of track / end of queue** — registers
+  `PlayerService.onBeforeTrackAdvance`, which is consulted *before* the queue
+  advances and **before** the repeat-one check, so "停在这一曲末尾" also works
+  under 单曲循环. The engine reports `completionStream` even with
+  `ReleaseMode.loop`; deciding whether that means "track finished" is
+  `PlayerService`'s job, not the engine's.
+
+The UI (`SleepTimerButton` in the player page's `PlayerBar`) and the notice
+SnackBar (`app.dart`) only read `ServiceLocator.sleepTimer` state — they contain no
+scheduling logic.
+
 ⸻
 
 ## Data Flow

@@ -25,4 +25,37 @@ void main() {
     expect(s.copyWith(nowPlayingBarFill: false).nowPlayingBarFill, isFalse);
     expect(s.copyWith(nowPlayingBarFill: true).nowPlayingBarFill, isTrue);
   });
+
+  test('默认 sleepTimerFinishCurrentTrack 为关（老配置缺失该键时行为不变）', () {
+    const s = AppSettings();
+    expect(s.sleepTimerFinishCurrentTrack, isFalse);
+  });
+
+  test('toJson/fromJson 往返保留 sleepTimerFinishCurrentTrack', () {
+    const s = AppSettings(sleepTimerFinishCurrentTrack: true);
+    final restored = AppSettings.fromJson(s.toJson());
+    expect(restored.sleepTimerFinishCurrentTrack, isTrue);
+  });
+
+  test('fromJson 缺失该键时回退 false', () {
+    final restored = AppSettings.fromJson({'musicFolders': []});
+    expect(restored.sleepTimerFinishCurrentTrack, isFalse);
+  });
+
+  test('copyWith 可开关 sleepTimerFinishCurrentTrack', () {
+    const s = AppSettings();
+    expect(
+      s
+          .copyWith(sleepTimerFinishCurrentTrack: true)
+          .sleepTimerFinishCurrentTrack,
+      isTrue,
+    );
+    expect(
+      s
+          .copyWith(sleepTimerFinishCurrentTrack: true)
+          .copyWith(sleepTimerFinishCurrentTrack: false)
+          .sleepTimerFinishCurrentTrack,
+      isFalse,
+    );
+  });
 }

@@ -59,6 +59,11 @@ class AppSettings {
   /// 底栏是否显示「按播放进度填充」背景效果。
   final bool nowPlayingBarFill;
 
+  /// 睡眠定时到点后是否先播完当前曲目再停止。
+  ///
+  /// `false`（默认）= 到点立即淡出暂停；`true` = 到点后转为"播完当前曲目再停"。
+  final bool sleepTimerFinishCurrentTrack;
+
   const AppSettings({
     this.musicFolders = const [],
     this.themeMode = 'system',
@@ -69,6 +74,7 @@ class AppSettings {
     this.lyricTextSize = 'medium',
     this.showTranslation = true,
     this.nowPlayingBarFill = true,
+    this.sleepTimerFinishCurrentTrack = false,
   });
 
   /// The raw folder paths (convenience getter).
@@ -84,6 +90,7 @@ class AppSettings {
     'lyricTextSize': lyricTextSize,
     'showTranslation': showTranslation,
     'nowPlayingBarFill': nowPlayingBarFill,
+    'sleepTimerFinishCurrentTrack': sleepTimerFinishCurrentTrack,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -112,6 +119,8 @@ class AppSettings {
       lyricTextSize: json['lyricTextSize'] as String? ?? 'medium',
       showTranslation: json['showTranslation'] as bool? ?? true,
       nowPlayingBarFill: json['nowPlayingBarFill'] as bool? ?? true,
+      sleepTimerFinishCurrentTrack:
+          json['sleepTimerFinishCurrentTrack'] as bool? ?? false,
     );
   }
 
@@ -125,6 +134,7 @@ class AppSettings {
     String? lyricTextSize,
     bool? showTranslation,
     bool? nowPlayingBarFill,
+    bool? sleepTimerFinishCurrentTrack,
   }) {
     return AppSettings(
       musicFolders: musicFolders ?? this.musicFolders,
@@ -137,6 +147,8 @@ class AppSettings {
       lyricTextSize: lyricTextSize ?? this.lyricTextSize,
       showTranslation: showTranslation ?? this.showTranslation,
       nowPlayingBarFill: nowPlayingBarFill ?? this.nowPlayingBarFill,
+      sleepTimerFinishCurrentTrack:
+          sleepTimerFinishCurrentTrack ?? this.sleepTimerFinishCurrentTrack,
     );
   }
 
@@ -186,6 +198,19 @@ class SettingsService {
   /// 持久化续播设置。
   Future<void> setResumePlaybackPosition(bool value) async {
     _settings = _settings.copyWith(resumePlaybackPosition: value);
+    await _save();
+  }
+
+  /// 睡眠定时到点后是否先播完当前曲目再停止，供设置界面使用。
+  bool get sleepTimerFinishCurrentTrack =>
+      _settings.sleepTimerFinishCurrentTrack;
+
+  /// 持久化睡眠定时到点行为。
+  ///
+  /// 播放中的定时读的是 `SleepTimerService.waitForTrackEnd` 回调，每次都取
+  /// 最新值，因此改完立即生效（无需通知播放器）。
+  Future<void> setSleepTimerFinishCurrentTrack(bool value) async {
+    _settings = _settings.copyWith(sleepTimerFinishCurrentTrack: value);
     await _save();
   }
 

@@ -164,3 +164,44 @@
   连续操作必须原地更新。
 - 回归测试：`test/hud_service_test.dart`（4）、`test/hud_overlay_test.dart`（5）、
   `test/playback_feedback_test.dart`（8）、`test/control_pulse_test.dart`（4）。
+
+## 8. 睡眠定时入口（PlayerBar 左侧，2026-09-19）
+
+- **位置**：播放页底部条 `PlayerBar` 的**左侧槽位**——那是原先为「让控制按钮严格居中」
+  留的与音量块等宽的占位（`_kVolumeBlockWidth = 144`），现在放月亮按钮，宽度不变，
+  控制按钮仍然居中。
+- **控件**：`SleepTimerButton`（`lib/widgets/sleep_timer_button.dart`）——计时器图标；
+  激活时图标转主题色并显示剩余时间（`M:SS`，满 1 小时 `H:MM:SS`）。
+  窄窗口（`compact`）只留图标，避免和音量块抢宽度。
+- **悬停形状必须显式给**：child 模式的 `PopupMenuButton` 内部是裸 `InkWell`，
+  不传 `borderRadius` 时高亮会被裁成方块（icon 模式走 `IconButton` 才自带圆角）。
+  这里是固定高 36 + `BorderRadius.all(Radius.circular(18))` → 图标态 36×36 正圆，
+  显示剩余时间时自然变成胶囊。
+- **弹出菜单动画保持 Material 默认**：`PopupMenuRoute` 默认 300ms + `Curves.linear`
+  （`_kMenuDuration`）。2026-09-19 曾用 `popUpAnimationStyle` 提速到 140ms 后按用户
+  反馈**回退默认**——不要再改；`PopupMenuThemeData` 也没有这个字段，无法全局设置。
+- **菜单**：5/10/15/30/45/60/90 分钟 → 分隔线 → 「播完当前曲目」「播完当前播放列表」
+  → 激活时再加「取消定时（剩余 M:SS）」。勾选项用 `CheckedPopupMenuItem`
+  （`PopupMenuItem` 在本 Flutter 版本已无 `checked` 参数）。
+- **到点反馈走 SnackBar，不走 HUD**：`SleepTimerService.notice` →
+  `app.dart` 的 `_PlayerNoticeConsumer`（与播放错误同一个消费器）。
+  理由见 §7——播放页禁用 HUD，而睡眠定时最常见的到点场景恰恰是"用户已经睡了、
+  任意页面都可能"，只在播放条上留下状态变化是不够的。
+- 逻辑分层：`SleepTimerService` 不依赖 `ServiceLocator`（只依赖 `PlayerService`），
+  入口按钮与提示都是它的视图；回归测试 `test/sleep_timer_test.dart`。
+- **macOS 菜单栏入口**：播放 ›「睡眠定时」子菜单（`AppDelegate.swift`
+  `sleepTimerSubmenuItem()`）——5/10/15/30/45/60/90 分钟 + 播完当前曲目 +
+  播完当前播放列表 + 取消定时。⚠️ 预设列表与 `SleepTimerButton.presets` 是**两处
+  各一份**（原生读不到 Dart 常量），改一处要记得改另一处。
+  - 勾选/使能靠 `MenuService` 推送的 `sleepTimerMode`（off/duration/endOfTrack/
+    endOfQueue）+ `sleepTimerMinutes`（**当初设定**的分钟数，来自
+    `SleepTimerState.requested`）；倒计时每秒都在变但这两个字段不变，所以不会每秒
+    推一次通道。「取消定时」只在有定时时可点。
+  - 动作经 `PlaybackFeedbackService`（外部操作统一出口）执行 + 发 HUD 回显：
+    非播放页没有那个定时按钮，HUD 是唯一反馈。
+- **设置项**：设置 › 播放设置 ›「睡眠定时先播完当前曲」（`sleepTimerFinishCurrentTrack`，
+  默认关）。它把**倒计时**到点的行为从"立即淡出暂停"改成"转入 `endOfTrack`、等这一首
+  播完再停"；真值经回调注入（`SleepTimerService.waitForTrackEnd`）现读，改完立即生效。
+  这两种到点各弹一条 SnackBar：切换等待时 `睡眠定时到点，播完当前曲目后停止`，
+  真正停下时 `睡眠定时结束，已停止播放` / `睡眠定时结束，已暂停`（前一条也为了
+  解释"倒计时为什么突然消失"）。
