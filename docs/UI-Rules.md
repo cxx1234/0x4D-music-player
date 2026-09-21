@@ -1,5 +1,8 @@
 # UI Rules — 界面设计约束
 
+> 跨领域 / 环境的坑（构建、macOS 原生层、Flutter 框架层）见 `Pitfalls.md`；
+> 本文件只留界面约束。提交风格见 `Commit-Conventions.md`。
+
 本文件记录与 macOS 原生红绿灯/顶部区域、页面工具栏相关的设计约束，
 供后续 UI 调整时遵循，避免破坏红绿灯定位与各页视觉一致性。
 
