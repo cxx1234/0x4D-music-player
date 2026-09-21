@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2026-09-21
+
+### Added
+- Track-change notifications: with the window closed or the app in the
+  background, a new track posts a desktop banner with its album art, the title
+  and "artist · album". Nothing is posted while the app is in front - the player
+  bar and the player page already show what is playing there
+- The banner carries a "Next" action that skips the track in the background
+  without bringing the window forward; the notification for the new track then
+  replaces it in place. Clicking the banner restores the window and opens the
+  player page, including when the window had been closed
+- Settings → Playback: "show a system notification when the track changes", on
+  by default. Switching it on asks for the notification permission right away,
+  and when that is denied a hint offers a shortcut to the system settings
+
+### Fixed
+- Track notifications no longer consume the album-art cache. macOS moves any
+  attachment that is not inside the app bundle into its own store, and the covers
+  live in the app container, so passing a cached cover straight to the plugin
+  deleted it from under the app. The notification now gets a throwaway copy under
+  `Documents/notif_attachments`, and the sandbox temp directory is avoided
+  because the system cannot read files back out of it
+
 ## [0.2.5] - 2026-09-20
 
 ### Added

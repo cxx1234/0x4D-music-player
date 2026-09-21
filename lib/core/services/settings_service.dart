@@ -64,6 +64,12 @@ class AppSettings {
   /// `false`（默认）= 到点立即淡出暂停；`true` = 到点后转为"播完当前曲目再停"。
   final bool sleepTimerFinishCurrentTrack;
 
+  /// 切歌时是否弹桌面系统横幅通知（默认开）。
+  ///
+  /// 仅控制切歌横幅；系统「正在播放」面板与媒体键（MediaControlService）
+  /// 不受此开关影响。
+  final bool showTrackChangeNotification;
+
   const AppSettings({
     this.musicFolders = const [],
     this.themeMode = 'system',
@@ -75,6 +81,7 @@ class AppSettings {
     this.showTranslation = true,
     this.nowPlayingBarFill = true,
     this.sleepTimerFinishCurrentTrack = false,
+    this.showTrackChangeNotification = true,
   });
 
   /// The raw folder paths (convenience getter).
@@ -91,6 +98,7 @@ class AppSettings {
     'showTranslation': showTranslation,
     'nowPlayingBarFill': nowPlayingBarFill,
     'sleepTimerFinishCurrentTrack': sleepTimerFinishCurrentTrack,
+    'showTrackChangeNotification': showTrackChangeNotification,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -121,6 +129,8 @@ class AppSettings {
       nowPlayingBarFill: json['nowPlayingBarFill'] as bool? ?? true,
       sleepTimerFinishCurrentTrack:
           json['sleepTimerFinishCurrentTrack'] as bool? ?? false,
+      showTrackChangeNotification:
+          json['showTrackChangeNotification'] as bool? ?? true,
     );
   }
 
@@ -135,6 +145,7 @@ class AppSettings {
     bool? showTranslation,
     bool? nowPlayingBarFill,
     bool? sleepTimerFinishCurrentTrack,
+    bool? showTrackChangeNotification,
   }) {
     return AppSettings(
       musicFolders: musicFolders ?? this.musicFolders,
@@ -149,6 +160,8 @@ class AppSettings {
       nowPlayingBarFill: nowPlayingBarFill ?? this.nowPlayingBarFill,
       sleepTimerFinishCurrentTrack:
           sleepTimerFinishCurrentTrack ?? this.sleepTimerFinishCurrentTrack,
+      showTrackChangeNotification:
+          showTrackChangeNotification ?? this.showTrackChangeNotification,
     );
   }
 
@@ -211,6 +224,17 @@ class SettingsService {
   /// 最新值，因此改完立即生效（无需通知播放器）。
   Future<void> setSleepTimerFinishCurrentTrack(bool value) async {
     _settings = _settings.copyWith(sleepTimerFinishCurrentTrack: value);
+    await _save();
+  }
+
+  /// 切歌时是否弹桌面系统横幅通知（默认开）。
+  bool get showTrackChangeNotification => _settings.showTrackChangeNotification;
+
+  /// 持久化切歌通知开关。
+  ///
+  /// 通知服务每次切歌都现读本设置，因此改完即时生效（无需通知服务）。
+  Future<void> setShowTrackChangeNotification(bool value) async {
+    _settings = _settings.copyWith(showTrackChangeNotification: value);
     await _save();
   }
 

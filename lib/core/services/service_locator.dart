@@ -19,6 +19,7 @@ import 'settings_service.dart';
 import 'sleep_timer_service.dart';
 import 'song_repository.dart';
 import 'system_accent_service.dart';
+import 'track_notification_service.dart';
 
 /// 简单的服务定位器，用于全局访问各项服务。
 ///
@@ -38,6 +39,7 @@ class ServiceLocator {
   static MenuService? _menuService;
   static SystemAccentService? _systemAccent;
   static PlaybackFeedbackService? _feedback;
+  static TrackNotificationService? _trackNotifications;
 
   /// HUD（底部浮动提示）状态源。
   ///
@@ -170,6 +172,16 @@ class ServiceLocator {
     return _feedback!;
   }
 
+  /// 切歌通知服务（每切一首弹桌面系统横幅；点击回到「正在播放」）。
+  static TrackNotificationService get trackNotifications {
+    if (_trackNotifications == null) {
+      throw StateError(
+        'TrackNotificationService not initialized. Call ServiceLocator.initialize() first.',
+      );
+    }
+    return _trackNotifications!;
+  }
+
   /// 常驻歌词视图模型（驱动 flutter_lyric controller，含歌词内容/内嵌缓存）。
   static LyricsViewModel get lyrics {
     if (_lyrics == null) {
@@ -274,6 +286,11 @@ class ServiceLocator {
       _feedback!,
     );
     await _mediaControls!.initialize();
+
+    // 切歌通知：与媒体控制互补（前者管系统「正在播放」/媒体键，本服务只管
+    // 横幅）。放在沙箱权限恢复之后——通知封面读的是沙箱容器内的 covers 文件。
+    _trackNotifications = TrackNotificationService(_player!, _settings!);
+    await _trackNotifications!.initialize();
 
     // 歌词视图模型（常驻，播放页只消费不持有）。创建时机放在沙箱权限恢复
     // （_restoreSandboxAccess）之后——读内嵌/.lrc 歌词需要文件可读。翻译副行

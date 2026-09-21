@@ -40,6 +40,9 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 睡眠定时「到点先播完当前曲」开关（启动时从设置读取，默认关）。
   bool _sleepTimerFinishCurrentTrack = false;
 
+  /// 切歌时是否弹系统横幅通知（启动时从设置读取，默认开）。
+  bool _showTrackChangeNotification = true;
+
   /// 封面缓存大小（字节）；null = 尚未加载成功。
   int? _cacheSizeBytes;
 
@@ -58,6 +61,8 @@ class _SettingsPageState extends State<SettingsPage> {
       _nowPlayingBarFill = ServiceLocator.settings.nowPlayingBarFill;
       _sleepTimerFinishCurrentTrack =
           ServiceLocator.settings.sleepTimerFinishCurrentTrack;
+      _showTrackChangeNotification =
+          ServiceLocator.settings.showTrackChangeNotification;
     }
     _loadCacheSize();
     // 菜单动作（如 Help › 关于本软件）：设置页是 Shell 保活 tab，订阅常驻。
@@ -180,6 +185,33 @@ class _SettingsPageState extends State<SettingsPage> {
     ServiceLocator.settings.setSleepTimerFinishCurrentTrack(value);
   }
 
+  /// 切换切歌通知开关（UI 状态 + 写盘）。
+  ///
+  /// 打开时顺带申请通知授权——这是明确的用户手势，最自然的申请时机；
+  /// 用户拒绝则提示并给一个直达系统设置的入口（否则开关看着是开的却不弹，
+  /// 会以为功能坏了）。通知服务每次切歌都现读设置，因此改完即时生效。
+  Future<void> _setShowTrackChangeNotification(bool value) async {
+    setState(() => _showTrackChangeNotification = value);
+    await ServiceLocator.settings.setShowTrackChangeNotification(value);
+    if (!value || !ServiceLocator.isReady || !mounted) return;
+
+    final granted = await ServiceLocator.trackNotifications.ensurePermission();
+    if (granted || !mounted) return;
+    ScaffoldMessenger.of(context)
+      ..removeCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('通知权限未开启，切歌通知不会显示'),
+          action: SnackBarAction(
+            label: '打开系统设置',
+            onPressed: () => unawaited(
+              ServiceLocator.trackNotifications.openNotificationSettings(),
+            ),
+          ),
+        ),
+      );
+  }
+
   /// 跟随系统圆点的兜底监听源（非 macOS / 未就绪时无系统色服务）。
   static final ValueNotifier<Color?> _noSystemColor = ValueNotifier<Color?>(
     null,
@@ -293,6 +325,19 @@ class _SettingsPageState extends State<SettingsPage> {
               onChanged: _setResumePlayback,
             ),
             onTap: () => _setResumePlayback(!_resumePlayback),
+          ),
+          ListTile(
+            minVerticalPadding: 16,
+            leading: const Icon(Icons.notifications_none_rounded),
+            title: _buildOptionText(theme, '切歌时显示系统通知', '只应用在后台/关窗时弹出，前台不打扰'),
+            subtitle: null,
+            trailing: _buildCompactSwitch(
+              value: _showTrackChangeNotification,
+              onChanged: _setShowTrackChangeNotification,
+            ),
+            onTap: () => unawaited(
+              _setShowTrackChangeNotification(!_showTrackChangeNotification),
+            ),
           ),
           ListTile(
             minVerticalPadding: 16,

@@ -82,6 +82,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
           action: ShellAction.exportPlaylist,
         );
       }
+      // 点击切歌通知横幅 → 打开「正在播放」页（core 不反向依赖 features，
+      // 回调由此注入，与上述 MenuService 的注入方式一致）。
+      ServiceLocator.trackNotifications.onOpenPlayer = _openPlayer;
       setState(() => _initialized = true);
     }
   }
@@ -139,11 +142,15 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   }
 
   void _openPlayer() {
-    // 点按迷你底栏进入播放页前先对账，确保首屏即引擎真相。
+    final nav = _navKey.currentState;
+    // 导航未就绪，或播放页已在最上层（_showBar 为 false 即播放页可见，例如
+    // 点击切歌通知时页面已经打开）→ 不重复入栈。
+    if (nav == null || !_showBar.value) return;
+    // 点按迷你底栏/通知进入播放页前先对账，确保首屏即引擎真相。
     if (ServiceLocator.isReady) {
       ServiceLocator.player.resyncFromAudio();
     }
-    _navKey.currentState!.push(
+    nav.push(
       AppRouter.bottomUpRoute(
         PlayerPage(
           uiState: _playerUiState,

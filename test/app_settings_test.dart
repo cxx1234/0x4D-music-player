@@ -58,4 +58,34 @@ void main() {
       isFalse,
     );
   });
+
+  test('默认 showTrackChangeNotification 为开（老配置缺失该键时行为不变）', () {
+    const s = AppSettings();
+    expect(s.showTrackChangeNotification, isTrue);
+  });
+
+  test('toJson/fromJson 往返保留 showTrackChangeNotification', () {
+    const s = AppSettings(showTrackChangeNotification: false);
+    final restored = AppSettings.fromJson(s.toJson());
+    expect(restored.showTrackChangeNotification, isFalse);
+  });
+
+  test('fromJson 缺失该键时回退 true', () {
+    final restored = AppSettings.fromJson({'musicFolders': []});
+    expect(restored.showTrackChangeNotification, isTrue);
+  });
+
+  test('copyWith 可关闭/恢复 showTrackChangeNotification', () {
+    const s = AppSettings();
+    expect(
+      s
+          .copyWith(showTrackChangeNotification: false)
+          .showTrackChangeNotification,
+      isFalse,
+    );
+    expect(
+      s.copyWith(showTrackChangeNotification: true).showTrackChangeNotification,
+      isTrue,
+    );
+  });
 }
