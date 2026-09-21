@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deleted it from under the app. The notification now gets a throwaway copy under
   `Documents/notif_attachments`, and the sandbox temp directory is avoided
   because the system cannot read files back out of it
+- Settings → Appearance drew the leading icons of the "theme mode" and "accent
+  color" rows in the plain black/white fallback of `ThemeData.iconTheme`: those
+  two rows are hand-built instead of a `ListTile` (one carries the segmented
+  button, the other the inline swatch strip), so they never received the
+  `onSurfaceVariant` tint every neighbouring row inherits and read almost black
+  in the light theme and one shade too bright in the dark one. Both now match
+  the leading icons above and below them
 
 ## [0.2.5] - 2026-09-20
 

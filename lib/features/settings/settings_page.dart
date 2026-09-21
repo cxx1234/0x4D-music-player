@@ -377,7 +377,14 @@ class _SettingsPageState extends State<SettingsPage> {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           children: [
-            const Icon(Icons.palette_outlined),
+            // 本行不是 ListTile（圆点色板要横排），拿不到 ListTile 那条
+            // `iconColor = onSurfaceVariant` 的注入，裸 Icon 会退回 ThemeData
+            // 的固定纯黑/纯白（M2 遗留，见 library_page 同款注释）；
+            // 显式指定才和上下其它 leading 图标同样着色。
+            Icon(
+              Icons.palette_outlined,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(width: 16),
             // 文本块给上限宽度，剩余宽度尽量留给色板；极窄时文本省略号。
             ConstrainedBox(
@@ -544,7 +551,11 @@ class _SettingsPageState extends State<SettingsPage> {
                   return Row(
                     children: [
                       // 跟随当前主题亮度：深色显示月亮、浅色显示太阳。
-                      Icon(_themeIndicatorIcon(theme)),
+                      // 颜色同上：不在 ListTile 里，需显式跟随主题。
+                      Icon(
+                        _themeIndicatorIcon(theme),
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(

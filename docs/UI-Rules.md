@@ -205,3 +205,21 @@
   这两种到点各弹一条 SnackBar：切换等待时 `睡眠定时到点，播完当前曲目后停止`，
   真正停下时 `睡眠定时结束，已停止播放` / `睡眠定时结束，已暂停`（前一条也为了
   解释"倒计时为什么突然消失"）。
+
+## 9. 列表行 leading 图标着色（2026-09-21）
+
+- **`ListTile` 的 leading / trailing 图标不用手动上色**：M3 会把整行内容包进
+  `IconTheme`（`iconColor = colorScheme.onSurfaceVariant`，见 `list_tile.dart` 的
+  `_LisTileDefaultsM3`），裸 `Icon` 自动跟着主题走中性灰。
+- ⚠️ **自拼 `Row` 里的裸 `Icon` 拿不到这层注入**，会退回 `ThemeData.iconTheme` 的
+  默认值——那是 **M2 遗留的固定纯黑 / 纯白**（`kDefaultIconDarkColor` /
+  `kDefaultIconLightColor`），既不跟随明暗也不跟随主题色，肉眼比邻行图标更黑 / 更白。
+  **必须显式 `color: theme.colorScheme.onSurfaceVariant`**（同类写法：
+  `library_page.dart` 排序菜单的 `PopupMenuButton.iconColor`、
+  `playlist_page.dart` / `playlist_detail_page.dart`）。
+- **「不染色」的含义是不跟随 accent 色，不是不设颜色**——`onSurfaceVariant` 本身就是
+  中性灰。已按此法修：设置 › 外观的「主题模式」（太阳 / 月亮，仍随明暗切换图标）
+  与「主题色」（`palette_outlined`）两行。
+- 回归测试：`test/settings_leading_icon_color_test.dart`（2 例，明暗各一）——用
+  `Icon.color ?? IconTheme.of(context).color` 取实际渲染色，与同页 `ListTile`
+  leading 图标（`Icons.replay_rounded`）对比，日后新增自拼行忘上色会直接失败。
