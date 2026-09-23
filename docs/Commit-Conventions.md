@@ -56,6 +56,9 @@ Full suite N passing; analyze clean.
 - 功能/修复提交里若动了 `pubspec.yaml`（版本或 build number），在正文末尾加一句
   说明「随本提交走，不另开 release 提交」，**不要拆成两个提交**
 - 只改文档 / CI 的提交不动版本号
+- **build number 怎么加**：要动版本号、但没有新增功能（`fix` `refactor` `perf`
+  `chore` `test` `build` `ci` `revert`）时，只把 `+x` 加一（`0.2.6+2` → `0.2.6+3`）；
+  有新增功能（`feat`）时 `x.y.z` 与 `+x` 都按用户指定的版本来，不自作主张
 
 ## 6. 粒度
 
