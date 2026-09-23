@@ -12,6 +12,9 @@ class AppDelegate: FlutterAppDelegate {
     var isShuffled = false
     var repeatMode = "off"  // "off" | "one" | "all"
     var isTextEditing = false
+    // Flutter 侧有**控件级**聚焦节点（Tab 键盘导航 / 文本输入）——裸空格的
+    // 键等价此时应放行给 Flutter（激活聚焦控件），详见 applyMenuItemState。
+    var hasKeyboardFocus = false
     var sleepTimerMode = "off"  // "off" | "duration" | "endOfTrack" | "endOfQueue"
     var sleepTimerMinutes = 0  // duration 模式下当初设定的分钟数（勾选预设项用）
   }
@@ -101,6 +104,7 @@ class AppDelegate: FlutterAppDelegate {
     menuState.isShuffled = (args["isShuffled"] as? Bool) ?? false
     menuState.repeatMode = (args["repeatMode"] as? String) ?? "off"
     menuState.isTextEditing = (args["isTextEditing"] as? Bool) ?? false
+    menuState.hasKeyboardFocus = (args["hasKeyboardFocus"] as? Bool) ?? false
     menuState.sleepTimerMode = (args["sleepTimerMode"] as? String) ?? "off"
     menuState.sleepTimerMinutes = (args["sleepTimerMinutes"] as? NSNumber)?.intValue ?? 0
     // 主动刷新所有菜单项（使能/标题/勾选随播放态即时同步）。
@@ -136,18 +140,27 @@ class AppDelegate: FlutterAppDelegate {
   ///
   /// ⚠️ 不要用 override NSWindow.performKeyEquivalent 兜底——会打断 AppKit 事件
   /// 链，导致 Esc 等键无限递归卡死。
+  ///
+  /// 修饰键必须**恰好**是 ⌘：`contains(.command)` 对 ⌘⇧. / ⌘⌥. 同样为真，会把
+  /// 它们也当成停止（CapsLock / Fn / 小键盘标志不影响语义，先剔除）。
   private func installKeyShortcutMonitor() {
     keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
       guard let self = self else { return event }
-      // 只关心 ⌘ + 句点键（keyCode 47）。Flutter 引擎会在 sendEvent 之前把 ⌘. 当
-      // "取消"(Escape) 拦截，这里在更早的 local monitor 层截住它。
-      guard event.modifierFlags.contains(.command), event.keyCode == 47 else { return event }
+      // 只关心「纯 ⌘ + 句点键」（keyCode 47）。Flutter 引擎会在 sendEvent 之前把
+      // ⌘. 当"取消"(Escape) 拦截，这里在更早的 local monitor 层截住它。
+      let modifiers = event.modifierFlags
+        .intersection(.deviceIndependentFlagsMask)
+        .subtracting([.capsLock, .function, .numericPad])
+      guard modifiers == .command, event.keyCode == 47 else { return event }
       // 先让菜单系统走标准匹配路径（performKeyEquivalent）：匹配成功时 AppKit 会
       // 自己高亮菜单栏并触发「停止」action（借用菜单系统的原生反馈）；失败再回退。
       if NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
         return nil // 菜单系统已消费并触发 action
       }
-      self.sendMenuAction("stop")
+      // 回退也要与菜单项使能一致：无曲目时「停止」不可点（否则会弹 HUD「已停止」）。
+      if self.menuState.hasTrack {
+        self.sendMenuAction("stop")
+      }
       return nil // 消费事件，避免继续派发给 Flutter
     }
   }
@@ -192,11 +205,14 @@ class AppDelegate: FlutterAppDelegate {
   private func applyMenuItemState(_ menuItem: NSMenuItem) -> Bool {
     switch menuItem.action {
     case #selector(playPauseTapped(_:)):
-      // 播放/暂停标题随播放态切换；文本编辑时禁用（空格快捷键让给文本框）。
+      // 播放/暂停标题随播放态切换；文本编辑 / 有控件持有键盘焦点时禁用。
+      // 裸空格是「激活当前聚焦控件」的通用键（Flutter 侧 ActivateIntent，与
+      // Enter 一致），菜单项被禁用后 AppKit 的键等价匹配会自动放行给 Flutter；
+      // 没有聚焦控件时空格仍是播放/暂停（Apple Music 习惯）。
       menuItem.title = menuState.isPlaying
         ? NSLocalizedString("menu.pause", comment: "Pause")
         : NSLocalizedString("menu.play", comment: "Play")
-      return menuState.hasTrack && !menuState.isTextEditing
+      return menuState.hasTrack && !menuState.isTextEditing && !menuState.hasKeyboardFocus
     case #selector(previousTapped(_:)), #selector(nextTapped(_:)):
       // 文本编辑时禁用 ⌘←/⌘→（让给文本框的“行首/行尾”）。
       return menuState.hasTrack && !menuState.isTextEditing
@@ -756,7 +772,13 @@ class AppDelegate: FlutterAppDelegate {
   }
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
-    let controller = mainFlutterWindow?.contentViewController as! FlutterViewController
+    // 不用 `as!`：窗口 / 根控制器类型变化时会在启动阶段直接崩，绕过 Flutter 侧
+    // 的启动错误页。取不到就跳过原生通道注册（应用仍可作为普通播放器使用）。
+    guard let controller = mainFlutterWindow?.contentViewController as? FlutterViewController else {
+      NSLog("[0x4D] contentViewController is not a FlutterViewController; "
+        + "menu/sandbox/system-accent channels not registered")
+      return
+    }
 
     // 程序化主菜单（文案见 en/zh-Hans.lproj/Localizable.strings）+ 菜单通道。
     configureMenuChannel(binaryMessenger: controller.engine.binaryMessenger)

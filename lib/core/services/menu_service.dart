@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../utils/keyboard_focus.dart';
 import '../utils/logger.dart';
 import 'playback_feedback_service.dart';
 import 'player_service.dart';
@@ -11,9 +12,9 @@ import 'sleep_timer_service.dart';
 /// 桥接 macOS 原生菜单（`AppDelegate.swift`）与播放器 / 导航。
 ///
 /// 职责：
-/// - 把播放状态（是否有曲目 / 播放中 / 随机 / 循环 / 文本编辑中 / 睡眠定时）
-///   推给原生，驱动菜单项使能、标题（播放↔暂停）、勾选态（单曲循环、播放模式
-///   三选一、睡眠定时）；
+/// - 把播放状态（是否有曲目 / 播放中 / 随机 / 循环 / 文本编辑中 / 有键盘聚焦
+///   控件 / 睡眠定时）推给原生，驱动菜单项使能、标题（播放↔暂停）、勾选态
+///   （单曲循环、播放模式三选一、睡眠定时）；
 /// - 接收原生菜单动作（播放·暂停 / 上一首 / 下一首 / 单曲循环 / 播放模式 /
 ///   睡眠定时 / 打开设置），转发给 [PlayerService] 或 [openSettings] 回调。
 ///
@@ -56,10 +57,16 @@ class MenuService {
     bool isShuffled,
     String repeatMode,
     bool isTextEditing,
+    bool hasKeyboardFocus,
     String sleepTimerMode,
     int sleepTimerMinutes,
   })?
   _lastPushed;
+
+  /// 焦点相关结论的缓存：只在 Focus 变化时算一次（[FocusManager] 的监听），
+  /// 不在每次 `_push()`（含每 ~200ms 的播放进度通知）里做 UI 树祖先遍历。
+  bool _isTextEditing = false;
+  bool _hasKeyboardFocus = false;
 
   bool _attached = false;
   bool _disposed = false;
@@ -80,6 +87,7 @@ class MenuService {
     _attached = true;
     _player.addListener(_onPlayerChanged);
     _sleepTimer.state.addListener(_onPlayerChanged);
+    _refreshFocusFlags();
     _push();
     FocusManager.instance.addListener(_onFocusChanged);
   }
@@ -156,14 +164,17 @@ class MenuService {
 
   void _onPlayerChanged() => _push();
 
-  void _onFocusChanged() => _push();
+  void _onFocusChanged() {
+    _refreshFocusFlags();
+    _push();
+  }
 
-  /// 是否正处于文本编辑（Flutter 文本框聚焦）——原生据此让空格/⌘←/⌘→
-  /// 菜单键等价放行给文本框。
-  bool _isTextEditing() {
+  /// 重算焦点相关结论（只在 Focus 变化时调用，见字段注释）。
+  void _refreshFocusFlags() {
     final focus = FocusManager.instance.primaryFocus;
-    if (focus == null || focus.context == null) return false;
-    return focus.context!.findAncestorWidgetOfExactType<EditableText>() != null;
+    _hasKeyboardFocus = hasKeyboardFocus;
+    _isTextEditing =
+        focus?.context?.findAncestorWidgetOfExactType<EditableText>() != null;
   }
 
   void _push() {
@@ -176,7 +187,8 @@ class MenuService {
       isPlaying: _player.isPlaying,
       isShuffled: _player.isShuffled,
       repeatMode: _player.repeatMode.name,
-      isTextEditing: _isTextEditing(),
+      isTextEditing: _isTextEditing,
+      hasKeyboardFocus: _hasKeyboardFocus,
       sleepTimerMode: timerState?.mode.name ?? 'off',
       sleepTimerMinutes: timerState?.requested?.inMinutes ?? 0,
     );
@@ -187,6 +199,7 @@ class MenuService {
         last.isShuffled == state.isShuffled &&
         last.repeatMode == state.repeatMode &&
         last.isTextEditing == state.isTextEditing &&
+        last.hasKeyboardFocus == state.hasKeyboardFocus &&
         last.sleepTimerMode == state.sleepTimerMode &&
         last.sleepTimerMinutes == state.sleepTimerMinutes) {
       return;
@@ -200,6 +213,7 @@ class MenuService {
             'isShuffled': state.isShuffled,
             'repeatMode': state.repeatMode,
             'isTextEditing': state.isTextEditing,
+            'hasKeyboardFocus': state.hasKeyboardFocus,
             'sleepTimerMode': state.sleepTimerMode,
             'sleepTimerMinutes': state.sleepTimerMinutes,
           })

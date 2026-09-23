@@ -226,3 +226,24 @@
 - 回归测试：`test/settings_leading_icon_color_test.dart`（2 例，明暗各一）——用
   `Icon.color ?? IconTheme.of(context).color` 取实际渲染色，与同页 `ListTile`
   leading 图标（`Icons.replay_rounded`）对比，日后新增自拼行忘上色会直接失败。
+
+## 10. 键盘操作与焦点（2026-09-23）
+
+- **Tab 可进入键盘导航，Esc 退出**。实现：`FocusManager.instance.addLateKeyEventHandler`
+  注册 `handleKeyboardFocusKeyEvent`（`lib/core/utils/keyboard_focus.dart`），在 `app.dart`
+  的 `_AppState` 里挂载 / 卸载。
+  - ⚠️ **不要用根级 `Shortcuts` 做键盘兜底**：它会抢在 `WidgetsApp` 默认映射之前，导致
+    对话框的 Esc 失效（见 `Pitfalls.md` C6）。late handler 只在「没人处理该键」时运行，
+    对话框 / 弹层菜单 / `ToolbarSearchField` 的 Esc 全部优先。
+  - 「是否处于键盘导航」一律用 `hasKeyboardFocus`（`primaryFocus` 非空**且不是**
+    `FocusScopeNode`）——路由 Scope 常驻持焦点，不能用「非空」简化。
+- **点空白处也退出**：`app.dart` 根 Scaffold body 外包
+  `GestureDetector(behavior: HitTestBehavior.translucent, onTap: 取消焦点)`。行为含义：
+  只有「真的没东西可点」时才触发（按钮 / 列表行 / 弹层菜单的手势在内层，赢下竞技场）。
+  ⚠️ 已知局限：Flutter 点击**不转移焦点**（`InkWell` 点击不请求焦点），点另一个控件后
+  旧焦点环仍会留着 —— 用 Esc 或点空白退出。
+- **裸空格的归属**（仅 macOS 原生菜单参与）：无聚焦控件 = 播放 / 暂停（Apple Music 习惯）；
+  有控件聚焦 = 激活该控件（与 `Enter` 一致）。实现：`MenuService` 把 `hasKeyboardFocus`
+  与其它菜单状态一起推给原生，`AppDelegate.applyMenuItemState` 的 `playPause` 分支据此
+  禁用裸空格键等价。新增「全局无修饰键快捷键」时必须一并考虑这条归属规则。
+- 回归测试：`test/keyboard_focus_test.dart`（4 例）。

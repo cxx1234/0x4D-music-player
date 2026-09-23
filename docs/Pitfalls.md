@@ -128,6 +128,14 @@
   `#selector(NSWindow.performMiniaturize/performZoom/performClose(_:))` +
   `#selector(NSApplication.arrangeInFront(_:))`（nil-target 走 responder chain）。
 
+### B8. 2026-09-23 裸空格键等价会吞掉 Flutter 的「聚焦控件激活」
+
+- **症状**：`Tab` 把焦点移到某个按钮后按空格，按钮没反应（**有曲目时**）；而无曲目时同一操作又能激活按钮 —— 行为随「有没有在播的歌」变化。
+- **根因**：播放 ›「播放 / 暂停」用了 Apple Music 风格的裸空格（`keyEquivalentModifierMask = []`，见 B4）。`NSMenu` 的键等价匹配在 Flutter 引擎**之前**，只要该菜单项使能就把空格全部吃掉；而它的使能条件是 `hasTrack && !isTextEditing` —— 有曲目就吞，没曲目（项被禁用）才落给 Flutter。
+- **修法**：把「Flutter 侧有控件持有键盘焦点」也算作让出理由 —— Dart `MenuService` 推 `hasKeyboardFocus`，Swift 侧 `applyMenuItemState` 的 `playPause` 分支加 `&& !menuState.hasKeyboardFocus`。
+- ⚠️ **判定不能写成「`primaryFocus` 非空」**：路由自身的 `FocusScope`（`ModalRoute` 的 autofocus）在启动后就是 `primaryFocus`，那样写会让空格**永远**不再播放 / 暂停。必须要求「非 `FocusScopeNode` 的真实聚焦节点」，见 `lib/core/utils/keyboard_focus.dart` 的 `hasKeyboardFocus`。
+- **护栏**：`test/keyboard_focus_test.dart`；`docs/UI-Rules.md` §10；`docs/Performance-Optimization.md` §9.2。
+
 ## C. Flutter 框架层
 
 ### C1. 2026-08-19 → 08-24 Flutter 3.47 macOS 全窗口闪烁（Intel 专属）
@@ -178,6 +186,21 @@
   的实际渲染色）；`docs/UI-Rules.md` §9。
 - **复发提示**：任何"不是 `ListTile` 但长得像设置行"的地方（自拼 `Row`）都要显式上色。
 
+### C5. 2026-09-23 桌面端没有「退出键盘焦点」的路径（Tab 会变成死路）
+
+- **症状**：按 `Tab` 后焦点环出现，之后**怎么都退不掉**：点鼠标没用、按 Esc 也没用；再按空格会激活那个（有时已经看不见的）聚焦按钮。
+- **机制**（3.47 实测）：① Esc 的框架默认映射是 `DismissIntent`，而 `_DismissModalAction.isEnabled` 只看 `route.barrierDismissible` —— 普通页面路由为 false ⇒ 整条链 no-op；② Flutter 的 `InkWell` **点击既不请求焦点也不 unfocus**，所以点别处也不会摘掉旧焦点环；③ 3.47 的 `_HighlightModeManager.handlePointerEvent` 只处理 touch/stylus，**mouse/trackpad 直接落空** ⇒ 鼠标连"切回 touch 模式隐藏焦点环"都不会发生（macOS 的默认模式本来就是 traditional）。
+- **修法**：`FocusManager.instance.addLateKeyEventHandler` 里 Esc → 取消焦点；根 Scaffold body 外包 `GestureDetector(behavior: translucent, onTap: 取消焦点)` 兜底「点空白」。
+- ⚠️ 顺带结论：`IndexedStack` 已经给非选中子页包了 `ExcludeFocus`，保活页不会进 Tab 遍历，不需要额外处理。
+- **护栏**：`lib/core/utils/keyboard_focus.dart`、`test/keyboard_focus_test.dart`、`docs/UI-Rules.md` §10。
+
+### C6. 2026-09-23 根级 `Shortcuts(escape:)` 会劫持对话框的 Esc
+
+- **症状**：为了给 Esc 加"取消焦点"，在 `MaterialApp.builder` 里包 `Shortcuts({escape: 自定义 Intent})` + `Actions` 后，**对话框按 Esc 关不掉了**。
+- **根因**：`ShortcutManager` 命中后是从 **primaryFocus 的 context 向上**找 Action。`builder` 里的 `Shortcuts` 位于 `WidgetsApp` 默认映射与 Navigator 之间（比对话框那条 `DismissIntent` 更靠近焦点）⇒ 先被它匹配，随后又在 `builder` 自己的 `Actions` 里找到我们的 Action 并消费掉。
+- **修法**：改用 `FocusManager.addLateKeyEventHandler` —— 它只在**没有任何控件 / 路由处理该键**时才运行，对话框 / `MenuAnchor` 菜单 / `ToolbarSearchField` 的 Esc 全部自然优先。
+- **护栏**：`test/keyboard_focus_test.dart`（对话框与弹层菜单两例断言「处理器不被调用、弹层自行关闭」）。
+
 ## D. 领域事故索引（细节留在原文档）
 
 | 症状 | 出处 |
@@ -188,6 +211,7 @@
 | 卡片 elevation 阴影在 Impeller 上有 ~20ms raster 尖峰 | `UI-Rules.md` §4.3 |
 | HUD 与 SnackBar 抢位置 / 连按 ⌘↑ 攒一串提示 | `UI-Rules.md` §7 |
 | 睡眠定时到点的反馈只有 SnackBar（HUD 在播放页被禁用） | `UI-Rules.md` §8 |
+| Tab 焦点退不掉、空格激活「看不见的」聚焦按钮 | `UI-Rules.md` §10、本册 C5/B8 |
 | 切歌提前量导致上一首尾部被截断；双实例掩盖间隙 | `AudioEngine-Migration.md` 附录 B/C |
 | 镜像队列（引擎侧与 Dart 侧各持一份队列）必须互斥 | `AudioEngine-Migration.md` §0.4 |
 | 引擎时序问题无法用假引擎单测覆盖 | `AudioEngine-Migration.md` §P2 |

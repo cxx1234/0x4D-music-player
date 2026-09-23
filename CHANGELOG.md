@@ -34,6 +34,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `onSurfaceVariant` tint every neighbouring row inherits and read almost black
   in the light theme and one shade too bright in the dark one. Both now match
   the leading icons above and below them
+- Keyboard focus no longer traps the app once `Tab` has moved it. Flutter disables
+  its own Escape handling on a plain page route, and a mouse click never moves nor
+  drops the focus, so the focus ring stayed on screen and `Space` kept activating
+  that (sometimes invisible) button. `Escape` now drops the keyboard focus, and so
+  does clicking empty space. The Escape handler is registered as a late key handler,
+  which only runs when nothing else wanted the key, so dialogs, popup menus and the
+  search field keep their own Escape behaviour
+- `Space` is no longer swallowed by the native play/pause item while a widget holds
+  the keyboard focus: the menu state now reports "a widget is focused" and that item
+  steps aside, so `Space` activates the focused widget exactly like `Enter` does.
+  With nothing focused `Space` is still play/pause. While a widget holds focus the
+  item is greyed out, same as it already was during text editing
+- The `⌘.` stop shortcut no longer triggers on `⌘⇧.` / `⌘⌥.`, and it no longer
+  reports a stop when nothing is playing: the fallback now respects the same
+  "there is a track" gate as the menu item
+- The menu state no longer walks the widget tree on every ~200ms playback tick: the
+  "is text editing" / "is a widget focused" answers are computed once when the focus
+  changes and cached
+- Startup no longer force-casts the window's content view controller. A change in the
+  window structure there would have crashed during launch, before the Flutter startup
+  error page could appear; the app now comes up without the native menu / sandbox
+  channels instead and says so on the console
 
 ## [0.2.5] - 2026-09-20
 

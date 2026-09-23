@@ -11,6 +11,7 @@ import '../core/navigation/route_observer.dart';
 import '../core/services/player_service.dart';
 import '../core/services/service_locator.dart';
 import '../core/services/sleep_timer_service.dart';
+import '../core/utils/keyboard_focus.dart';
 import '../core/utils/logger.dart';
 import '../features/player/player_page.dart';
 import '../features/player/player_ui_state.dart';
@@ -41,6 +42,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // 键盘导航退出口（P1）：Esc 取消焦点。注册为 **late** key handler —— 只有
+    // 对话框 / 弹层菜单 / 文本框都没处理该键时才轮到这里（详见 utils/keyboard_focus.dart）。
+    FocusManager.instance.addLateKeyEventHandler(handleKeyboardFocusKeyEvent);
     _initializeServices();
   }
 
@@ -99,6 +103,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    FocusManager.instance.removeLateKeyEventHandler(
+      handleKeyboardFocusKeyEvent,
+    );
     _showBar.dispose();
     _shellController.dispose();
     super.dispose();
@@ -246,8 +253,16 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                     // 所有页面（Shell + 子页面 + 播放页）都渲染在底栏上方，底栏不被
                     // 子页面盖住。顶部不再有全局顶栏，改由各页面自行避让（左侧边栏
                     // 顶部预留 45 给红绿灯，右侧内容区用统一高度的 PageToolbar）。
-                    body: _PlayerNoticeConsumer(
-                      child: child ?? const SizedBox.shrink(),
+                    body: GestureDetector(
+                      // 键盘导航退出口（P3）：点空白处取消焦点。
+                      // `translucent` + 根级只当兜底 —— 按钮 / 列表行 / 弹层菜单
+                      // 自己的手势会赢下手势竞技场（内层优先），只有「真的没东西
+                      // 可点」时才轮到它，不会误伤交互。
+                      behavior: HitTestBehavior.translucent,
+                      onTap: () => clearKeyboardFocus(),
+                      child: _PlayerNoticeConsumer(
+                        child: child ?? const SizedBox.shrink(),
+                      ),
                     ),
                     bottomNavigationBar: ValueListenableBuilder<bool>(
                       valueListenable: _showBar,
