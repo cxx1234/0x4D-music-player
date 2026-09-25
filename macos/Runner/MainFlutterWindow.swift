@@ -91,6 +91,11 @@ class MainFlutterWindow: NSWindow {
           self?.topBarActionsWidth = CGFloat(width)
         }
         result(nil)
+      case "showMainWindow":
+        // 点击切歌通知时把已关闭的窗口唤回（App 关窗驻留后台，可能没有可见窗口）。
+        self?.makeKeyAndOrderFront(nil)
+        NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+        result(nil)
       default:
         result(nil)
       }

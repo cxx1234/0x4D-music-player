@@ -31,7 +31,7 @@ enum AppLogLevel {
 /// - 因此 Debug 构建下应用内"日志查看页"(`LogPage`)为空属预期,日志请从控制台查看。
 ///
 /// 约定:消息用英文(与堆栈/框架日志统一);tag 用分类名
-/// (App/Startup/Player/Scan/Sandbox/DB/Cache/M3U/Settings/FolderWatch/Zone/Flutter/Platform)。
+/// (App/Startup/Player/Scan/Sandbox/DB/Cache/M3U/Settings/FolderWatch/Notify/Zone/Flutter/Platform)。
 ///
 /// 日志系统自身失败绝不抛异常(否则会递归崩溃),一律降级为 `debugPrint`。
 abstract final class AppLogger {

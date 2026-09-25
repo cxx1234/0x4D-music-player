@@ -135,6 +135,58 @@ with `AudioplayersEngine` as the only implementation). The engine plays **one fi
 at a time**; queue sequencing, shuffle order, repeat modes and auto-skip live in
 `PlayerService`. See `AudioEngine-Migration.md`.
 
+### Sleep timer (session-only)
+
+`SleepTimerService` (`lib/core/services/sleep_timer_service.dart`) owns both trigger
+kinds and is **never persisted** (重启即失效):
+
+* **duration** — its own tick; on expiry it calls
+  `PlayerService.fadeOutAndPause()` (engine-level volume ramp, then pause — the
+  user's `volume` / slider position are deliberately left untouched).
+  If the `sleepTimerFinishCurrentTrack` setting is on **and playback is actually
+  running**, expiry instead switches the mode to `endOfTrack` (\"等这一首播完再停\");
+  the button then shows no countdown, it shows the waiting mode.
+* **end of track / end of queue** — registers
+  `PlayerService.onBeforeTrackAdvance`, which is consulted *before* the queue
+  advances and **before** the repeat-one check, so "停在这一曲末尾" also works
+  under 单曲循环. The engine reports `completionStream` even with
+  `ReleaseMode.loop`; deciding whether that means "track finished" is
+  `PlayerService`'s job, not the engine's.
+
+The UI (`SleepTimerButton` in the player page's `PlayerBar`) and the notice
+SnackBar (`app.dart`) only read `ServiceLocator.sleepTimer` state — they contain no
+scheduling logic.
+
+### Track-change notifications
+
+`TrackNotificationService` (`lib/core/services/track_notification_service.dart`)
+posts a desktop banner (macOS) whenever the current song changes. It listens to
+`PlayerService.currentSongNotifier`, so every way of changing tracks — manual
+skip, auto-advance, shuffle, repeat and jump-to-song — goes through one path; a
+300 ms debounce collapses rapid skipping, and a fixed notification id makes each
+new track **replace** the previous banner instead of stacking up in Notification
+Center.
+
+Banners are **background-only**: `presentBanner` / `presentList` / `presentAlert`
+are all off, which suppresses the banner while the app is in front (the player bar
+and the player page already show the same thing) and leaves the windowless case —
+the app keeps running after the window closes — as the one that gets a banner.
+Clicking it restores the window and opens the player page.
+
+The cover travels as a notification attachment, but **never as the cached file**:
+macOS moves attachments that live outside the app bundle into its own store, so
+passing `Documents/covers/*` would delete the app's own cover. The service copies
+the cover to `Documents/notif_attachments` first — not to the sandbox temp
+directory, which the system cannot read back.
+
+A "Next" action is registered on the notification category (actions can only be
+configured during `initialize`) and handled in `_onResponse`; it skips without
+activating the app. Play/pause is deliberately absent: it is stateful, and the
+banner only refreshes on track changes.
+
+Permission is requested when the user turns the switch on in Settings › Playback,
+with the first track change as a fallback (the switch defaults to on).
+
 ⸻
 
 ## Data Flow

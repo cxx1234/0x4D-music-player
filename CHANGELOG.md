@@ -5,6 +5,120 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2026-09-21
+
+### Added
+- Track-change notifications: with the window closed or the app in the
+  background, a new track posts a desktop banner with its album art, the title
+  and "artist · album". Nothing is posted while the app is in front - the player
+  bar and the player page already show what is playing there
+- The banner carries a "Next" action that skips the track in the background
+  without bringing the window forward; the notification for the new track then
+  replaces it in place. Clicking the banner restores the window and opens the
+  player page, including when the window had been closed
+- Settings → Playback: "show a system notification when the track changes", on
+  by default. Switching it on asks for the notification permission right away,
+  and when that is denied a hint offers a shortcut to the system settings
+
+### Fixed
+- Track notifications no longer consume the album-art cache. macOS moves any
+  attachment that is not inside the app bundle into its own store, and the covers
+  live in the app container, so passing a cached cover straight to the plugin
+  deleted it from under the app. The notification now gets a throwaway copy under
+  `Documents/notif_attachments`, and the sandbox temp directory is avoided
+  because the system cannot read files back out of it
+- Settings → Appearance drew the leading icons of the "theme mode" and "accent
+  color" rows in the plain black/white fallback of `ThemeData.iconTheme`: those
+  two rows are hand-built instead of a `ListTile` (one carries the segmented
+  button, the other the inline swatch strip), so they never received the
+  `onSurfaceVariant` tint every neighbouring row inherits and read almost black
+  in the light theme and one shade too bright in the dark one. Both now match
+  the leading icons above and below them
+- Keyboard focus no longer traps the app once `Tab` has moved it. Flutter disables
+  its own Escape handling on a plain page route, and a mouse click never moves nor
+  drops the focus, so the focus ring stayed on screen and `Space` kept activating
+  that (sometimes invisible) button. `Escape` now drops the keyboard focus, and so
+  does clicking empty space. The Escape handler is registered as a late key handler,
+  which only runs when nothing else wanted the key, so dialogs, popup menus and the
+  search field keep their own Escape behaviour
+- `Space` is no longer swallowed by the native play/pause item while a widget holds
+  the keyboard focus: the menu state now reports "a widget is focused" and that item
+  steps aside, so `Space` activates the focused widget exactly like `Enter` does.
+  With nothing focused `Space` is still play/pause. While a widget holds focus the
+  item is greyed out, same as it already was during text editing
+- The `⌘.` stop shortcut no longer triggers on `⌘⇧.` / `⌘⌥.`, and it no longer
+  reports a stop when nothing is playing: the fallback now respects the same
+  "there is a track" gate as the menu item
+- The menu state no longer walks the widget tree on every ~200ms playback tick: the
+  "is text editing" / "is a widget focused" answers are computed once when the focus
+  changes and cached
+- Startup no longer force-casts the window's content view controller. A change in the
+  window structure there would have crashed during launch, before the Flutter startup
+  error page could appear; the app now comes up without the native menu / sandbox
+  channels instead and says so on the console
+- Scanning no longer leaves background workers behind when a metadata batch has to
+  abort part-way (for example when a worker fails to start): the worker handles are
+  now kept and shut down as soon as the batch finishes or throws
+
+## [0.2.5] - 2026-09-20
+
+### Added
+- Sleep timer, reachable from the timer button on the left of the player bar and
+  from the macOS Playback menu: 5/10/15/30/45/60/90 minutes, "end of current
+  track", "end of playlist" and cancel. The remaining time sits next to the icon;
+  the timer is session-only and is not persisted across restarts
+- Sleep timer expiry fades the volume out over 5s and then pauses, so playback
+  stops mid-track without a click. The fade runs at engine level, so the volume
+  slider and the persisted volume never move; any new playback aborts it
+- Settings → Playback: a switch for "finish the current track first". With it on,
+  a countdown that expires while something is playing waits for that track to end
+  instead of stopping right away (it still stops immediately when paused)
+- macOS Help menu: "About This App" opens the in-app Settings → About page; the
+  standard system About panel stays in the App menu
+
+### Changed
+- The audio engine reports `onPlayerComplete` even while single-repeat is on, and
+  deciding whether that means "the track finished" is `PlayerService`'s job again.
+  That is what lets "end of current track" work with repeat-one enabled
+- Sleep-timer actions from the menu bar go through `PlaybackFeedbackService` like
+  the other external actions: they report through the HUD on every page except
+  the player page, where the button itself changes state
+
+### Fixed
+- Sleep-timer button: the hover highlight is a circle (a pill once the countdown
+  appears) instead of a square - child-mode `PopupMenuButton` wraps its child in
+  a bare `InkWell`, which needs an explicit `borderRadius`
+
+## [0.2.4] - 2026-09-18
+
+### Added
+- Feedback for actions that have no visible control: volume, track skips, play/pause
+  and stop coming from the macOS menu or the media keys now report what happened. The
+  HUD sits bottom-centre, above the SnackBar, for 1.2s, and repeated presses update it
+  in place instead of queueing up
+- Control pulse: those same shortcuts light up the matching button on the player page
+  and in the now-playing bar for 180ms, so the controls mirror the action
+
+### Changed
+- Menu and media-control actions now go through one `PlaybackFeedbackService`, so both
+  entry points share the same copy; at the end of the queue the HUD says "已是最后一首"
+  (and "已是第一首" when going back) instead of silently doing nothing
+- The HUD stays off on the player page: the volume slider, info card and controls
+  already show that state there
+
+### Fixed
+- Song lists: the "now playing" highlight is now identical in every list. Only the library
+  passed `isPlaying`, so the dimmed cover with the equalizer appeared there alone while the
+  other lists kept the corner note badge and a pause glyph even while playing; and none of
+  them rebuilt on play/pause because they subscribed to track changes alone
+- Song lists: a stray `isPlaying` can no longer light up a row that is not the current track
+- Artist detail: song list padding brought in line with the other lists (was 24/0/8/16), so the
+  selected-row highlight is no longer a different width there
+- Song rows: the play-state icon sits 12px from the duration text instead of 8, which read as
+  one blob
+- Volume: changes made with the menu shortcuts now surface the new value for 1.2s, the same
+  way dragging the slider does (a held key restarts that timer instead of flickering)
+
 ## [0.2.3] - 2026-09-17
 
 ### Added

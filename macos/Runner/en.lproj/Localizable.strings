@@ -28,6 +28,11 @@
 "menu.modeSequential" = "Sequential";
 "menu.modeRepeatAll" = "Repeat All";
 "menu.modeShuffleAll" = "Shuffle";
+"menu.sleepTimer" = "Sleep Timer";
+"menu.sleepTimerMinutes" = "%d Minutes";
+"menu.sleepTimerEndOfTrack" = "End of Track";
+"menu.sleepTimerEndOfQueue" = "End of Playlist";
+"menu.sleepTimerCancel" = "Cancel Timer";
 
 /* Edit menu */
 "menu.edit" = "Edit";
@@ -48,3 +53,4 @@
 
 /* Help menu */
 "menu.help" = "Help";
+"menu.aboutApp" = "About This App";

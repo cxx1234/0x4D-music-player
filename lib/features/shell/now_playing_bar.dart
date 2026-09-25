@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../core/services/playback_feedback_service.dart';
 import '../../core/services/service_locator.dart';
 import '../../widgets/cached_album_art.dart';
+import '../../widgets/control_pulse.dart';
 
 /// 全局常驻的迷你播放条（挂在根 Scaffold 的 bottomNavigationBar，跨所有页面可见）。
 ///
@@ -23,6 +25,8 @@ class NowPlayingBar extends StatelessWidget {
     }
 
     final player = ServiceLocator.player;
+    // 快捷键 / 媒体键切歌、播放暂停时，让这一排按钮也亮一下（见 ControlPulse）。
+    final pulses = ServiceLocator.feedback.pulses;
 
     // 外层 RepaintBoundary：整条底栏自成一合成层，内部刷新不波及页面；
     // 内容层只订低频通知器，播放进度 tick 不会重建封面/文本/按钮。
@@ -100,32 +104,49 @@ class NowPlayingBar extends StatelessWidget {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              IconButton(
-                                icon: const Icon(Icons.skip_previous_rounded),
-                                onPressed: song != null
-                                    ? () => player.previous()
-                                    : null,
-                                tooltip: '上一首',
-                              ),
-                              IconButton(
-                                icon: Icon(
-                                  player.isPlaying
-                                      ? Icons.pause_circle_filled_rounded
-                                      : Icons.play_circle_filled_rounded,
-                                  color: theme.colorScheme.primary,
+                              ControlPulse(
+                                pulses: pulses,
+                                action: PlaybackAction.previous,
+                                builder: (context, pulsing) => IconButton(
+                                  icon: const Icon(Icons.skip_previous_rounded),
+                                  style: _pulseStyle(theme, pulsing),
+                                  onPressed: song != null
+                                      ? () => player.previous()
+                                      : null,
+                                  tooltip: '上一首',
                                 ),
-                                iconSize: 36,
-                                onPressed: song != null
-                                    ? () => player.togglePlay()
-                                    : null,
-                                tooltip: player.isPlaying ? '暂停' : '播放',
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.skip_next_rounded),
-                                onPressed: song != null
-                                    ? () => player.next()
-                                    : null,
-                                tooltip: '下一首',
+                              ControlPulse(
+                                pulses: pulses,
+                                action: PlaybackAction.playPause,
+                                builder: (context, pulsing) => IconButton(
+                                  icon: Icon(
+                                    player.isPlaying
+                                        ? Icons.pause_circle_filled_rounded
+                                        : Icons.play_circle_filled_rounded,
+                                    color: pulsing
+                                        ? theme.colorScheme.onPrimaryContainer
+                                        : theme.colorScheme.primary,
+                                  ),
+                                  iconSize: 36,
+                                  style: _pulseStyle(theme, pulsing),
+                                  onPressed: song != null
+                                      ? () => player.togglePlay()
+                                      : null,
+                                  tooltip: player.isPlaying ? '暂停' : '播放',
+                                ),
+                              ),
+                              ControlPulse(
+                                pulses: pulses,
+                                action: PlaybackAction.next,
+                                builder: (context, pulsing) => IconButton(
+                                  icon: const Icon(Icons.skip_next_rounded),
+                                  style: _pulseStyle(theme, pulsing),
+                                  onPressed: song != null
+                                      ? () => player.next()
+                                      : null,
+                                  tooltip: '下一首',
+                                ),
                               ),
                             ],
                           ),
@@ -142,6 +163,14 @@ class NowPlayingBar extends StatelessWidget {
     );
   }
 }
+
+/// 底栏按钮的脉冲高亮样式（外部操作时亮一下，结束后恢复透明）。
+ButtonStyle? _pulseStyle(ThemeData theme, bool pulsing) => pulsing
+    ? IconButton.styleFrom(
+        backgroundColor: theme.colorScheme.primaryContainer,
+        foregroundColor: theme.colorScheme.onPrimaryContainer,
+      )
+    : null;
 
 /// 底栏进度背景填充层：从左到右按播放进度对背景着色。
 ///

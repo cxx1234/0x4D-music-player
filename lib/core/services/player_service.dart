@@ -328,6 +328,9 @@ class PlayerService extends ChangeNotifier {
   /// [_onEngineError] 统一走"提示 + 自动跳过"。
   Future<bool> _loadCurrent({required bool autoPlay}) async {
     final generation = ++_loadGeneration;
+    // 开始播放新曲目 → 放弃进行中的睡眠淡出：否则淡出会在几秒后把刚起播的
+    // 曲目暂停掉（音量同时还原）。
+    cancelFadeOut();
     final targetIndex = _playQueue.currentIndex;
     // 曲目切换（或首次加载）时先清零持久化进度：否则切歌后立刻退出/挂起
     // （flushPendingWrites）会把**上一首**的位置写进新曲，下次续播到错误位置。
@@ -383,9 +386,13 @@ class PlayerService extends ChangeNotifier {
 
   /// 单曲自然播完 → 推进队列。
   Future<void> _onCompleted() async {
+    if (_advancing || _playQueue.isEmpty) return;
+    // 睡眠定时（「播完当前曲 / 播完当前播放列表」）的接管点。必须放在单曲循环
+    // 判定**之前**：这两者都是"在这一曲的末尾停下"，与重复模式无关。
+    final isLastInOrder = _currentSlot + 1 >= _order.length;
+    if (onBeforeTrackAdvance?.call(isLastInOrder) ?? false) return;
     // 单曲循环由引擎原生循环完成；部分引擎（audioplayers）仍会上报完成事件。
     if (_repeatMode == PlayerRepeatMode.one) return;
-    if (_advancing || _playQueue.isEmpty) return;
     _advancing = true;
     try {
       final slot = _currentSlot;
@@ -651,6 +658,77 @@ class PlayerService extends ChangeNotifier {
     await _engine.release();
     _playQueue.setPlaybackState(Duration.zero, Duration.zero);
     notifyListeners();
+  }
+
+  // ─── 睡眠定时（淡出暂停 / 自然播完钩子）─────────────────
+
+  /// 睡眠定时到点时的默认淡出时长。
+  static const Duration kSleepFadeDuration = Duration(seconds: 5);
+
+  /// 淡出步长（每步降一点音量，避免"咔"地一下静音）。
+  static const Duration _kFadeStep = Duration(milliseconds: 200);
+
+  /// 淡出代际：每次开始/取消淡出都自增，让过期的淡出循环自行退出。
+  int _fadeGeneration = 0;
+
+  /// 是否有淡出正在进行（[_cancelFadeOut] 的快速退出条件）。
+  bool _fading = false;
+
+  /// 曲目**自然播完**、即将推进队列之前调用的钩子（睡眠定时用）。
+  ///
+  /// [isLastInOrder] 表示这是本轮播放顺序的最后一首（随机排列下即队尾）。
+  /// 返回 `true` 表示调用方已接管本次推进（队列不前进）。
+  ///
+  /// 与重复模式无关：单曲循环下引擎仍会上报完成事件，因此"播完这一遍就停"
+  /// 在单曲循环下同样生效。
+  bool Function(bool isLastInOrder)? onBeforeTrackAdvance;
+
+  /// 淡出到静音后暂停播放（睡眠定时到点用）。
+  ///
+  /// 音量走**引擎级** [AudioEngine.setVolume]，结束后再还原 [volume]——刻意不
+  /// 改 [_volume]：后者是 UI 的真相（音量滑块订阅它），跟着淡出降到 0 会让滑块
+  /// 位置肉眼可见地掉下去，还可能被误当成用户的设置。
+  ///
+  /// 淡出期间若用户开始播放别的曲目（任何一次 [_loadCurrent]）或调用
+  /// [cancelFadeOut]，本次淡出立即中止并还原音量，不会把刚起播的曲目暂停掉。
+  Future<void> fadeOutAndPause({Duration duration = kSleepFadeDuration}) async {
+    final generation = ++_fadeGeneration;
+    _fading = true;
+    try {
+      if (!_shouldPlay) {
+        // 已经停了（用户手动暂停 / 队列已播完）：无需淡出，只还原音量。
+        await _engine.setVolume(_volume);
+        return;
+      }
+      if (duration > Duration.zero) {
+        final steps = (duration.inMilliseconds / _kFadeStep.inMilliseconds)
+            .ceil();
+        for (var i = 1; i <= steps; i++) {
+          await Future<void>.delayed(_kFadeStep);
+          // 被取消/接管：音量已由取消方还原，这里直接退出。
+          if (generation != _fadeGeneration) return;
+          // 用户中途暂停 → 直接收尾（下面统一还原音量）。
+          if (!_shouldPlay) break;
+          await _engine.setVolume(_volume * (1 - i / steps));
+        }
+      }
+      if (generation != _fadeGeneration) return;
+      if (_shouldPlay) await pause();
+      if (generation != _fadeGeneration) return;
+      await _engine.setVolume(_volume);
+      notifyListeners();
+    } finally {
+      // 只有仍是本次淡出时才收尾（被取消时已由取消方复位）。
+      if (generation == _fadeGeneration) _fading = false;
+    }
+  }
+
+  /// 取消进行中的淡出并立即还原音量（没有淡出在跑时是 no-op）。
+  void cancelFadeOut() {
+    if (!_fading) return;
+    _fading = false;
+    _fadeGeneration++;
+    unawaited(_engine.setVolume(_volume));
   }
 
   /// Skip to the next song.  Wraps around if [repeatMode] is [PlayerRepeatMode.all].
@@ -936,6 +1014,8 @@ class PlayerService extends ChangeNotifier {
 
   @override
   void dispose() {
+    // 让进行中的淡出循环在下一步自行退出（引擎随后被释放）。
+    _fadeGeneration++;
     _positionSub?.cancel();
     _durationSub?.cancel();
     _playingSub?.cancel();

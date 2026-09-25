@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/models/accent_color.dart';
@@ -35,8 +37,17 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 底栏播放进度填充开关（启动时从设置读取，默认开）。
   bool _nowPlayingBarFill = true;
 
+  /// 睡眠定时「到点先播完当前曲」开关（启动时从设置读取，默认关）。
+  bool _sleepTimerFinishCurrentTrack = false;
+
+  /// 切歌时是否弹系统横幅通知（启动时从设置读取，默认开）。
+  bool _showTrackChangeNotification = true;
+
   /// 封面缓存大小（字节）；null = 尚未加载成功。
   int? _cacheSizeBytes;
+
+  /// 菜单（ShellController 广播）进来的页面动作，如「关于本软件」。
+  StreamSubscription<ShellAction>? _actionsSub;
 
   @override
   void initState() {
@@ -48,8 +59,21 @@ class _SettingsPageState extends State<SettingsPage> {
       _themeMode = ServiceLocator.settings.themeMode;
       _accent = ServiceLocator.settings.accentColor;
       _nowPlayingBarFill = ServiceLocator.settings.nowPlayingBarFill;
+      _sleepTimerFinishCurrentTrack =
+          ServiceLocator.settings.sleepTimerFinishCurrentTrack;
+      _showTrackChangeNotification =
+          ServiceLocator.settings.showTrackChangeNotification;
     }
     _loadCacheSize();
+    // 菜单动作（如 Help › 关于本软件）：设置页是 Shell 保活 tab，订阅常驻。
+    // 广播在切 tab 后的下一帧发出，此时订阅已建立（见 ShellController.request）。
+    _actionsSub = widget.controller?.actions.listen(_onShellAction);
+  }
+
+  @override
+  void dispose() {
+    _actionsSub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -152,6 +176,42 @@ class _SettingsPageState extends State<SettingsPage> {
     ServiceLocator.settings.setNowPlayingBarFill(value);
   }
 
+  /// 切换睡眠定时「先播完当前曲再停」开关（UI 状态 + 写盘）。
+  ///
+  /// 播放中的定时每次到点都现读设置（`SleepTimerService.waitForTrackEnd`
+  /// 回调），因此改完立即生效，无需通知播放器。
+  void _setSleepTimerFinishCurrentTrack(bool value) {
+    setState(() => _sleepTimerFinishCurrentTrack = value);
+    ServiceLocator.settings.setSleepTimerFinishCurrentTrack(value);
+  }
+
+  /// 切换切歌通知开关（UI 状态 + 写盘）。
+  ///
+  /// 打开时顺带申请通知授权——这是明确的用户手势，最自然的申请时机；
+  /// 用户拒绝则提示并给一个直达系统设置的入口（否则开关看着是开的却不弹，
+  /// 会以为功能坏了）。通知服务每次切歌都现读设置，因此改完即时生效。
+  Future<void> _setShowTrackChangeNotification(bool value) async {
+    setState(() => _showTrackChangeNotification = value);
+    await ServiceLocator.settings.setShowTrackChangeNotification(value);
+    if (!value || !ServiceLocator.isReady || !mounted) return;
+
+    final granted = await ServiceLocator.trackNotifications.ensurePermission();
+    if (granted || !mounted) return;
+    ScaffoldMessenger.of(context)
+      ..removeCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text('通知权限未开启，切歌通知不会显示'),
+          action: SnackBarAction(
+            label: '打开系统设置',
+            onPressed: () => unawaited(
+              ServiceLocator.trackNotifications.openNotificationSettings(),
+            ),
+          ),
+        ),
+      );
+  }
+
   /// 跟随系统圆点的兜底监听源（非 macOS / 未就绪时无系统色服务）。
   static final ValueNotifier<Color?> _noSystemColor = ValueNotifier<Color?>(
     null,
@@ -198,6 +258,19 @@ class _SettingsPageState extends State<SettingsPage> {
     controller.request(NavigationItem.library, action: ShellAction.forceRescan);
   }
 
+  /// ShellController 广播的菜单动作。
+  void _onShellAction(ShellAction action) {
+    if (action == ShellAction.openAbout) _openAbout();
+  }
+
+  /// 打开「关于」页（「通用 › 关于」行与菜单「关于本软件」共用）。
+  void _openAbout() {
+    if (!mounted) return;
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const AboutPage()));
+  }
+
   /// 「音乐库」分组卡片：目前为强制刷新入口。无文件夹时禁用（ListTile 置灰）。
   Widget _buildLibraryCard() {
     final theme = Theme.of(context);
@@ -239,16 +312,47 @@ class _SettingsPageState extends State<SettingsPage> {
       surfaceTintColor: Colors.transparent,
       shadowColor: Colors.transparent,
       clipBehavior: Clip.antiAlias,
-      child: ListTile(
-        minVerticalPadding: 16,
-        leading: const Icon(Icons.replay_rounded),
-        title: _buildOptionText(theme, '续播上次播放位置', '启动后恢复上次播放进度'),
-        subtitle: null,
-        trailing: _buildCompactSwitch(
-          value: _resumePlayback,
-          onChanged: _setResumePlayback,
-        ),
-        onTap: () => _setResumePlayback(!_resumePlayback),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            minVerticalPadding: 16,
+            leading: const Icon(Icons.replay_rounded),
+            title: _buildOptionText(theme, '续播上次播放位置', '启动后恢复上次播放进度'),
+            subtitle: null,
+            trailing: _buildCompactSwitch(
+              value: _resumePlayback,
+              onChanged: _setResumePlayback,
+            ),
+            onTap: () => _setResumePlayback(!_resumePlayback),
+          ),
+          ListTile(
+            minVerticalPadding: 16,
+            leading: const Icon(Icons.notifications_none_rounded),
+            title: _buildOptionText(theme, '切歌时显示系统通知', '只应用在后台/关窗时弹出，前台不打扰'),
+            subtitle: null,
+            trailing: _buildCompactSwitch(
+              value: _showTrackChangeNotification,
+              onChanged: _setShowTrackChangeNotification,
+            ),
+            onTap: () => unawaited(
+              _setShowTrackChangeNotification(!_showTrackChangeNotification),
+            ),
+          ),
+          ListTile(
+            minVerticalPadding: 16,
+            leading: const Icon(Icons.timer_outlined),
+            title: _buildOptionText(theme, '睡眠定时先播完当前曲', '关闭则到点立即淡出暂停'),
+            subtitle: null,
+            trailing: _buildCompactSwitch(
+              value: _sleepTimerFinishCurrentTrack,
+              onChanged: _setSleepTimerFinishCurrentTrack,
+            ),
+            onTap: () => _setSleepTimerFinishCurrentTrack(
+              !_sleepTimerFinishCurrentTrack,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -273,7 +377,14 @@ class _SettingsPageState extends State<SettingsPage> {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           children: [
-            const Icon(Icons.palette_outlined),
+            // 本行不是 ListTile（圆点色板要横排），拿不到 ListTile 那条
+            // `iconColor = onSurfaceVariant` 的注入，裸 Icon 会退回 ThemeData
+            // 的固定纯黑/纯白（M2 遗留，见 library_page 同款注释）；
+            // 显式指定才和上下其它 leading 图标同样着色。
+            Icon(
+              Icons.palette_outlined,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(width: 16),
             // 文本块给上限宽度，剩余宽度尽量留给色板；极窄时文本省略号。
             ConstrainedBox(
@@ -440,7 +551,11 @@ class _SettingsPageState extends State<SettingsPage> {
                   return Row(
                     children: [
                       // 跟随当前主题亮度：深色显示月亮、浅色显示太阳。
-                      Icon(_themeIndicatorIcon(theme)),
+                      // 颜色同上：不在 ListTile 里，需显式跟随主题。
+                      Icon(
+                        _themeIndicatorIcon(theme),
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Column(
@@ -546,9 +661,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             subtitle: null,
             trailing: Icon(Icons.chevron_right, color: chevronColor),
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const AboutPage())),
+            onTap: _openAbout,
           ),
         ],
       ),

@@ -292,7 +292,9 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
     if (_loading) return const Center(child: CircularProgressIndicator());
 
     return ListenableBuilder(
-      listenable: player.currentSongNotifier,
+      // uiListenable（切歌/播放态/队列）：只订 currentSongNotifier 的话，
+      // 播放/暂停翻转不会重建，行内「播放中」指示会滞后。
+      listenable: player.uiListenable,
       builder: (context, _) {
         return Column(
           children: [
@@ -330,6 +332,7 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
                     return SongTile(
                       song: song,
                       isCurrentSong: isCurrent,
+                      isPlaying: isCurrent && player.isPlaying,
                       onTap: () => ServiceLocator.player.playFromList(
                         _songs,
                         startIndex: row.songIndex,

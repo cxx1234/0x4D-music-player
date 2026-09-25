@@ -94,6 +94,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
         break; // 文件夹动作属于音乐库页。
       case ShellAction.forceRescan:
         break; // 强制刷新属于音乐库页。
+      case ShellAction.openAbout:
+        break; // 关于页属于设置页。
     }
   }
 

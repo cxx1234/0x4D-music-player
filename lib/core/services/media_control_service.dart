@@ -5,6 +5,7 @@ import '../audio/now_playing_info.dart';
 import '../audio/platform_media_controls.dart';
 import '../database/database.dart';
 import '../utils/logger.dart';
+import 'playback_feedback_service.dart';
 import 'player_service.dart';
 
 /// Bridges the system media controls (media keys, Control Center, lock
@@ -19,6 +20,10 @@ import 'player_service.dart';
 class MediaControlService {
   final PlayerService _player;
   final PlatformMediaControls _controls;
+
+  /// 系统侧（媒体键 / 「正在播放」面板）来的播放控制经它转发：
+  /// 这两条入口在界面上没有对应控件，必须靠 HUD / 按钮脉冲才有反馈。
+  final PlaybackFeedbackService _feedback;
 
   StreamSubscription<MediaControlEvent>? _eventSub;
   Timer? _positionTimer;
@@ -36,7 +41,7 @@ class MediaControlService {
   /// 退化到不更新进度。
   bool _elapsedUnsupported = false;
 
-  MediaControlService(this._player, this._controls);
+  MediaControlService(this._player, this._controls, this._feedback);
 
   /// Registers with the system and starts listening.
   Future<void> initialize() async {
@@ -61,15 +66,15 @@ class MediaControlService {
   void _handleEvent(MediaControlEvent event) {
     switch (event) {
       case PlayEvent():
-        _player.play();
+        _feedback.play();
       case PauseEvent():
-        _player.pause();
+        _feedback.pause();
       case TogglePlayEvent():
-        _player.togglePlay();
+        _feedback.togglePlay();
       case NextEvent():
-        _player.next();
+        _feedback.next();
       case PreviousEvent():
-        _player.previous();
+        _feedback.previous();
       case SeekEvent(:final position):
         _player.seek(position);
     }

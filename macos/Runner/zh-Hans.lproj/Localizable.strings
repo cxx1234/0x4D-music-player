@@ -28,6 +28,11 @@
 "menu.modeSequential" = "顺序播放";
 "menu.modeRepeatAll" = "列表循环";
 "menu.modeShuffleAll" = "随机循环";
+"menu.sleepTimer" = "睡眠定时";
+"menu.sleepTimerMinutes" = "%d 分钟";
+"menu.sleepTimerEndOfTrack" = "播完当前曲目";
+"menu.sleepTimerEndOfQueue" = "播完当前播放列表";
+"menu.sleepTimerCancel" = "取消定时";
 
 /* 编辑菜单 */
 "menu.edit" = "编辑";
@@ -48,3 +53,4 @@
 
 /* 帮助菜单 */
 "menu.help" = "帮助";
+"menu.aboutApp" = "关于本软件";

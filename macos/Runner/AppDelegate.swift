@@ -12,6 +12,11 @@ class AppDelegate: FlutterAppDelegate {
     var isShuffled = false
     var repeatMode = "off"  // "off" | "one" | "all"
     var isTextEditing = false
+    // Flutter 侧有**控件级**聚焦节点（Tab 键盘导航 / 文本输入）——裸空格的
+    // 键等价此时应放行给 Flutter（激活聚焦控件），详见 applyMenuItemState。
+    var hasKeyboardFocus = false
+    var sleepTimerMode = "off"  // "off" | "duration" | "endOfTrack" | "endOfQueue"
+    var sleepTimerMinutes = 0  // duration 模式下当初设定的分钟数（勾选预设项用）
   }
 
   private var menuState = MenuState()
@@ -99,6 +104,9 @@ class AppDelegate: FlutterAppDelegate {
     menuState.isShuffled = (args["isShuffled"] as? Bool) ?? false
     menuState.repeatMode = (args["repeatMode"] as? String) ?? "off"
     menuState.isTextEditing = (args["isTextEditing"] as? Bool) ?? false
+    menuState.hasKeyboardFocus = (args["hasKeyboardFocus"] as? Bool) ?? false
+    menuState.sleepTimerMode = (args["sleepTimerMode"] as? String) ?? "off"
+    menuState.sleepTimerMinutes = (args["sleepTimerMinutes"] as? NSNumber)?.intValue ?? 0
     // 主动刷新所有菜单项（使能/标题/勾选随播放态即时同步）。
     refreshAllMenuItems()
   }
@@ -132,18 +140,27 @@ class AppDelegate: FlutterAppDelegate {
   ///
   /// ⚠️ 不要用 override NSWindow.performKeyEquivalent 兜底——会打断 AppKit 事件
   /// 链，导致 Esc 等键无限递归卡死。
+  ///
+  /// 修饰键必须**恰好**是 ⌘：`contains(.command)` 对 ⌘⇧. / ⌘⌥. 同样为真，会把
+  /// 它们也当成停止（CapsLock / Fn / 小键盘标志不影响语义，先剔除）。
   private func installKeyShortcutMonitor() {
     keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
       guard let self = self else { return event }
-      // 只关心 ⌘ + 句点键（keyCode 47）。Flutter 引擎会在 sendEvent 之前把 ⌘. 当
-      // "取消"(Escape) 拦截，这里在更早的 local monitor 层截住它。
-      guard event.modifierFlags.contains(.command), event.keyCode == 47 else { return event }
+      // 只关心「纯 ⌘ + 句点键」（keyCode 47）。Flutter 引擎会在 sendEvent 之前把
+      // ⌘. 当"取消"(Escape) 拦截，这里在更早的 local monitor 层截住它。
+      let modifiers = event.modifierFlags
+        .intersection(.deviceIndependentFlagsMask)
+        .subtracting([.capsLock, .function, .numericPad])
+      guard modifiers == .command, event.keyCode == 47 else { return event }
       // 先让菜单系统走标准匹配路径（performKeyEquivalent）：匹配成功时 AppKit 会
       // 自己高亮菜单栏并触发「停止」action（借用菜单系统的原生反馈）；失败再回退。
       if NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
         return nil // 菜单系统已消费并触发 action
       }
-      self.sendMenuAction("stop")
+      // 回退也要与菜单项使能一致：无曲目时「停止」不可点（否则会弹 HUD「已停止」）。
+      if self.menuState.hasTrack {
+        self.sendMenuAction("stop")
+      }
       return nil // 消费事件，避免继续派发给 Flutter
     }
   }
@@ -154,11 +171,26 @@ class AppDelegate: FlutterAppDelegate {
   @objc private func modeSequentialTapped(_ sender: Any?) { sendMenuAction("setPlayMode", value: "sequential") }
   @objc private func modeRepeatAllTapped(_ sender: Any?) { sendMenuAction("setPlayMode", value: "repeatAll") }
   @objc private func modeShuffleAllTapped(_ sender: Any?) { sendMenuAction("setPlayMode", value: "shuffleAll") }
+
+  /// 睡眠定时（子菜单项共用）：预设分钟项用 `tag` 传分钟数，其余项用
+  /// `representedObject` 传模式/取消字符串。
+  @objc private func sleepTimerTapped(_ sender: Any?) {
+    guard let menuItem = sender as? NSMenuItem else { return }
+    if let value = menuItem.representedObject as? String {
+      sendMenuAction("sleepTimer", value: value)
+    } else {
+      sendMenuAction("sleepTimer", value: menuItem.tag)
+    }
+  }
   @objc private func openSettingsTapped(_ sender: Any?) { sendMenuAction("openSettings") }
   @objc private func newPlaylistTapped(_ sender: Any?) { sendMenuAction("newPlaylist") }
   @objc private func importFolderTapped(_ sender: Any?) { sendMenuAction("importFolder") }
   @objc private func importPlaylistTapped(_ sender: Any?) { sendMenuAction("importPlaylist") }
   @objc private func exportPlaylistTapped(_ sender: Any?) { sendMenuAction("exportPlaylist") }
+
+  /// 帮助 ›「关于本软件」：打开应用内的关于页（版本 / 开源许可 / 仓库链接）。
+  /// 系统标准的「关于 %@」面板仍在 App 菜单里，两者并存。
+  @objc private func openAboutTapped(_ sender: Any?) { sendMenuAction("openAbout") }
 
   // MARK: - 菜单校验（使能 / 标题 / 勾选）
 
@@ -173,11 +205,14 @@ class AppDelegate: FlutterAppDelegate {
   private func applyMenuItemState(_ menuItem: NSMenuItem) -> Bool {
     switch menuItem.action {
     case #selector(playPauseTapped(_:)):
-      // 播放/暂停标题随播放态切换；文本编辑时禁用（空格快捷键让给文本框）。
+      // 播放/暂停标题随播放态切换；文本编辑 / 有控件持有键盘焦点时禁用。
+      // 裸空格是「激活当前聚焦控件」的通用键（Flutter 侧 ActivateIntent，与
+      // Enter 一致），菜单项被禁用后 AppKit 的键等价匹配会自动放行给 Flutter；
+      // 没有聚焦控件时空格仍是播放/暂停（Apple Music 习惯）。
       menuItem.title = menuState.isPlaying
         ? NSLocalizedString("menu.pause", comment: "Pause")
         : NSLocalizedString("menu.play", comment: "Play")
-      return menuState.hasTrack && !menuState.isTextEditing
+      return menuState.hasTrack && !menuState.isTextEditing && !menuState.hasKeyboardFocus
     case #selector(previousTapped(_:)), #selector(nextTapped(_:)):
       // 文本编辑时禁用 ⌘←/⌘→（让给文本框的“行首/行尾”）。
       return menuState.hasTrack && !menuState.isTextEditing
@@ -197,6 +232,29 @@ class AppDelegate: FlutterAppDelegate {
     case #selector(modeShuffleAllTapped(_:)):
       menuItem.state =
         (menuState.repeatMode == "all" && menuState.isShuffled) ? .on : .off
+      return menuState.hasTrack
+    case #selector(sleepTimerTapped(_:)):
+      // 「取消定时」只在有定时时可点；其余项要求有曲目（没歌时设定无意义）。
+      if let value = menuItem.representedObject as? String {
+        switch value {
+        case "endOfTrack":
+          menuItem.state = menuState.sleepTimerMode == "endOfTrack" ? .on : .off
+          return menuState.hasTrack
+        case "endOfQueue":
+          menuItem.state = menuState.sleepTimerMode == "endOfQueue" ? .on : .off
+          return menuState.hasTrack
+        case "cancel":
+          menuItem.state = .off
+          return menuState.sleepTimerMode != "off"
+        default:
+          return false
+        }
+      }
+      // 预设分钟项（tag = 分钟数）：与当初设定的时长一致时打勾。
+      let isActive =
+        menuState.sleepTimerMode == "duration"
+        && menuState.sleepTimerMinutes == menuItem.tag
+      menuItem.state = isActive ? .on : .off
       return menuState.hasTrack
     default:
       return true
@@ -416,6 +474,67 @@ class AppDelegate: FlutterAppDelegate {
     playModeItem.submenu = playModeMenu
     menu.addItem(playModeItem)
 
+    menu.addItem(.separator())
+    menu.addItem(sleepTimerSubmenuItem())
+
+    item.submenu = menu
+    return item
+  }
+
+  /// 睡眠定时子菜单：N 分钟 / 播完当前曲目 / 播完当前播放列表 / 取消定时。
+  ///
+  /// ⚠️ 预设分钟数必须与 Dart 侧 `SleepTimerButton.presets` 保持一致（两处各列一份，
+  /// 改一处要记得改另一处）；Dart 按"当初设定的分钟数"回推勾选态。
+  private func sleepTimerSubmenuItem() -> NSMenuItem {
+    let title = NSLocalizedString("menu.sleepTimer", comment: "Sleep Timer")
+    let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+    let menu = NSMenu(title: title)
+
+    for minutes in [5, 10, 15, 30, 45, 60, 90] {
+      let entry = NSMenuItem(
+        title: String(
+          format: NSLocalizedString("menu.sleepTimerMinutes", comment: "N Minutes"),
+          minutes
+        ),
+        action: #selector(sleepTimerTapped(_:)),
+        keyEquivalent: ""
+      )
+      entry.tag = minutes
+      entry.target = self
+      menu.addItem(entry)
+    }
+
+    menu.addItem(.separator())
+
+    let endOfTrack = NSMenuItem(
+      title: NSLocalizedString("menu.sleepTimerEndOfTrack", comment: "End of Track"),
+      action: #selector(sleepTimerTapped(_:)),
+      keyEquivalent: ""
+    )
+    endOfTrack.representedObject = "endOfTrack"
+    endOfTrack.target = self
+    menu.addItem(endOfTrack)
+
+    let endOfQueue = NSMenuItem(
+      title: NSLocalizedString("menu.sleepTimerEndOfQueue", comment: "End of Playlist"),
+      action: #selector(sleepTimerTapped(_:)),
+      keyEquivalent: ""
+    )
+    endOfQueue.representedObject = "endOfQueue"
+    endOfQueue.target = self
+    menu.addItem(endOfQueue)
+
+    menu.addItem(.separator())
+
+    let cancel = NSMenuItem(
+      title: NSLocalizedString("menu.sleepTimerCancel", comment: "Cancel Timer"),
+      action: #selector(sleepTimerTapped(_:)),
+      keyEquivalent: ""
+    )
+    cancel.representedObject = "cancel"
+    cancel.target = self
+    menu.addItem(cancel)
+
     item.submenu = menu
     return item
   }
@@ -564,6 +683,15 @@ class AppDelegate: FlutterAppDelegate {
     let title = NSLocalizedString("menu.help", comment: "Help")
     let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
     let menu = NSMenu(title: title)
+
+    let about = NSMenuItem(
+      title: NSLocalizedString("menu.aboutApp", comment: "About This App"),
+      action: #selector(openAboutTapped(_:)),
+      keyEquivalent: ""
+    )
+    about.target = self
+    menu.addItem(about)
+
     item.submenu = menu
     return item
   }
@@ -644,7 +772,13 @@ class AppDelegate: FlutterAppDelegate {
   }
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
-    let controller = mainFlutterWindow?.contentViewController as! FlutterViewController
+    // 不用 `as!`：窗口 / 根控制器类型变化时会在启动阶段直接崩，绕过 Flutter 侧
+    // 的启动错误页。取不到就跳过原生通道注册（应用仍可作为普通播放器使用）。
+    guard let controller = mainFlutterWindow?.contentViewController as? FlutterViewController else {
+      NSLog("[0x4D] contentViewController is not a FlutterViewController; "
+        + "menu/sandbox/system-accent channels not registered")
+      return
+    }
 
     // 程序化主菜单（文案见 en/zh-Hans.lproj/Localizable.strings）+ 菜单通道。
     configureMenuChannel(binaryMessenger: controller.engine.binaryMessenger)

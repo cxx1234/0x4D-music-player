@@ -14,8 +14,9 @@ import 'audio_engine.dart';
 ///
 /// * **释放模式**：用 `ReleaseMode.stop` 而非默认的 `ReleaseMode.release`
 ///   —— 后者在播完后会释放资源并清空 source，导致"已加载"状态失真。
-/// * **完成事件**：`ReleaseMode.loop` 下 `onPlayerComplete` 仍会触发，因此
-///   单曲循环期间主动过滤，避免调用方被误导为"播完了"。
+/// * **完成事件**：`ReleaseMode.loop` 下 `onPlayerComplete` 仍会触发，这里**原样上报**
+///   ——"是否代表曲目结束"由调用方按重复模式判断（`PlayerService._onCompleted`
+///   在单曲循环时忽略它，而睡眠定时「播完当前曲」正好需要它）。
 /// * **seek 守卫**：没有 source 时引擎**不会**发送 `onSeekComplete`，而 Dart 侧
 ///   `seek()` 会等待该事件直到 30s 超时 —— 未加载时必须直接返回。
 /// * **进度节流**：默认 `FramePositionUpdater` 每帧调用一次原生方法（60 次/秒），
@@ -42,8 +43,8 @@ class AudioplayersEngine implements AudioEngine {
       (s) => _playingCtrl.add(s == PlayerState.playing),
     );
     _completionSub = _player.onPlayerComplete.listen((_) {
-      // 单曲循环由引擎原生循环完成，此时的 complete 事件不代表"曲目结束"。
-      if (_loopSingle) return;
+      // ⚠️ 不做单曲循环过滤：调用方（PlayerService）本就按重复模式忽略完成事件，
+      // 而睡眠定时「播完当前曲」需要在单曲循环下也拿到这个事件。
       _completionCtrl.add(null);
     });
     _errorSub = _player.eventStream.listen(

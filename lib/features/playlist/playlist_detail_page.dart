@@ -232,7 +232,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
         ],
       ),
       body: ListenableBuilder(
-        listenable: player.currentSongNotifier,
+        // uiListenable：切歌/播放态/队列变化均会重建列表高亮。
+        listenable: player.uiListenable,
         builder: (context, _) {
           return Column(
             children: [
@@ -325,6 +326,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       key: ValueKey(song.id),
       song: song,
       isCurrentSong: isCurrent,
+      isPlaying: isCurrent && ServiceLocator.player.isPlaying,
       onTap: () =>
           ServiceLocator.player.playFromList(_songs, startIndex: index),
       leading: Row(

@@ -111,7 +111,9 @@ Avoid adding dependencies for trivial functionality.
 
 One feature per commit.
 
-Write clear commit messages.
+Commit subjects use Conventional Commits with a scope; the type/scope
+vocabulary, the body rules and the test/analyze footer live in
+`docs/Commit-Conventions.md`.
 
 Examples:
 
@@ -120,6 +122,9 @@ feat(player): implement playback queue
 fix(scanner): ignore hidden folders
 
 refactor(audio): introduce AudioEngine abstraction
+
+Recurring platform, toolchain and framework traps belong in `docs/Pitfalls.md`,
+not in the commit body.
 
 ⸻
 
@@ -142,6 +147,8 @@ Before generating code, AI assistants should:
 2. Follow these Development Rules
 3. Stay within the current GitHub Issue
 4. Avoid implementing future roadmap items
+5. Check `docs/Pitfalls.md` before debugging build, platform or framework
+   problems - the trap may already be recorded there
 
 When uncertain, prefer asking for clarification instead of making assumptions.
 

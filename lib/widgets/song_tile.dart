@@ -12,8 +12,15 @@ class SongTile extends StatelessWidget {
   static const double kRowHeight = 72;
 
   final Song song;
+
+  /// 是否为当前播放歌曲：决定整行高亮（底色 + 主色标题/副标题/时长 + 行首指示）。
   final bool isCurrentSong;
+
+  /// 是否正在播放当前歌曲；**仅在 [isCurrentSong] 为 true 时生效**
+  /// （封面播放中遮罩 + 行尾音量图标）。各调用方都需传，否则同一首歌在不同
+  /// 页面的高亮表现会不一致。
   final bool isPlaying;
+
   final VoidCallback? onTap;
 
   /// 自定义行首组件；为 null 时显示封面。
@@ -112,7 +119,9 @@ class SongTile extends StatelessWidget {
               borderRadius: 6,
             ),
           ),
-          if (isPlaying)
+          // 播放中遮罩只在「当前歌曲 + 正在播放」时出现：非当前曲即使调用方
+          // 误传 isPlaying 也不会点亮，保证各列表高亮语义一致。
+          if (isCurrentSong && isPlaying)
             ClipRRect(
               borderRadius: BorderRadius.circular(6),
               child: Container(
@@ -197,7 +206,8 @@ class SongTile extends StatelessWidget {
         children: [
           if (showCurrentIndicator && isCurrentSong)
             Padding(
-              padding: const EdgeInsets.only(right: 8),
+              // 与右侧时长文本拉开间距（原 8 太贴近，视觉上像连在一起）
+              padding: const EdgeInsets.only(right: 12),
               child: Icon(
                 isPlaying ? Icons.volume_up_rounded : Icons.pause_rounded,
                 size: 18,

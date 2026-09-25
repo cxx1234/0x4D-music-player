@@ -303,6 +303,8 @@ class _PlayerPageState extends State<PlayerPage> {
                 theme: theme,
                 onSeek: _viewModel.seek,
                 compact: narrow,
+                // 快捷键/媒体键切歌、播放暂停时让对应按钮也亮一下。
+                pulses: ServiceLocator.feedback.pulses,
               );
             },
           ),

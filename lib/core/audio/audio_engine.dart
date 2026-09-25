@@ -96,6 +96,9 @@ abstract class AudioEngine {
   Stream<bool> get playingStream;
 
   /// 单曲**自然播完**（切歌 / 暂停 / 释放**不会**触发）。
+  ///
+  /// 单曲循环（[setLoopSingle]）下**每一遍结束仍会上报**：调用方需按重复模式
+  /// 自行决定是否推进队列（`PlayerService` 已处理）。
   Stream<void> get completionStream;
 
   /// 加载 / 播放 / 跳转失败。
