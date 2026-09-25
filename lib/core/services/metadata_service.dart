@@ -18,7 +18,10 @@ import '../utils/logger.dart';
 ///
 /// 批量解析（[parseAll]）采用**受限并发 worker 池**：
 /// - 并发数 = CPU 核数，钳制在 [1, _kMaxConcurrency]；
-/// - 每个 worker 循环取下一个文件单独 [Isolate.run] 解析；
+/// - 文件按并发数切成 chunk，**每 chunk 一个常驻 worker isolate**
+///   （`Isolate.spawn`）顺序解析 —— isolate 启动开销远大于单文件解析，
+///   必须靠 chunk 摊薄；
+/// - worker 每完成一个文件就通过 [SendPort] 上报，主 isolate 按下标归位结果；
 /// - 进度**节流推送**：worker 只累加计数，主 isolate 每 100ms 推送一次，
 ///   避免每个文件都触发 UI rebuild（400 次 -> ~10 次/秒）；
 /// - 返回的 [ScannedSong] 是纯数据（含 Uint8List 封面），可跨 isolate 发送。
@@ -51,10 +54,11 @@ class MetadataService {
 
   /// Parses metadata for multiple files with bounded concurrency.
   ///
-  /// 并发 worker 池：并发数 = CPU 核数（钳制 [1, _kMaxConcurrency]），每个
-  /// worker 循环取下一个文件单独 [Isolate.run] 解析。进度**节流**：worker 只
-  /// 累加计数，主 isolate 每 100ms 推送一次 [onProgress]，扫描期间不再逐文件
-  /// 触发 UI rebuild。
+  /// 并发 worker 池：并发数 = CPU 核数（钳制 [1, _kMaxConcurrency]），文件均分
+  /// 成 chunk 后**每 chunk 一个常驻 worker isolate**（`Isolate.spawn`）顺序解析，
+  /// 每个文件完成即通过 [SendPort] 上报；结果按原始下标归位（与完成顺序无关）。
+  /// 进度**节流**：主 isolate 每 100ms 推送一次 [onProgress]，扫描期间不再逐
+  /// 文件触发 UI rebuild。
   Future<(List<ScannedSong>, List<String>)> parseAll(
     List<String> filePaths, {
     void Function(int processed, int total, String currentFile)? onProgress,
@@ -119,20 +123,27 @@ class MetadataService {
       }
     });
 
+    // 保存 worker 句柄：正常路径下 worker 跑完自己退出，但异常路径（spawn 失败
+    // 等）会留下仍在读文件的 isolate，必须在 finally 里回收。
+    final workers = <Isolate>[];
+
     try {
       for (var ci = 0; ci < chunks.length; ci++) {
-        await Isolate.spawn(
-          _batchWorker,
-          (
+        workers.add(
+          await Isolate.spawn(_batchWorker, (
             sendPort: receivePort.sendPort,
             paths: chunks[ci],
             startIndex: ci * chunkSize,
-          ),
+          )),
         );
       }
       await doneCompleter.future;
     } finally {
       progressTimer.cancel();
+      // 先停 worker 再关端口；已自行结束的 worker 上 kill 是 no-op。
+      for (final worker in workers) {
+        worker.kill(priority: Isolate.immediate);
+      }
       if (!portClosed) receivePort.close();
     }
 
@@ -179,12 +190,6 @@ class MetadataService {
   }
 }
 
-/// 在后台 isolate 解析单个文件；失败返回 null。
-///
-/// 必须是**顶层函数**：这样 [Isolate.run] 的闭包只捕获可发送的参数（String），
-/// 不会携带外层作用域的不可发送对象（如 UI 进度回调 -> widget 树 ->
-/// AsyncCompleter），避免抛 `Illegal argument in isolate message:
-/// object is unsendable`。
 /// 批量 isolate 的逐文件结果消息。
 typedef _BatchMessage = ({int index, String path, ScannedSong? song});
 
@@ -207,11 +212,7 @@ void _batchWorker(
     } catch (_) {
       // 具体异常由主 isolate 汇总时统一记 warning（isolate 内不调用 AppLogger，
       // 避免依赖 Flutter 框架的日志实现跨 isolate 出错）。
-      msg.sendPort.send((
-        index: msg.startIndex + i,
-        path: path,
-        song: null,
-      ));
+      msg.sendPort.send((index: msg.startIndex + i, path: path, song: null));
     }
   }
 }

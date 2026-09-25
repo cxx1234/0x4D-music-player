@@ -56,6 +56,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   window structure there would have crashed during launch, before the Flutter startup
   error page could appear; the app now comes up without the native menu / sandbox
   channels instead and says so on the console
+- Scanning no longer leaves background workers behind when a metadata batch has to
+  abort part-way (for example when a worker fails to start): the worker handles are
+  now kept and shut down as soon as the batch finishes or throws
 
 ## [0.2.5] - 2026-09-20
 
