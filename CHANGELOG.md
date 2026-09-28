@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Pausing right after picking a song no longer leaves audio playing while the UI,
+  the menu title and the macOS Now Playing rate all say "paused". The load window
+  (`setSourceDeviceFile` + `getDuration`) is a real await, so the resume after it
+  now re-checks the play intent instead of starting unconditionally
+- The sleep timer can be cancelled during its five-second fade-out. The state used
+  to be cleared the moment the countdown hit zero and only then begin fading, so
+  the "cancel" entry vanished from both the player-bar menu and the native menu,
+  and a play request in that window was undone by the fade-out's own trailing
+  pause. The state now stays active behind a `fading` flag until the fade really
+  ends, cancelling restores the volume immediately, and a new play request aborts
+  the fade instead of fighting it
+- The sleep-timer countdown measures against a deadline instead of subtracting one
+  tick per tick, so a throttled timer or a sleeping machine no longer stretches
+  "30 minutes" into an arbitrary wait. The "paused" notice is also posted only
+  once playback actually stopped, not the moment the fade begins
+- Media keys survive a native registration failure: `MediaControlService.setup` is
+  wrapped in a try/catch like the menu and notification channels, so a startup
+  race reports "media keys unavailable" instead of ending on the error page
+- A failed menu-state push no longer caches its snapshot, so enabling, titles and
+  checkmarks are retried on the next push instead of silently staying at the
+  native defaults
+- Notification album-art copies are reused when the source has not changed, and
+  copies older than a week are cleaned up with the next copy. The throwaway copies
+  directory used to grow with the library and re-copied whole covers on every
+  track change
+- Restoring the window from a notification that fails now logs a warning instead
+  of swallowing the error, and the "stop" HUD reads "已停止 · 保留队列" to match
+  what `stopPlayback` does (queue and current track kept)
+
 ## [0.2.6] - 2026-09-21
 
 ### Added

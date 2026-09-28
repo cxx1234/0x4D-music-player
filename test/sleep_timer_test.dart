@@ -224,6 +224,65 @@ void main() {
     expect(engine.pauseCalls, 0);
   });
 
+  test('淡出期间取消定时：立即还原音量、保留播放，且不弹「已暂停」', () async {
+    await player.playFromList([_song(1)]);
+
+    // 淡出用 2 秒：首轮降音量在 200ms 后发生，600ms 时必然已在淡出中
+    // （窗口太窄会与测试机的调度延迟抖成临界）。
+    final timer = makeTimer(fade: const Duration(seconds: 2));
+    timer.startForDuration(const Duration(milliseconds: 100));
+
+    // 进入淡出：音量已被压低，但状态必须**仍是激活的** —— 否则取消入口
+    // （播放条按钮 / 原生菜单项）会在这几秒里凭空消失，用户无法中断。
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    expect(engine.volume, lessThan(1.0), reason: '已在淡出中');
+    expect(timer.isActive, isTrue, reason: '淡出期间必须保持激活，取消入口不能消失');
+    expect(timer.state.value?.fading, isTrue);
+
+    timer.cancel();
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+
+    expect(timer.isActive, isFalse);
+    expect(engine.volume, 1.0, reason: '取消必须还原音量（否则下次播放是静音）');
+    expect(player.isPlaying, isTrue, reason: '取消后应继续播放');
+    expect(engine.pauseCalls, 0, reason: '取消后不得再被淡出暂停');
+    expect(timer.takeNotice(), isNull, reason: '取消不是「到点」，不该发「已暂停」');
+  });
+
+  test('淡出期间用户起播（媒体键路径）：放弃定时，不被尾部 pause 掐掉', () async {
+    await player.playFromList([_song(1)]);
+
+    final timer = makeTimer(fade: const Duration(seconds: 2));
+    timer.startForDuration(const Duration(milliseconds: 100));
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    expect(engine.volume, lessThan(1.0), reason: '已在淡出中');
+
+    // 媒体键 / 系统「正在播放」面板的 Play 走的就是 PlayerService.play()。
+    await player.play();
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+
+    expect(player.isPlaying, isTrue, reason: '用户起播后不得再被淡出收尾暂停');
+    expect(engine.pauseCalls, 0);
+    expect(engine.volume, 1.0, reason: '音量必须还原');
+    expect(timer.isActive, isFalse, reason: '被用户起播接管 → 定时状态收回');
+    expect(timer.takeNotice(), isNull, reason: '这不是「到点暂停」，不该发提示');
+  });
+
+  test('倒计时按真实时间推进：剩余时长与 deadline 对齐', () async {
+    final timer = makeTimer(tick: const Duration(milliseconds: 20));
+    timer.startForDuration(const Duration(milliseconds: 400));
+
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final remaining = timer.remaining;
+    expect(remaining, isNotNull);
+    expect(
+      remaining!,
+      lessThan(const Duration(milliseconds: 200)),
+      reason: '剩余应按真实经过时间减少（而非每次 tick 固定减一个步长）',
+    );
+    timer.cancel();
+  });
+
   test('剩余时间格式化', () {
     expect(
       formatSleepTimerRemaining(const Duration(minutes: 5, seconds: 9)),

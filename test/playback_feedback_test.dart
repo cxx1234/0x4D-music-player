@@ -100,7 +100,7 @@ void main() {
     expect(hud.message?.text, '播放中');
   });
 
-  test('停止：提示「已停止」且不发控件脉冲（界面上没有停止按钮）', () async {
+  test('停止：提示「已停止 · 保留队列」且不发控件脉冲（界面上没有停止按钮）', () async {
     player.setQueue([_song(1)]);
     await feedback.play();
 
@@ -109,8 +109,12 @@ void main() {
 
     await feedback.stop();
 
-    expect(hud.message?.text, '已停止');
-    expect(player.currentSong, isNull, reason: '停止会清空队列，底栏随即变成未在播放');
+    expect(hud.message?.text, '已停止 · 保留队列');
+    expect(
+      player.currentSong?.id,
+      1,
+      reason: 'stopPlayback 保留当前曲目与队列（清空队列的是 stop）',
+    );
     expect(pulseCount, 0, reason: '没有可点亮的停止控件，只靠 HUD');
   });
 
@@ -229,8 +233,9 @@ class _StubPlayer extends PlayerService {
 
   @override
   Future<void> stopPlayback() async {
-    _songs.clear();
-    _index = 0;
+    // 与真实 [PlayerService.stopPlayback] 一致：**保留队列与当前曲目**，只把
+    // 播放停掉（真实实现另会把播放位置归零，stub 没有位置概念）。
+    // 会清空队列的是 [PlayerService.stop]——那是「停止并清空」，不是本入口。
     _playing = false;
   }
 

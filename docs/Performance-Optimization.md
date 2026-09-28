@@ -120,7 +120,8 @@
 - 位置：`media_control_service.dart:49-64`。⚠️ 原依据「与扫描 `_rebuildSequence` 并发」已失效（该方法随引擎迁移删除）；现并发载体为 `PlayerService._loadCurrent`——已加代际守卫（5.6 ✅），剩余风险为连击时的重复下发。
 - 改法：给引擎操作加操作串行/统一入口。
 
-### 4.7 🆕² 媒体控制 `setup()` 失败会把「媒体键不可用」升级成整屏启动失败页
+### 4.7 🆕² ~~媒体控制 `setup()` 失败会把「媒体键不可用」升级成整屏启动失败页~~ ✅（2026-09-29）
+- **已修**：`initialize()` 里只包住 `setup()` 一步 try/catch + `AppLogger.warning`，其余订阅照常建立。
 - 位置：`media_control_service.dart:48`（`await _controls.setup()` 无 try/catch）→ 冒泡到 `app.dart:47-58` 的 `ServiceLocator.initialize()` catch → `StartupErrorPage`（fatal）。
 - 背景：sandbox / menu / media_controls 三个通道都在同一次原生 `applicationDidFinishLaunching` 里注册，Dart 侧初始化先跑就会 `MissingPluginException`；而 `menu_service.dart:196-205`、`track_notification_service.dart:96-99` 都有兜底。
 - 改法：只包住 `setup()` 一步 try/catch + `AppLogger.warning`，其余订阅照常建立。
@@ -131,7 +132,8 @@
 - 改法：改订 `_player.uiListenable`（已覆盖推送用到的全部字段）+ `_sleepTimer.state`；`_isTextEditing` 结论在 Focus 变化时算一次并缓存。
 - 说明：与 5.5「整 service 订阅者可接受」不冲突 —— 5.5 的守卫只把 `position` 去重，本条的问题是**每次推送都做 UI 树查询**。
 
-### 4.9 🆕² `MenuService._push()` 在通道失败时仍记快照
+### 4.9 🆕² ~~`MenuService._push()` 在通道失败时仍记快照~~ ✅（2026-09-29）
+- **已修**：`catchError` 里清 `_lastPushed`，下次推送重试；`menu_service_test` 新增「推送失败后同一状态也会重推」用例。
 - 位置：`menu_service.dart:194-206`（`_lastPushed = state;` 在 `invokeMethod` 之前，`catchError` 只记日志）。
 - 后果：启动早期通道未就绪时那次推送丢失，菜单使能/标题/勾选保持原生默认值，直到状态再变化一次才纠正。
 - 改法：`catchError` 内 `_lastPushed = null;`，让下次推送重试。
@@ -162,7 +164,8 @@
 - `player_service.dart:497-505`：shuffle 下 `effectiveQueue` 每次访问 O(n) 重建 + `indexOf` → 缓存并按队列/顺序表失效。
 - 文档约束：单曲引擎无预加载 → 结构性曲间空白；应在 `docs/AudioEngine-Migration.md` 写明「不得用位置提前量切歌」，避免后人"修"出截尾。
 
-### 5.9 🆕² 加载窗口内按暂停会被静默推翻（高）
+### 5.9 🆕² ~~加载窗口内按暂停会被静默推翻（高）~~ ✅（2026-09-29）
+- **已修**：`_loadCurrent` 起播前复查播放意（`if (autoPlay && _shouldPlay)`）；`player_service_queue_test` 新增「加载窗口内按暂停」用例。
 - 位置：`player_service.dart:352`（`_shouldPlay = autoPlay`）→ `:361`（`await _engine.load(...)`）→ `:362`（`if (autoPlay) await _engine.play()`，不复查用户意图）。
 - 场景：audioplayers 的 `load()`（`setSourceDeviceFile` + `getDuration`）是真实等待窗口（慢盘/大文件更久）；用户「点歌 → 立刻点暂停」时 `pause()` 只把 `_shouldPlay` 置 false，加载返回后第 362 行仍起播。
 - 后果：`isPlaying`（= `_shouldPlay`）为 false 但声音在放 —— 播放页/底栏图标、菜单「播放/暂停」标题、Now Playing 的 rate 全显示「已暂停」，再点一次才恢复一致。
@@ -204,37 +207,43 @@
 
 ## 8. 睡眠定时 / 通知 / HUD 反馈（2026-09-22 审查新增）
 
-### 8.1 🆕² 睡眠定时到点的 5 秒淡出期间无法取消，且「按播放」会被再次暂停（高）
+### 8.1 🆕² ~~睡眠定时到点的 5 秒淡出期间无法取消，且「按播放」会被再次暂停（高）~~ ✅（2026-09-29）
+- **已修**：新增 `SleepTimerState.fading`，淡出期间状态保持激活（取消入口不再消失）；`cancel()` 去掉早退并无条件 `cancelFadeOut()`；`PlayerService.play()` 主动中止淡出（不再被尾部 `pause` 摸掉）；状态在被用户起播接管时由 `_onPlayerChanged` 收回。
 - 位置：`sleep_timer_service.dart:203-209`（`_notify()` 先 `state.value = null` 再 `await _player.fadeOutAndPause(...)` — UI 立即认为「未激活」，实际还要响 5 秒）、`:135-141`（`cancel()` 首行 `if (!isActive && _timer == null) return;`，即使被调到也不会 `cancelFadeOut()`）。
 - 连带：`sleep_timer_button.dart:129-137`（「取消定时」项仅 `active` 时构建）、`AppDelegate.swift:230-232`（原生「取消」项读 `sleepTimerMode != "off"`）→ 淡出期间两个入口都消失/置灰。
 - 更糟：淡出期间用户点「播放」→ `togglePlay()` 因 `_shouldPlay == true` 走 `pause()`；用户再点一次播放后，`player_service.dart:723` 尾部的 `if (_shouldPlay) await pause()` 又把刚恢复的播放停掉（表现为「按播放没反应」）。
 - 改法：给状态加 `fading` 标志（淡出期间仍算 active，UI/原生菜单据此保留取消入口）；把 `cancelFadeOut()` 提到 `cancel()` 的早退判断之前；`fadeOutAndPause` 尾部的 `if (_shouldPlay) await pause()` 改为只在「本次淡出未被取消/未被重新起播」时执行。
 
-### 8.2 🆕² 倒计时按 tick 递减而非按 deadline
+### 8.2 🆕² ~~倒计时按 tick 递减而非按 deadline~~ ✅（2026-09-29）
+- **已修**：`startForDuration` 记 `_deadline`，每个 tick 用 `DateTime.now()` 差值算剩余（测试用 `tick: 20ms` 验证仍与真实时间对齐）。
 - 位置：`sleep_timer_service.dart:174-182`（`next = current!.remaining! - tickInterval`）。
 - 后果：定时器被节流或系统睡眠期间剩余时间不随真实时间推进（醒来仍剩原分钟数），且每次 tick 的调度误差持续累积 —— 与「定 30 分钟就是 30 分钟」的预期不符。
 - 改法：`startForDuration` 记 `deadline = DateTime.now().add(duration)`，每次 tick 用 `DateTime.now()` 差值算剩余。
 
-### 8.3 🆕² `notif_attachments/` 只增不减，且同一首歌反复切会重复拷贝
+### 8.3 🆕² ~~`notif_attachments/` 只增不减，且同一首歌反复切会重复拷贝~~ ✅（2026-09-29）
+- **已修**：拷贝前比对大小/mtime（相同则直接复用），并按 **7 天 TTL + 每小时一次节流**清理旧副本。
 - 位置：`track_notification_service.dart:158-176`（`_copyCoverForAttachment`）：每首歌把封面复制到 `Documents/notif_attachments/cover_<songId><ext>`，先 `delete` 再 `copy`。
 - 后果：① 长期使用按曲库规模持续占用沙箱磁盘，**没有任何清理策略**（`cleanupOrphanCovers` 只管 `covers/`）；② 来回切换同一首歌会反复 delete+copy 整份图片。
 - 改法：拷贝前比对文件大小/mtime，一致则跳过；在孤儿封面清理（或启动 quickSync）时同步清掉不在库中的 `cover_*` 副本。
 
-### 8.4 🆕² 淡出刚开始就提示「已暂停」，与听感不符
+### 8.4 🆕² ~~淡出刚开始就提示「已暂停」，与听感不符~~ ✅（2026-09-29）
+- **已修**：提示改到淡出真正结束之后发，且只在确实停下时发（被取消/被起播接管时不发）。
 - 位置：`sleep_timer_service.dart:206-209`（`_notify('睡眠定时结束，已暂停')` 在 `fadeOutAndPause` 之前）。
 - 改法：提示移到淡出结束之后发，或文案改为「睡眠定时结束，正在淡出…」。
 
-### 8.5 🆕² `PlaybackFeedbackService.stop()` 的注释/文案与实际行为不符
+### 8.5 🆕² ~~`PlaybackFeedbackService.stop()` 的注释/文案与实际行为不符~~ ✅（2026-09-29）
+- **已修**：注释改为「保留队列与当前曲目」，HUD 文案改「已停止 · 保留队列」；`_StubPlayer.stopPlayback` 也改成与真实实现一致（原来在测试里模拟的是「清空队列」）。
 - 位置：`playback_feedback_service.dart:112-127`（注释称「停止会清空队列，底栏随即变成未在播放」），实际调用 `PlayerService.stopPlayback()`（`player_service.dart:650-658`：保留队列与当前曲目，只归零位置）。
 - 后果：按 ⌘. 后底栏仍显示当前曲目，与注释/UI 约定不一致，后续维护容易被误判为 bug 或误改。
 - 改法：注释与 HUD 文案改为「已停止（保留队列，再播从头开始）」，或让 `stop()` 真正调用会清队列的 `PlayerService.stop()`。
 
-### 8.6 🆕² 通知点击唤回窗口的异常被静默吞掉
+### 8.6 🆕² ~~通知点击唤回窗口的异常被静默吞掉~~ ✅（2026-09-29）
+- **已修**：补 `AppLogger.warning('Notify', 'Failed to restore main window', e)`。
 - 位置：`track_notification_service.dart:262-270`（`catch (_) {}`）。
 - 后果：违反 `docs/ErrorHandling.md` §5「禁止静默」；用户点了横幅但窗口没出现时，日志里查不到痕迹。
 - 改法：`catch (e) => AppLogger.warning('Notify', 'Failed to restore main window', e)`。
 
-### 8.7 🆕² 通知「仅后台弹」与设置项文案的语义落差（低）
+### 8.7 🆕² ~~通知「仅后台弹」与设置项文案的语义落差（低）~~ ✅（设置项副标题已写明「只应用在后台/关窗时弹出，前台不打扰」）
 - 位置：`track_notification_service.dart:118-131`（`presentBanner/presentList/presentAlert = false`，刻意设计）+ `settings_page.dart:331-339`（设置项「切歌时显示系统通知」）。
 - 说明：前台不弹是有意为之（窗口可见时用户本就看到底栏），但设置项名没写「仅在后台」，容易被当成「开关失效」。
 - 改法：设置项副标题补「仅在窗口不在前台时显示」，或在 `docs/UI-Rules.md` 写明该策略。
@@ -300,37 +309,20 @@
 - ~~数据 / 状态风险：2.9、2.10、3.10、5.4、5.8~~ —— 2026-09-17 ✅
 - ~~发布清单：R1、R2、R3、R4、R6、R9、R11、R12~~ —— 2026-09-17 ✅
 - ~~键盘 / 原生菜单：9.2、9.3、9.5、10.1~~ —— 2026-09-23 ✅（另附 4.8 的「每次推送都查 UI 树」缓存化）
+- ~~审查第一批：5.9、8.1、8.2、8.3、8.4、8.5、8.6、4.7、4.9~~ —— 2026-09-29 ✅（8.7 的设置项文案同日补）
 
-### 11.2 第 1 批 — 用户可见行为（建议下一轮直接做）
+### 11.2 第 1 批 — 用户可见行为 ✅ 2026-09-29 完成
 
-同一主题都是「状态与 UI 说法不一致」，改动小、无架构风险：
-
-1. **8.1** 睡眠定时淡出期间无法取消 + 「按播放」被再次暂停（S）
-2. **5.9** 加载窗口内按暂停被静默推翻（S，`:362` 加一行守卫）
-3. ~~**9.2** 原生空格键吞掉非文本框的空格（S）~~ ✅ 2026-09-23（与 §10.1 的 Tab 退出口同一批，见 11.1）
-4. **4.7** 媒体控制 `setup()` 失败升级成整屏启动失败页（S）
-5. **9.4** 单曲循环时播放模式子菜单勾选不同步（S）
-6. **4.9** 菜单推送失败后不再重试（S）
-7. **8.4 / 8.5 / 8.6** 淡出提示文案、`stop()` 注释、静默 catch（S）
-
-> 建议：8.1 要引入 `fading` 状态，8.2/8.4 都动 `sleep_timer_service.dart` —— 三者放同一次提交，避免反复改同一个文件。
+见 11.1。唯一未动的仍是 **9.4**（单曲循环时原生「播放模式」勾选），按你的决定继续暂缓 —— 改动很小，只差通道多推一个 `baseRepeatMode`。
 
 ### 11.3 第 2 批 — 有可测收益的性能项
 
 1. **9.1** 原生主线程解码整张封面（M，目前唯一可能明显掉帧的原生热点）
-2. **4.8** 菜单每 ~200ms 的 UI 树祖先遍历（S，改订 `uiListenable` + 缓存判定）
-3. **8.3** 通知封面副本的重复拷贝与堆积（M）
-4. **2.4 / 2.7** 两处全行物化查询改 `selectOnly` 投影（S）
-5. **3.5 / 3.7 / 3.8** 扫描与孤儿清理的批量 / 短路（M）
-6. **1.5 / 1.6** 底栏填充层与睡眠按钮的重建粒度（S）
-7. **6.2 / 6.3** 歌词外部 `.lrc` 缓存与延迟加载（S）
-8. **4.2 / 5.3** 日志批量 flush、播放位置独立落盘（S~M）
-9. **2.5 / 3.6 / 3.11 / 4.3 / 5.5 / 5.7b** 残余小项（S），可并成一次「清理批次」提交
+2. **4.8（剩余）** 菜单订阅面改订 `uiListenable`（S；每次推送的 UI 树查询已缓存化 ✅ 2026-09-23）
 
 ### 11.4 第 3 批 — 一致性收尾（低风险顺手）
 
-- **8.2** 倒计时按 deadline 计算、**8.7** 「仅后台弹」文案、~~**9.3** `⌘.` 修饰键严格判断~~ ✅（2026-09-23）
-- ~~**9.5** `as!` 强转改 `guard let`~~ ✅（2026-09-23）、**4.10** `DetailTopBar` 通道兜底、**5.10** 播放态双源
+- **4.10** `DetailTopBar` 通道兜底、**5.10** 播放态双源（把其他 notifier 收口到 `_shouldPlay`）
 - **2.6** 删除死 watch 流、**2.11 / 2.12** 初始化重试释放与扫描反馈、**3.11** `restoredFiles` 的 isolate 归并
 
 ### 11.5 第 4 批 — 第二轮架构（需专门时间窗）

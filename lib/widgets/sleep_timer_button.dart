@@ -74,10 +74,14 @@ class SleepTimerButton extends StatelessWidget {
                     size: 20,
                     color: color,
                   ),
-                  if (active && !compact && remaining != null) ...[
+                  if (active && !compact) ...[
                     const SizedBox(width: 4),
                     Text(
-                      formatSleepTimerRemaining(remaining),
+                      state.fading
+                          ? '淡出中'
+                          : formatSleepTimerRemaining(
+                              remaining ?? Duration.zero,
+                            ),
                       style: theme.textTheme.bodySmall?.copyWith(color: color),
                     ),
                   ],
@@ -131,12 +135,9 @@ class SleepTimerButton extends StatelessWidget {
         PopupMenuItem<String>(
           value: 'cancel',
           // 倒计时模式下把剩余时间写在取消项里：菜单里的选项无法"勾选"一个
-          // 正在递减的值，这是唯一能显示进度的位置。
-          child: Text(
-            state.remaining != null
-                ? '取消定时（${formatSleepTimerRemaining(state.remaining!)}）'
-                : '取消定时（${sleepTimerLabel(state)}）',
-          ),
+          // 正在递减的值，这是唯一能显示进度的位置（淡出期间显示「正在淡出…」，
+          // 提示用户此刻取消还来得及）。
+          child: Text('取消定时（${sleepTimerLabel(state)}）'),
         ),
       ],
     ];
@@ -145,9 +146,10 @@ class SleepTimerButton extends StatelessWidget {
 
 /// 睡眠定时状态的可读文案（菜单/tooltip 用）。
 String sleepTimerLabel(SleepTimerState state) => switch (state.mode) {
-  SleepTimerMode.duration => formatSleepTimerRemaining(
-    state.remaining ?? Duration.zero,
-  ),
+  SleepTimerMode.duration =>
+    state.fading
+        ? '正在淡出…'
+        : formatSleepTimerRemaining(state.remaining ?? Duration.zero),
   SleepTimerMode.endOfTrack => '播完当前曲目',
   SleepTimerMode.endOfQueue => '播完当前播放列表',
 };

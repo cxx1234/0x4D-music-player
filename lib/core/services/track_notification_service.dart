@@ -42,6 +42,17 @@ class TrackNotificationService {
   /// 固定通知 id：新歌**替换**上一条横幅，而不是在通知中心里越堆越多。
   static const int _notificationId = 1001;
 
+  /// 封面副本的保留时长：超过这个时间又没再被用到的副本会在下一次拷贝时删掉。
+  ///
+  /// 副本按曲目 id 命名、每张都是完整封面图，不清就会随曲库一直长（上千首歌
+  /// 就是几百 MB 沙箱磁盘）。7 天足够覆盖"这条横幅还挂在通知中心"的窗口。
+  static const Duration _attachmentTtl = Duration(days: 7);
+
+  /// 清理节流：挂在拷贝路径上，没必要每次切歌都扫一遍目录。
+  static const Duration _cleanupInterval = Duration(hours: 1);
+
+  DateTime? _lastAttachmentCleanup;
+
   /// 连续切歌的合并窗口：窗口期内只弹最后确定的当前曲，避免快速连点时刷屏。
   static const Duration _debounce = Duration(milliseconds: 300);
 
@@ -200,12 +211,56 @@ class TrackNotificationService {
       final ext = p.extension(coverPath);
       final name = 'cover_${song.id}${ext.isEmpty ? '.jpg' : ext}';
       final dest = File(p.join(dir.path, name));
+      // 已经拷过且源文件没变（封面换掉时大小/mtime 会变）→ 直接复用：
+      // 来回切同一首歌不该反复搬运整张 Hi-Res 封面。
+      if (await dest.exists() && await _sameFile(src, dest)) return dest.path;
       if (await dest.exists()) await dest.delete();
       await src.copy(dest.path);
+      await _cleanupAttachments(dir);
       return dest.path;
     } catch (e) {
       AppLogger.warning('Notify', 'Failed to prepare cover attachment', e);
       return null;
+    }
+  }
+
+  /// 粗略判断两个文件是否同源：大小相同且修改时间相差 1 秒内即视为同一份。
+  static Future<bool> _sameFile(File a, File b) async {
+    try {
+      final sa = await a.stat();
+      final sb = await b.stat();
+      return sa.size == sb.size &&
+          sb.modified.difference(sa.modified).abs() <
+              const Duration(seconds: 1);
+    } catch (e) {
+      // 读不到状态就当作不同（宁可多拷一次，不要用坏副本）。
+      return false;
+    }
+  }
+
+  /// 删除过期的封面副本（节流到 [_cleanupInterval] 一次）。
+  Future<void> _cleanupAttachments(Directory dir) async {
+    final now = DateTime.now();
+    final last = _lastAttachmentCleanup;
+    if (last != null && now.difference(last) < _cleanupInterval) return;
+    _lastAttachmentCleanup = now;
+    try {
+      final cutoff = now.subtract(_attachmentTtl);
+      var removed = 0;
+      await for (final entity in dir.list()) {
+        if (entity is! File) continue;
+        final stat = await entity.stat();
+        if (stat.modified.isBefore(cutoff)) {
+          await entity.delete();
+          removed++;
+        }
+      }
+      if (removed > 0) {
+        AppLogger.info('Notify', 'Removed $removed stale cover copies');
+      }
+    } catch (e) {
+      // 清理是尽力而为：失败不该影响本次通知。
+      AppLogger.warning('Notify', 'Failed to clean cover copies', e);
     }
   }
 
@@ -262,8 +317,10 @@ class TrackNotificationService {
   Future<void> _openPlayer() async {
     try {
       await _windowChannel.invokeMethod<void>('showMainWindow');
-    } catch (_) {
-      // 通道不可用（非 macOS / 初始化异常）时忽略：至少把页面打开。
+    } catch (e) {
+      // 通道不可用（非 macOS / 初始化异常）不影响打开页面，但必须留痕：
+      // 用户点了横幅、窗口却没起来时，日志是唯一的线索（禁止静默）。
+      AppLogger.warning('Notify', 'Failed to restore main window', e);
     }
     onOpenPlayer?.call();
   }
