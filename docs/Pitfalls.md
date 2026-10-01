@@ -146,8 +146,8 @@
   专辑页（大量 `Image.file` + `frameBuilder` 的 `AnimatedOpacity` 淡入 + `ClipRRect` +
   elevation 阴影）是重灾区：纹理上传/合成时序变化 → 透明帧与淡入被频繁看到。
 - **状态**：**未修**（等官方或改淡入实现）。提交 **flutter/flutter#191538**，官方在 Apple
-  Silicon 上无法复现，已转 Impeller 团队。最小复现：`test/impeller_flicker_repro.dart`
-  （`flutter run -d macos -t test/impeller_flicker_repro.dart`）。
+  Silicon 上无法复现，已转 Impeller 团队。最小复现：`test/demo/impeller_flicker_repro.dart`
+  （`flutter run -d macos -t test/demo/impeller_flicker_repro.dart`）。
 - **基线事实**：本项目 `macos/Runner/Info.plist` 保留 **`FLTEnableImpeller=false`**（走 Skia）
   —— 所以在本项目里跑复现 demo **是 Skia，不会闪**，要在干净 `flutter create` 项目里跑。
 - **验证方法**：临时删掉该 key 或加 `true`，`flutter run` 控制台会打印
