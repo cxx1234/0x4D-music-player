@@ -329,6 +329,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       song: song,
       isCurrentSong: isCurrent,
       isPlaying: isCurrent && ServiceLocator.player.isPlaying,
+      // 排序模式下关掉右键：行左槽已经是拖拽把手，再弹菜单只会打架。
+      contextMenuEnabled: !_reorderMode,
       onTap: () =>
           ServiceLocator.player.playFromList(_songs, startIndex: index),
       leading: Row(

@@ -328,3 +328,42 @@
   按行、宽度两组取大、长文案不溢出、宽度夹取、锚点宽度）、
   `test/menu_morph_route_test.dart`（4 例：向上/向下/翻转/顶部安全区）与
   `test/sleep_timer_test.dart`（15 例）。
+
+## 12. 鼠标右键（次级点击）菜单（2026-10-01）
+
+桌面端的右键菜单走 `lib/widgets/context_menu.dart`。**走哪套看控件形态，不看
+「右键」这个手势 —— 目标是「右键弹出来的东西和左键点那个按钮弹出来的长得一样」**：
+
+| 控件 | 右键菜单 | 位置 |
+|---|---|---|
+| 歌曲行（有行内三点按钮） | 直接调那个 `PopupMenuButton` 的 `showButtonMenu()` | 标题三点按钮处 |
+| 行状条目（队列行 / 歌手行 / 「我的收藏」条） | `showRowMenu` → **标准弹出菜单** `showMenu` | `rowMenuSlot`：行右内缘往左一个按钮位（16+40）、垂直居中 |
+| 网格卡片（专辑 / 播放列表） | `showCardMenu` → 容器变换（§11 那套） | 贴卡片底边的 12px 窄条 + `grow: up` |
+
+容器变换那一套的进场 / 退场从 `MenuMorphRoute` 的默认 320 / 220 调到了
+**240 / 180**（只在 [showCardMenu] 里，睡眠定时入口仍用默认值）：卡片长成面板
+不需要那么久，320ms 读起来是「慢」。
+
+- **为什么行状条目不用容器变换**：那里没有「按钮那个小矩形要长成面板」的叙事，
+  容器变换的进场（默认 320ms + 内容延后淡入）看起来比标准菜单慢一大截；而且
+  同一条队列行的左键弹菜单（如果有）也应该与右键一致。`showRowMenu` 的锚点算法
+  与 `PopupMenuButton` 内部完全相同（`Rect.fromRect(按钮矩形, overlay)`），
+  所以同一个位置用右键与用鼠标点三点，弹出来的一模一样。
+- **条目类型跟着走**：行状条目用 `PopupMenuEntry`（与 `SongTile.menuBuilder`
+  同类型，可以直接复用 `song_actions.dart` 那套菜单项工厂）；
+  容器变换菜单用 `MorphMenuEntry`。
+- **条目内容不为了右键另立一份**：有现成菜单的（播放列表卡片、歌曲行）原样复用；
+  新写的（专辑卡片、歌手行、队列行、我的收藏条）按「点击行/卡片本身已经做过的
+  事不重复列」裁 —— 点行就是播放/进详情，所以右键里不再放「播放」「打开详情」。
+- **排序 / 删除模式下关掉右键**：那些模式里行上的手势已经是拖拽 / 勾选。
+  `SongTile.contextMenuEnabled: false`（播放列表详情 `!_reorderMode`）、队列行
+  传 `!_deleteMode && !_reorderMode`。
+- 锚点由组件自己的 `onSecondaryTap` 回调交给调用方（`CardSurface` / `CoverCard` /
+  `SongTile` / `ListItemTile` 都带），**必须现取** —— 网格/列表滚过之后控件位置
+  就变了。`overlayRectOf` 对拿不到 `RenderBox` 的 context（Sliver 的 `itemBuilder`）
+  **安静返回 null**，调用方不弹菜单即可 —— 别再写 `as RenderBox?` 强转，那个会
+  抛类型错。
+- 回归测试：`test/context_menu_test.dart`（5 例：槽位几何、锚点换算、Sliver
+  返回 null、行菜单是标准弹出菜单、卡片菜单是容器变换，两者都回传值）、
+  `test/song_tile_context_menu_test.dart`（3 例：有菜单→打开同一个、无菜单→回调
+  给行 context、都没有→无事发生）。

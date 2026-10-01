@@ -7,7 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Right-click (secondary click) context menus on the desktop surfaces that carry
+  a set of actions. Which menu opens is decided by the control, not by the right
+  click, so the two agree: a row that already has a three-dot button opens *that*
+  menu (same position, same animation — the button's own `showButtonMenu()`), so
+  the five song-list call sites needed no change; row-shaped entries without a
+  button (queue rows, artist rows, the "favourites" bar in the playlists page)
+  use the standard popup menu anchored on the row's trailing slot, i.e. exactly
+  where a three-dot button would be; grid cards (album, playlist) use the
+  container-transform menu they already have for their three-dot and long press.
+  Entries do not repeat what a plain click already does — a row click plays or
+  opens, so the new menus hold only the *other* actions (queue rows get "remove
+  from queue", artist rows get "play all", the album card gets "play all / add to
+  queue"). Right-clicking is turned off while a list is in reorder or
+  multi-select mode, since the row gestures there are already drag and check
+
 ### Changed
+- The grid-card menus (album card, playlist card — three-dot, long press and
+  right click alike) grow open in 240ms instead of 320ms and close in 180ms
+  instead of 220ms. "The card unfolds into its options" does not need to take
+  that long; at 320ms it read as slow next to the plain popup menus. The scope is
+  `showCardMenu`, so the sleep-timer menu, which also uses the container
+  transform, keeps the default timing it was tuned with
 - Popup menus across the app ease out (`Curves.easeOutCubic`) instead of moving
   linearly. The framework's choreography spends the last third of its 300ms on
   the last few percent of the animated value, so a linear curve made the panel

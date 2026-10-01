@@ -13,8 +13,8 @@ import '../../core/utils/grid_layout.dart';
 import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
 import '../../widgets/card_surface.dart';
+import '../../widgets/context_menu.dart';
 import '../../widgets/cover_card.dart';
-import '../../widgets/menu_morph_route.dart';
 import '../../widgets/morph_menu.dart';
 import '../../widgets/page_toolbar.dart';
 import '../../widgets/search_empty_state.dart';
@@ -429,57 +429,23 @@ class _PlaylistPageState extends State<PlaylistPage> {
     ).showSnackBar(SnackBar(content: Text('已导出 ${content.count} 首歌曲')));
   }
 
-  /// 卡片菜单：右下角三点与长按共用，锚定**整张卡片**。
+  /// 卡片菜单：右下角三点、长按与鼠标右键**三处共用**，锚定整张卡片。
   ///
-  /// 用容器变换弹出（[MenuMorphRoute]）：卡片那个矩形连续长成选项面板，而不是
-  /// 在卡片旁边淡入 —— 与睡眠定时菜单同一套观感（见 `docs/UI-Rules.md` §11）。
+  /// 用容器变换弹出（`showCardMenu` → `MenuMorphRoute`）：卡片那个矩形连续长成
+  /// 选项面板，而不是在卡片旁边淡入 —— 与睡眠定时菜单同一套观感（见
+  /// `docs/UI-Rules.md` §11）。三处共用同一个函数，位置与动画才完全一致。
   Future<void> _showPlaylistMenu(
     Playlist playlist,
     BuildContext cardContext,
   ) async {
-    final box = cardContext.findRenderObject() as RenderBox?;
-    final overlayBox =
-        Overlay.of(cardContext).context.findRenderObject() as RenderBox?;
-    if (box == null || overlayBox == null) return;
+    // 锚点现取：网格滚动过之后卡片位置就变了（见 `context_menu.dart`）。
+    final cardRect = overlayRectOf(cardContext);
+    if (cardRect == null) return;
 
-    // 锚点要换算到 overlay 坐标（路由就插在它里面）。
-    final anchorRect =
-        overlayBox.globalToLocal(box.localToGlobal(Offset.zero)) & box.size;
-    final entries = _playlistEntries();
-
-    // 动画起点：贴在**卡片底边**的一条窄边（宽度不变）。配合 grow: up，面板底边
-    // 钉在卡片底边、高度往上填开 —— 起点直接给整张卡片的话，卡片（≈229 高）与
-    // 面板（208 高）几乎一样大，整段动画只剩底边往上收 + 淡入，看着像「卡片塌
-    // 下来」；收成一条窄边才读得出「填充」，而且卡片上半截（封面）还露着。
-    const stripHeight = 12.0;
-    final anchorStrip = Rect.fromLTWH(
-      anchorRect.left,
-      anchorRect.bottom - stripHeight,
-      anchorRect.width,
-      stripHeight,
-    );
-
-    final value = await Navigator.of(cardContext).push<String>(
-      MenuMorphRoute<String>(
-        anchorRect: anchorStrip,
-        grow: MenuMorphGrow.up,
-        // 宽高必须提前算准（终点矩形是算出来的，不能先布局再定位）。
-        // 宽度取**卡片自己的宽度**：面板与卡片严丝合缝，就是它翻开的。
-        panelSize: Size(
-          MorphMenuPanel.widthForAnchor(cardContext, anchorRect.width, entries),
-          MorphMenuPanel.heightFor(entries),
-        ),
-        // 起点取卡片的圆角与底色：看着就是这张卡片自己翻成了选项。
-        anchorShape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-        ),
-        panelShape: const RoundedRectangleBorder(
-          borderRadius: kMorphMenuRadius,
-        ),
-        anchorColor: Theme.of(cardContext).colorScheme.surfaceContainerLow,
-        builder: (context, close) =>
-            MorphMenuPanel(entries: entries, onSelected: close),
-      ),
+    final value = await showCardMenu<String>(
+      context: cardContext,
+      cardRect: cardRect,
+      entries: _playlistEntries(),
     );
     if (value != null && mounted) {
       await _handlePlaylistMenu(playlist, value);
@@ -498,6 +464,34 @@ class _PlaylistPageState extends State<PlaylistPage> {
       context,
     ).push(MaterialPageRoute(builder: (_) => const FavoritesPage()));
     await _viewModel.load();
+  }
+
+  /// 「我的收藏」固定卡的右键菜单：只有「播放」。
+  ///
+  /// 点卡片本身是打开收藏页，所以「播放」在这里不是重复项。这条虽然也是
+  /// `CardSurface`，但它长得像**一行**（图 + 标题 + 计数），所以菜单走行那套
+  /// （标准弹出菜单、锚在条目右端），与歌曲行的菜单一模一样，而不是网格卡片那种
+  /// 「从卡片底边长出来」。
+  Future<void> _showFavoritesMenu(BuildContext cardContext) async {
+    final cardRect = overlayRectOf(cardContext);
+    if (cardRect == null) return;
+
+    final value = await showRowMenu<String>(
+      context: cardContext,
+      rowRect: cardRect,
+      entries: const [PopupMenuItem(value: 'play', child: Text('播放'))],
+    );
+    if (value != 'play' || !mounted) return;
+
+    final songs = await ServiceLocator.songRepo.getFavoriteSongs();
+    if (!mounted) return;
+    if (songs.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('还没有收藏的歌曲')));
+      return;
+    }
+    ServiceLocator.player.playFromList(songs, startIndex: 0);
   }
 
   // ─── Search ─────────────────────────────────────────────
@@ -668,6 +662,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
                     subtitle: '${_viewModel.songCountFor(playlist)} 首歌曲',
                     onTap: () => _openDetail(playlist),
                     onLongPress: () => _showPlaylistMenu(playlist, cardContext),
+                    // 右键走同一个菜单：三种入口共用，位置与动画完全一致。
+                    onSecondaryTap: (ctx) => _showPlaylistMenu(playlist, ctx),
                     trailing: Tooltip(
                       message: '更多',
                       child: InkWell(
@@ -697,6 +693,9 @@ class _PlaylistPageState extends State<PlaylistPage> {
       padding: const EdgeInsets.all(16),
       child: CardSurface(
         onTap: _openFavorites,
+        // 右键只弹菜单（点击卡片本身才是打开收藏页），菜单只有「播放」——
+        // 与卡片组同一套观感（从卡片底边向上长出来）。
+        onSecondaryTap: _showFavoritesMenu,
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(

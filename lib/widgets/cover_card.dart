@@ -9,6 +9,8 @@ import 'card_surface.dart';
 /// - 底部文本块（标题 + 副标题）在左；可选 [trailing]（如三点菜单）位于文本区
 ///   右上角、与标题顶部对齐。
 /// - [onLongPress] 可选；菜单按钮放在 [trailing] 内，点击不会触发 [onTap]。
+/// - [onSecondaryTap] 可选：鼠标右键时回调（参数是卡片 context，供 `context_menu`
+///   换算锚点）。
 ///
 /// 使用：
 /// ```dart
@@ -28,6 +30,7 @@ class CoverCard extends StatelessWidget {
     this.trailing,
     required this.onTap,
     this.onLongPress,
+    this.onSecondaryTap,
   });
 
   /// 封面内容，通常传 `CachedAlbumArt(size: double.infinity)` 或 `PlaylistCover`。
@@ -48,6 +51,9 @@ class CoverCard extends StatelessWidget {
   /// 长按回调（可选）。
   final VoidCallback? onLongPress;
 
+  /// 鼠标右键（次级点击）回调，参数是卡片自己的 context（用于算菜单锚点）。
+  final void Function(BuildContext cardContext)? onSecondaryTap;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -56,6 +62,7 @@ class CoverCard extends StatelessWidget {
       child: CardSurface(
         onTap: onTap,
         onLongPress: onLongPress,
+        onSecondaryTap: onSecondaryTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

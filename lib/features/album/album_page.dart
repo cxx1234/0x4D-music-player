@@ -9,9 +9,11 @@ import '../../core/utils/grid_layout.dart';
 import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
 import '../../widgets/cached_album_art.dart';
+import '../../widgets/context_menu.dart';
 import '../../widgets/cover_card.dart';
 import '../../widgets/detail_header.dart';
 import '../../widgets/detail_top_bar.dart';
+import '../../widgets/morph_menu.dart';
 import '../../widgets/page_toolbar.dart';
 import '../../widgets/play_all_button.dart';
 import '../../widgets/search_empty_state.dart';
@@ -198,6 +200,7 @@ class _AlbumsPageState extends State<AlbumsPage> {
             title: album.name,
             subtitle: _albumSubtitle(album),
             onTap: () => _openAlbumDetail(context, album),
+            onSecondaryTap: (cardContext) => _showAlbumMenu(album, cardContext),
           );
         },
       ),
@@ -208,6 +211,43 @@ class _AlbumsPageState extends State<AlbumsPage> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => AlbumDetailPage(album: album)));
+  }
+
+  /// 专辑卡片的右键菜单：播放全部 / 添加到播放队列。
+  ///
+  /// 不设「打开详情」——点卡片本身就是打开详情，右键重列一遍是重复项。菜单同
+  /// 播放列表卡片那一套（从卡片底边向上长出来），两处观感一致。
+  Future<void> _showAlbumMenu(Album album, BuildContext cardContext) async {
+    final cardRect = overlayRectOf(cardContext);
+    if (cardRect == null) return;
+
+    // 顺序按误操作风险排（危险/少用的放上面），最常用的「播放全部」压在底边。
+    final value = await showCardMenu<String>(
+      context: cardContext,
+      cardRect: cardRect,
+      entries: const [
+        MorphMenuEntry('添加到播放队列', 'queue'),
+        MorphMenuEntry('播放全部', 'play'),
+      ],
+    );
+    if (value == null || !mounted) return;
+
+    final songs = await ServiceLocator.songRepo.getSongsByAlbum(album.id);
+    if (!mounted) return;
+    if (songs.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('专辑里没有可播放的歌曲')));
+      return;
+    }
+
+    switch (value) {
+      case 'play':
+        ServiceLocator.player.playFromList(songs, startIndex: 0);
+      case 'queue':
+        // 空队列时 addToQueue 会自动开始播放（与歌曲菜单同一入口语义）。
+        await ServiceLocator.player.addToQueue(songs);
+    }
   }
 }
 

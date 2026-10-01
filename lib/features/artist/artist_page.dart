@@ -9,6 +9,7 @@ import '../../core/utils/index_letters.dart';
 import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
 import '../../widgets/cached_album_art.dart';
+import '../../widgets/context_menu.dart';
 import '../../widgets/detail_top_bar.dart';
 import '../../widgets/index_scrollbar.dart';
 import '../../widgets/list_item_tile.dart';
@@ -200,6 +201,9 @@ class _ArtistsPageState extends State<ArtistsPage> {
                   '$songCount 首歌曲${albumCount > 0 ? ' · $albumCount 张专辑' : ''}',
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _openArtistDetail(context, artist),
+              // 右键：与歌曲行同一位置（行尾菜单槽位）。
+              onSecondaryTap: (rowContext) =>
+                  _showArtistMenu(artist, rowContext),
             );
           },
         ),
@@ -211,6 +215,32 @@ class _ArtistsPageState extends State<ArtistsPage> {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => ArtistDetailPage(artist: artist)));
+  }
+
+  /// 歌手行的右键菜单：只有「播放全部」。
+  ///
+  /// 不设「查看详情」——点行本身就是进详情，右键重列一遍是重复项。菜单从行尾
+  /// 的菜单槽位长出来，与歌曲行的三点按钮同一位置。
+  Future<void> _showArtistMenu(Artist artist, BuildContext rowContext) async {
+    final rowRect = overlayRectOf(rowContext);
+    if (rowRect == null) return;
+
+    final value = await showRowMenu<String>(
+      context: rowContext,
+      rowRect: rowRect,
+      entries: const [PopupMenuItem(value: 'play', child: Text('播放全部'))],
+    );
+    if (value != 'play' || !mounted) return;
+
+    final songs = await ServiceLocator.songRepo.getSongsByArtist(artist.id);
+    if (!mounted) return;
+    if (songs.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('这位歌手还没有可播放的歌曲')));
+      return;
+    }
+    ServiceLocator.player.playFromList(songs, startIndex: 0);
   }
 }
 
