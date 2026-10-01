@@ -328,6 +328,36 @@ void main() {
     // 收尾：周期计时器必须显式取消，否则 testWidgets 会报"仍有定时器未取消"。
     timer.cancel();
   });
+
+  testWidgets('激活态菜单的「取消定时」行放得下最长的时间文本', (tester) async {
+    // 90 分钟 → 剩余显示 1:xx:xx，是「取消定时（…）」这条最宽的情况。
+    final timer = makeTimer(tick: const Duration(seconds: 1));
+    timer.startForDuration(const Duration(minutes: 90));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlayerBar(
+            player: player,
+            theme: ThemeData(),
+            onSeek: (_) {},
+            sleepTimer: timer,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.timer));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400)); // 菜单展开动画
+
+    expect(find.textContaining('取消定时（'), findsOneWidget);
+    // 条目行是裸 Row（没有 Expanded / ellipsis），放不下时会报 RenderFlex 溢出。
+    // 测试字体每个字都是 1em，比真机的中西文混排更宽，所以这条断言更严格。
+    expect(tester.takeException(), isNull);
+
+    timer.cancel();
+  });
 }
 
 Song _song(int id) => Song(

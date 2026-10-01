@@ -191,6 +191,10 @@
     （`_rectTween.end = Offset.zero & navSize`），只适合"小控件 → 整页"。
   - 面板高度是**算出来的**（行高 × 行数 + 分隔线 + 内边距），所以条目用固定行高；
     矮窗口下面板会被屏幕高度钳制，内容自己滚动。
+  - 面板宽度**按最宽的一行实测**（`TextPainter` + `textScaler`，夹在 200–320）——
+    终点矩形必须在打开前算出来，宽度写死会被「取消定时（1:30:00）」顶破；条目
+    文字另有 `ellipsis` 兜底，极端字号下也不会出现溢出条纹。文案只有 `_entries`
+    一份，渲染与实测共用，不会走样。
 - **其余弹出菜单的动画统一走 `kPopupMenuAnimationStyle`**
   （`lib/core/constants/motion.dart`，`curve: Curves.easeOutCubic`）：`PopupMenuThemeData`
   **没有** `popUpAnimationStyle` 字段，主题里设不了，只能每个入口自己传。默认

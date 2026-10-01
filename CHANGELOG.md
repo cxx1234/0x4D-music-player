@@ -50,6 +50,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Restoring the window from a notification that fails now logs a warning instead
   of swallowing the error, and the "stop" HUD reads "已停止 · 保留队列" to match
   what `stopPlayback` does (queue and current track kept)
+- The sleep-timer menu no longer overflows on its cancel row. The container
+  transform has to know the panel size before it opens, so the width was fixed
+  at 228px, which a 90-minute timer ("取消定时（1:30:00）") is too wide for. The
+  width is now measured from the widest row with the text scaler applied and
+  clamped. The player-bar button label gets the same treatment: in the
+  end-of-queue mode it reads "播完当前播放列表", the widest thing that 128px slot
+  ever shows. Both now ellipsize instead of overflowing
 
 ## [0.2.6] - 2026-09-21
 
