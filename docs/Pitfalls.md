@@ -201,6 +201,24 @@
 - **修法**：改用 `FocusManager.addLateKeyEventHandler` —— 它只在**没有任何控件 / 路由处理该键**时才运行，对话框 / `MenuAnchor` 菜单 / `ToolbarSearchField` 的 Esc 全部自然优先。
 - **护栏**：`test/keyboard_focus_test.dart`（对话框与弹层菜单两例断言「处理器不被调用、弹层自行关闭」）。
 
+### C7. 2026-10-01 弹出菜单在窗口底部会“从下沿滑上来”
+
+- **症状**：播放条（窗口最底部）里的 `PopupMenuButton`，展开时不像“从按钮展开”，
+  而是整张菜单从窗口下沿往上滑出来；菜单越高滑动越久，感觉“超过 300ms”。
+- **根因**：`_PopupMenuRouteLayout.getPositionForChild` 的 y 来自 `y = position.top`，
+  随后 `_fitInsideScreen` 在放不下时改成 `y = screen.bottom - 8 - childSize.height`
+  —— 这里的 `childSize` 是**当帧动画中的尺寸**（高度 = 内容高 × `heightFactor`），
+  于是每帧都有 `y + height ≡ screen.bottom - 8`：**底边被钉死、顶边随高度往上跑**。
+  又因为 `clipBehavior` 默认 `Clip.none`，内容是整块被带着上移的（不是被裁剪揭示）。
+  时长确实是 300ms（`_kMenuDuration`），但主导观感的滑动占 267ms —— 高度区间是
+  `Interval(0, unit × 项数)`，`unit = 1/(项数 + 1.5)`，12 项时就是 `[0, 0.889]`。
+- **修法**：换成自己控制生长锚点的实现 —— `MenuMorphRoute`
+  （`lib/widgets/menu_morph_route.dart`）：位置只算一次、面板靠裁剪长大，
+  内容在屏幕上不动。
+- **顺带**：`package:animations` 的 `OpenContainer` 做不了这件事 —— 它的终点矩形
+  写死是**整个 Navigator**（`open_container.dart`：`_rectTween.end = Offset.zero &
+  navSize`），只适合“小控件 → 整页”的容器变换。
+
 ## D. 领域事故索引（细节留在原文档）
 
 | 症状 | 出处 |

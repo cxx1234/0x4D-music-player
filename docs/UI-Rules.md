@@ -168,19 +168,30 @@
 - 回归测试：`test/hud_service_test.dart`（4）、`test/hud_overlay_test.dart`（5）、
   `test/playback_feedback_test.dart`（8）、`test/control_pulse_test.dart`（4）。
 
-## 8. 睡眠定时入口（PlayerBar 左侧，2026-09-19）
+## 8. 睡眠定时入口（PlayerBar 左侧，2026-09-19；菜单动画 2026-10-01 改为容器变换）
 
 - **位置**：播放页底部条 `PlayerBar` 的**左侧槽位**——那是原先为「让控制按钮严格居中」
-  留的与音量块等宽的占位（`_kVolumeBlockWidth = 144`），现在放月亮按钮，宽度不变，
+  留的与音量块等宽的占位（`_kVolumeBlockWidth = 144`），现在放定时按钮，宽度不变，
   控制按钮仍然居中。
 - **控件**：`SleepTimerButton`（`lib/widgets/sleep_timer_button.dart`）——计时器图标；
   激活时图标转主题色并显示剩余时间（`M:SS`，满 1 小时 `H:MM:SS`）。
   窄窗口（`compact`）只留图标，避免和音量块抢宽度。
-- **悬停形状必须显式给**：child 模式的 `PopupMenuButton` 内部是裸 `InkWell`，
-  不传 `borderRadius` 时高亮会被裁成方块（icon 模式走 `IconButton` 才自带圆角）。
-  这里是固定高 36 + `BorderRadius.all(Radius.circular(18))` → 图标态 36×36 正圆，
-  显示剩余时间时自然变成胶囊。
-- **弹出菜单动画统一走 `kPopupMenuAnimationStyle`**
+- **悬停/水波高亮形状必须显式给**：`InkWell` 不传 `borderRadius` 时高亮会被裁成
+  方块。这里是固定高 36 + `BorderRadius.all(Radius.circular(18))` → 图标态 36×36
+  正圆，显示剩余时间时自然变成胶囊。
+- **菜单用容器变换弹出**（`MenuMorphRoute`，`lib/widgets/menu_morph_route.dart`）：
+  面板从按钮那个矩形连续长出来（位置与尺寸 `RectTween`、圆角 `ShapeBorderTween`、
+  底色 `ColorTween`），内容按终点尺寸贴着"生长方向那一角"布局，靠裁剪逐步揭示 ——
+  所以内容在屏幕上是不动的。
+  - **为什么不用 `PopupMenuButton`**：它的定位每帧都用当帧尺寸重算
+    （`_PopupMenuRouteLayout` + `_fitInsideScreen`），菜单比按钮下方空间高时会被
+    "底边钉住"、整张菜单从窗口下沿滑上来；播放条就在窗口最底部，必然触发这条分支
+    （见 `docs/Pitfalls.md` §C7）。
+  - **为什么不用 `package:animations` 的 `OpenContainer`**：它的终点矩形写死是全屏
+    （`_rectTween.end = Offset.zero & navSize`），只适合"小控件 → 整页"。
+  - 面板高度是**算出来的**（行高 × 行数 + 分隔线 + 内边距），所以条目用固定行高；
+    矮窗口下面板会被屏幕高度钳制，内容自己滚动。
+- **其余弹出菜单的动画统一走 `kPopupMenuAnimationStyle`**
   （`lib/core/constants/motion.dart`，`curve: Curves.easeOutCubic`）：`PopupMenuThemeData`
   **没有** `popUpAnimationStyle` 字段，主题里设不了，只能每个入口自己传。默认
   `Curves.linear` 下"值 = 真实时间比例"，尾段那 1/3 时长只跑最后几个百分点的值、
@@ -188,8 +199,8 @@
   （最后一条约 267ms → 约 156ms），**总时长仍是框架默认的 300ms**。
   ⚠️ 不要再退回 `linear`（2026-09-19 曾因"想提速"把它改成 140ms，方向反了）。
 - **菜单**：5/10/15/30/45/60/90 分钟 → 分隔线 → 「播完当前曲目」「播完当前播放列表」
-  → 激活时再加「取消定时（剩余 M:SS）」。勾选项用 `CheckedPopupMenuItem`
-  （`PopupMenuItem` 在本 Flutter 版本已无 `checked` 参数）。
+  → 激活时再加「取消定时（剩余 M:SS）」。勾选项是自绘行（透明 `check` 占位 +
+  文案），不再用 `CheckedPopupMenuItem`。
 - **到点反馈走 SnackBar，不走 HUD**：`SleepTimerService.notice` →
   `app.dart` 的 `_PlayerNoticeConsumer`（与播放错误同一个消费器）。
   理由见 §7——播放页禁用 HUD，而睡眠定时最常见的到点场景恰恰是"用户已经睡了、

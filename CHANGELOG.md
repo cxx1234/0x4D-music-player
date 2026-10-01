@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the last few percent of the animated value, so a linear curve made the panel
   look settled while items were still trickling in. Keeping the framework's
   300ms, the last item now arrives at roughly 156ms instead of 267ms
+- The sleep-timer menu grows out of its button instead of sliding up from the
+  window edge. `PopupMenuRoute` recomputes its position every frame from the
+  *current* panel size, so a menu taller than the space below the button gets
+  its bottom edge pinned to the window and slides up from below — which the
+  player-bar button at the very bottom of the window always hits. Position,
+  size, corner radius and colour are now interpolated from the button, and the
+  panel is positioned once and revealed by its own clip
 
 ### Fixed
 - Pausing right after picking a song no longer leaves audio playing while the UI,
