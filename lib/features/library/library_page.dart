@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/constants/motion.dart';
 import '../../core/database/database.dart';
 import '../../core/database/song_sort_order.dart';
 import '../../core/services/library_scanner_service.dart';
@@ -408,6 +409,7 @@ class _LibraryPageState extends State<LibraryPage> {
         ),
         if (_viewModel.songs.isNotEmpty)
           PopupMenuButton<SongSortOrder>(
+            popUpAnimationStyle: kPopupMenuAnimationStyle,
             tooltip: '排序',
             icon: const Icon(Icons.sort),
             // 默认 iconTheme.color 是固定纯黑/纯白（M2 遗留），显式指定跟随主题。

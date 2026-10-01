@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import '../../core/constants/motion.dart';
 import '../../core/database/database.dart';
 import '../../core/services/folder_watcher_service.dart';
 import '../../core/services/service_locator.dart';
@@ -428,6 +429,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
     if (box == null || overlay == null) return;
     final value = await showMenu<String>(
       context: anchor,
+      popUpAnimationStyle: kPopupMenuAnimationStyle,
       position: RelativeRect.fromRect(
         box.localToGlobal(Offset.zero) & box.size,
         Offset.zero & overlay.size,
@@ -521,6 +523,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
                 onPressed: _enterSearch,
               ),
               PopupMenuButton<String>(
+                popUpAnimationStyle: kPopupMenuAnimationStyle,
                 tooltip: '更多',
                 // 默认 iconTheme.color 是固定纯黑/纯白（M2 遗留），显式指定跟随主题。
                 iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -621,6 +624,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
                     onTap: () => _openDetail(playlist),
                     onLongPress: () => _showPlaylistMenu(playlist, cardContext),
                     trailing: PopupMenuButton<String>(
+                      popUpAnimationStyle: kPopupMenuAnimationStyle,
                       tooltip: '更多',
                       // child 模式：用固定 20×20 盒子承载图标，命中区即 20×20。
                       // （icon 模式内部走 IconButton，默认 48 命中区且不接收

@@ -180,9 +180,13 @@
   不传 `borderRadius` 时高亮会被裁成方块（icon 模式走 `IconButton` 才自带圆角）。
   这里是固定高 36 + `BorderRadius.all(Radius.circular(18))` → 图标态 36×36 正圆，
   显示剩余时间时自然变成胶囊。
-- **弹出菜单动画保持 Material 默认**：`PopupMenuRoute` 默认 300ms + `Curves.linear`
-  （`_kMenuDuration`）。2026-09-19 曾用 `popUpAnimationStyle` 提速到 140ms 后按用户
-  反馈**回退默认**——不要再改；`PopupMenuThemeData` 也没有这个字段，无法全局设置。
+- **弹出菜单动画统一走 `kPopupMenuAnimationStyle`**
+  （`lib/core/constants/motion.dart`，`curve: Curves.easeOutCubic`）：`PopupMenuThemeData`
+  **没有** `popUpAnimationStyle` 字段，主题里设不了，只能每个入口自己传。默认
+  `Curves.linear` 下"值 = 真实时间比例"，尾段那 1/3 时长只跑最后几个百分点的值、
+  几乎看不见，观感是"框先淡实、内容再慢慢往外蹦"；换成 ease-out 后进度整体前移
+  （最后一条约 267ms → 约 156ms），**总时长仍是框架默认的 300ms**。
+  ⚠️ 不要再退回 `linear`（2026-09-19 曾因"想提速"把它改成 140ms，方向反了）。
 - **菜单**：5/10/15/30/45/60/90 分钟 → 分隔线 → 「播完当前曲目」「播完当前播放列表」
   → 激活时再加「取消定时（剩余 M:SS）」。勾选项用 `CheckedPopupMenuItem`
   （`PopupMenuItem` 在本 Flutter 版本已无 `checked` 参数）。

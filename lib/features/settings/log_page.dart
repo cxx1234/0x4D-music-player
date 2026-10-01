@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import '../../core/constants/motion.dart';
 import '../../core/utils/logger.dart';
 import '../../widgets/detail_top_bar.dart';
 import 'log_detail_page.dart';
@@ -179,6 +180,7 @@ class _LogPageState extends State<LogPage> {
         actions: [
           if (_days.length > 1)
             PopupMenuButton<String>(
+              popUpAnimationStyle: kPopupMenuAnimationStyle,
               tooltip: '选择日期',
               initialValue: _selectedDay,
               onSelected: _selectDay,

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Popup menus across the app ease out (`Curves.easeOutCubic`) instead of moving
+  linearly. The framework's choreography spends the last third of its 300ms on
+  the last few percent of the animated value, so a linear curve made the panel
+  look settled while items were still trickling in. Keeping the framework's
+  300ms, the last item now arrives at roughly 156ms instead of 267ms
+
 ### Fixed
 - Pausing right after picking a song no longer leaves audio playing while the UI,
   the menu title and the macOS Now Playing rate all say "paused". The load window

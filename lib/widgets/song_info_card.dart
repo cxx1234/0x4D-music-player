@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../core/constants/motion.dart';
 import '../core/database/database.dart';
 import 'cached_album_art.dart';
 import 'text_link.dart';
@@ -126,6 +127,7 @@ class SongInfoCard extends StatelessWidget {
           onPressed: onLike,
         ),
         PopupMenuButton<String>(
+          popUpAnimationStyle: kPopupMenuAnimationStyle,
           icon: Icon(
             Icons.more_vert,
             size: 20,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/constants/motion.dart';
 import '../core/database/database.dart';
 import 'cached_album_art.dart';
 
@@ -226,6 +227,7 @@ class SongTile extends StatelessWidget {
           if (hasMenu) ...[
             const SizedBox(width: 6),
             PopupMenuButton<String>(
+              popUpAnimationStyle: kPopupMenuAnimationStyle,
               tooltip: '更多',
               icon: const Icon(Icons.more_vert),
               onSelected: (value) => onMenuSelected?.call(song, value),
