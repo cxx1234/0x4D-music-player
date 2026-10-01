@@ -66,3 +66,7 @@ app.*.map.json
 
 # AI
 .copilot/
+
+# Personal notes (not part of the project)
+RESUME-NOTES.md
+FLUTTER-NOTES.md
