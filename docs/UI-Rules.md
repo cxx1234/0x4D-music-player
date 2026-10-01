@@ -195,6 +195,12 @@
     终点矩形必须在打开前算出来，宽度写死会被「取消定时（1:30:00）」顶破；条目
     文字另有 `ellipsis` 兜底，极端字号下也不会出现溢出条纹。文案只有 `_entries`
     一份，渲染与实测共用，不会走样。
+  - **勾选位是按行留的**，不是整面板留（见 §11）：可勾选行左边 24px，预设行与
+    「取消定时」从内边距直接开始，不随“当前有没有勾选”左右漂移。
+  - **预设只有 5 档（15/30/45/60/90）**：面板高 = 行数 × 48 + 分隔线 + 内边距，
+    7 档加上激活态的「取消定时」是 512px，而最小窗口（520 高）扣掉红绿灯与播放
+    条只剩 ≈450px —— 放不下就会被屏幕钳制、内部滚起来。原生菜单栏入口不受高度
+    限制，仍保留 5/10。
 - **其余弹出菜单的动画统一走 `kPopupMenuAnimationStyle`**
   （`lib/core/constants/motion.dart`，`curve: Curves.easeOutCubic`）：`PopupMenuThemeData`
   **没有** `popUpAnimationStyle` 字段，主题里设不了，只能每个入口自己传。默认
@@ -202,9 +208,10 @@
   几乎看不见，观感是"框先淡实、内容再慢慢往外蹦"；换成 ease-out 后进度整体前移
   （最后一条约 267ms → 约 156ms），**总时长仍是框架默认的 300ms**。
   ⚠️ 不要再退回 `linear`（2026-09-19 曾因"想提速"把它改成 140ms，方向反了）。
-- **菜单**：5/10/15/30/45/60/90 分钟 → 分隔线 → 「播完当前曲目」「播完当前播放列表」
-  → 激活时再加「取消定时（剩余 M:SS）」。勾选项是自绘行（透明 `check` 占位 +
-  文案），不再用 `CheckedPopupMenuItem`。
+- **菜单**：15/30/45/60/90 分钟（app 内 5 档，理由见上）→ 分隔线 →
+  「播完当前曲目」「播完当前播放列表」（这两行可勾选，左边留勾选位）→ 激活时再
+  加「取消定时（剩余 M:SS）」（普通行，不吃缩进）。勾选项是自绘行（未勾选时画
+  透明 `check` 占位 + 文案），不再用 `CheckedPopupMenuItem`。
 - **到点反馈走 SnackBar，不走 HUD**：`SleepTimerService.notice` →
   `app.dart` 的 `_PlayerNoticeConsumer`（与播放错误同一个消费器）。
   理由见 §7——播放页禁用 HUD，而睡眠定时最常见的到点场景恰恰是"用户已经睡了、
@@ -212,7 +219,8 @@
 - 逻辑分层：`SleepTimerService` 不依赖 `ServiceLocator`（只依赖 `PlayerService`），
   入口按钮与提示都是它的视图；回归测试 `test/sleep_timer_test.dart`。
 - **macOS 菜单栏入口**：播放 ›「睡眠定时」子菜单（`AppDelegate.swift`
-  `sleepTimerSubmenuItem()`）——5/10/15/30/45/60/90 分钟 + 播完当前曲目 +
+  `sleepTimerSubmenuItem()`）——5/10/15/30/45/60/90 分钟（比 app 内那份多 5/10：
+  菜单栏没有高度限制）+ 播完当前曲目 +
   播完当前播放列表 + 取消定时。⚠️ 预设列表与 `SleepTimerButton.presets` 是**两处
   各一份**（原生读不到 Dart 常量），改一处要记得改另一处。
   - 勾选/使能靠 `MenuService` 推送的 `sleepTimerMode`（off/duration/endOfTrack/
@@ -266,3 +274,57 @@
   与其它菜单状态一起推给原生，`AppDelegate.applyMenuItemState` 的 `playPause` 分支据此
   禁用裸空格键等价。新增「全局无修饰键快捷键」时必须一并考虑这条归属规则。
 - 回归测试：`test/keyboard_focus_test.dart`（4 例）。
+
+## 11. 容器变换菜单（2026-10-01）
+
+「浮层菜单从触发它的控件里长出来」这一套现在有两处用：播放条左侧的**睡眠定时**
+入口、播放列表卡片的**三点 / 长按**菜单。都走 `lib/widgets/menu_morph_route.dart`
+（自写的 `MenuMorphRoute`，Material Motion 的 container transform）。
+
+- **不要再退回 `PopupMenuButton` / `showMenu`**：
+  `_PopupMenuRouteLayout` 每帧用*当前*面板尺寸重算位置，菜单比按钮下方空间高时
+  会被「底边钉住」、整张菜单从窗口下沿滑上来（播放条就在窗口最底部，必然命中
+  这条分支）。机理见 `Pitfalls.md` C7。
+- **面板的行样式与尺寸只此一份**：`lib/widgets/morph_menu.dart` 的
+  `MorphMenuPanel` + `MorphMenuEntry` + `heightFor` / `widthFor` /
+  `widthForAnchor`。新增菜单时复用，不要另写一份行布局。
+- **宽高必须在打开之前算准**（终点矩形是算的，不能先布局再定位）：
+  - 高度 = 行数 × `kMorphMenuRowHeight` + 分隔线数 × `kMorphMenuDividerHeight`
+    + 上下内边距 —— 用 `heightFor`。
+  - 宽度二选一：
+    - **锚点自己有宽度**（网格里的卡片）→ `widthForAnchor`：面板与锚点严丝合缝，
+      看着就是那个控件自己翻开的；下限是实测内容宽度，免得行里出现省略号。
+    - **锚点很小**（播放条上 36px 的按钮）→ `widthFor`：按**最宽一行实测**
+      （`TextPainter` + `textScaler`）+ 两侧内边距，夹进 200–320。
+  - ⚠️ **不要写死宽度**：硬编码 228px 曾被「取消定时（1:30:00）」顶出 21px 的
+    溢出条纹；行内 `Text` 的 `ellipsis` 只是兜底，不是解法。
+- **勾选位是按行留的，不是整面板留**：`MorphMenuEntry.checkable(...)` 的行左边
+  留「勾选框 + 间距」24px（未勾选时画透明图标占位，文字不跳），`MorphMenuEntry(...)`
+  的普通行从内边距开始 —— 好处有两处：预设行与「取消定时」不随“当前有没有勾选”
+  左右漂移；播放列表卡片（没有可勾选行）完全不吃缩进。
+  ⚠️ 宽度要**按两组分别量、取大**：只按“最宽一行 + 24”算，会在“勾选行文案更长”
+  的菜单里把文字挤成省略号。
+- **条目顺序按误操作风险排**：面板从卡片长出来、光标常压在最下面一行（三点按钮
+  在卡片右下角），所以「删除」放最远的一行、最常用的「播放」放最下面。
+- **锚点取触发控件自己的 `RenderBox`**：
+  - `anchorRect = overlayBox.globalToLocal(box.localToGlobal(Offset.zero)) & box.size`。
+  - 播放列表卡片的**三点按钮与长按共用同一个菜单**，两者都锚定**整张卡片**
+    （不是那 20×20 的图标），所以两处动画完全一样；`trailing` 内的点击不会触发
+    卡片的 `onTap`（内层手势赢下竞技场）。
+  - 起点形状 / 底色传 `anchorShape` / `anchorColor`：卡片用 `surfaceContainerLow`
+    + r12（与 `CardSurface` 的默认一致），面板一律 `kMorphMenuRadius`（r12）。
+- **生长方向可以指定**（`MenuMorphRoute.grow`）：`auto`（默认，下方装不下才向上）、
+  `up`（底边钉在锚点底边、高度往上填开）、`down`。首选方向装不下、另一个方向装
+  得下时会翻过去，避免“勉强挤进去 + 内部滚动”。
+  - ⚠️ **向上生长必须扣顶部安全区**（`layoutConfig.menuTopInset`，macOS 52 =
+    红绿灯那一栏）：不扣的话面板装不下时顶边会被钳到 y=8，正好钻进原生红绿灯
+    底下（macOS 标题栏透明、Flutter 视图铺满整窗）。护栏：
+    `test/menu_morph_route_test.dart`。
+- **锚点可以不是控件本身，而是“收窄后的动画起点”**：播放列表卡片（≈229 高）与
+  面板（208 高）几乎一样大，直接拿整张卡片当起点，整段动画只剩底边往上收 +
+  淡入，看着像“卡片塌下来”。现在传的是**贴在卡片底边的一条 12px 窄边** +
+  `grow: up`，读出来是“从卡片底部向上填充”，卡片上半截（封面）还露着。
+- 回归测试：`test/morph_menu_test.dart`（8 例：尺寸自洽、分隔线、回传值、勾选位
+  按行、宽度两组取大、长文案不溢出、宽度夹取、锚点宽度）、
+  `test/menu_morph_route_test.dart`（4 例：向上/向下/翻转/顶部安全区）与
+  `test/sleep_timer_test.dart`（15 例）。

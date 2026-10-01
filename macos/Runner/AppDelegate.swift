@@ -483,8 +483,9 @@ class AppDelegate: FlutterAppDelegate {
 
   /// 睡眠定时子菜单：N 分钟 / 播完当前曲目 / 播完当前播放列表 / 取消定时。
   ///
-  /// ⚠️ 预设分钟数必须与 Dart 侧 `SleepTimerButton.presets` 保持一致（两处各列一份，
-  /// 改一处要记得改另一处）；Dart 按"当初设定的分钟数"回推勾选态。
+  /// 预设分钟数比 Dart 侧 `SleepTimerButton.presets` **多 5/10 两档**（那里为了
+  /// 最小窗口里的面板高度减到了 15/30/45/60/90）：菜单栏没有高度限制，可以给细
+  /// 一点的粒度；Dart 按“当初设定的分钟数”回推勾选态，多出来的档位也能正常工作。
   private func sleepTimerSubmenuItem() -> NSMenuItem {
     let title = NSLocalizedString("menu.sleepTimer", comment: "Sleep Timer")
     let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")

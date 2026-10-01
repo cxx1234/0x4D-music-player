@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../core/constants/layout.dart';
+
 /// 「容器变换」（Material Motion 的 container transform）弹出的菜单。
 ///
 /// 与 `PopupMenuButton` 的区别：面板不是"在某个位置淡入或滑入"，而是**从触发它的
@@ -24,6 +26,22 @@ import 'package:flutter/material.dart';
 /// `PopupMenuRoute` 的定位每帧都用**当帧尺寸**重算（`_fitInsideScreen`），菜单比
 /// 按钮下方空间高时会被"底边钉住、整张菜单从窗口下沿滑上来"；这里的位置只算一次，
 /// 面板靠自身的裁剪长大，不会有那种位移。
+/// 菜单的生长方向偏好。
+///
+/// 方向本来是按可用空间推出来的（[MenuMorphGrow.auto]），但「锚点本身就有按钮/
+/// 卡片那么大」时需要能指定：播放列表卡片要的是「贴住卡片底边、往上填充」，靠
+/// 推导永远会判成向下（卡片下方通常很空）。
+enum MenuMorphGrow {
+  /// 按可用空间自己决定：首选向下，下方装不下才向上（默认）。
+  auto,
+
+  /// 优先向上：底边钉在锚点底边，高度往上长开。
+  up,
+
+  /// 优先向下：顶边钉在锚点顶边。
+  down,
+}
+
 class MenuMorphRoute<T> extends PopupRoute<T> {
   MenuMorphRoute({
     required this.anchorRect,
@@ -39,6 +57,8 @@ class MenuMorphRoute<T> extends PopupRoute<T> {
     this.panelColor,
     this.duration = const Duration(milliseconds: 320),
     this.reverseDuration = const Duration(milliseconds: 220),
+    this.grow = MenuMorphGrow.auto,
+    this.topInset,
   });
 
   /// 触发它的控件在 **overlay 坐标**里的矩形（动画起点）。
@@ -63,6 +83,16 @@ class MenuMorphRoute<T> extends PopupRoute<T> {
 
   /// 关闭时长；通常比打开短（两者可以不一样，这是弹层菜单给不了的）。
   final Duration reverseDuration;
+
+  /// 生长方向偏好；首选方向装不下、另一个方向装得下时会翻过去。
+  final MenuMorphGrow grow;
+
+  /// 顶部安全区：向上生长时面板顶边不得越过的高度（红绿灯那一栏）。
+  ///
+  /// 不传就用当前平台的 `layoutConfig.menuTopInset`（macOS 52，其余 0）—— 默认
+  /// 尊重它，是因为面板顶到窗口上沿会钻到原生红绿灯下面；测试里可以显式传 0
+  /// 保持确定性。
+  final double? topInset;
 
   CurvedAnimation? _curved;
 
@@ -122,6 +152,8 @@ class MenuMorphRoute<T> extends PopupRoute<T> {
           viewport: Size(constraints.maxWidth, constraints.maxHeight),
           anchorRect: anchorRect,
           panelSize: panelSize,
+          grow: grow,
+          topInset: topInset ?? layoutConfig.menuTopInset,
         );
 
         // 内容按终点尺寸布局、钉在"生长方向那一角"——这样面板长大时它在屏幕上
@@ -217,13 +249,28 @@ class _MorphGeometry {
     required Size viewport,
     required Rect anchorRect,
     required Size panelSize,
+    MenuMorphGrow grow = MenuMorphGrow.auto,
+    double topInset = 0,
   }) {
-    // 竖向：优先往下长；下面装不下就翻到上方（钉住两者共有的那条边）。
+    // 竖向可用空间。上方要额外扣掉顶部安全区（macOS 红绿灯那一栏）：不扣的话
+    // 面板装不下时会被钳到 y=8，正好钻进红绿灯底下。
     final double spaceBelow = viewport.height - _kMargin - anchorRect.bottom;
-    final bool growsUp = panelSize.height > spaceBelow;
-    final double available = growsUp
-        ? anchorRect.bottom - _kMargin
-        : spaceBelow;
+    final double spaceAbove = anchorRect.bottom - topInset - _kMargin;
+
+    // 方向：首选方向装得下就用它；首选装不下、另一个方向装得下就翻过去（免得
+    // 勉强挤进去之后面板内部滚起来）；两边都装不下就保持首选，靠滚动消化。
+    final bool preferUp = switch (grow) {
+      MenuMorphGrow.up => true,
+      MenuMorphGrow.down => false,
+      MenuMorphGrow.auto => panelSize.height > spaceBelow,
+    };
+    final double preferred = preferUp ? spaceAbove : spaceBelow;
+    final double other = preferUp ? spaceBelow : spaceAbove;
+    final bool growsUp = preferred >= panelSize.height
+        ? preferUp
+        : (other >= panelSize.height ? !preferUp : preferUp);
+
+    final double available = growsUp ? spaceAbove : spaceBelow;
     final double height = math.min(panelSize.height, math.max(available, 0));
     // 横向：左边缘与锚点左边缘对齐；右边缘装不下就往左挪。
     final double width = math.min(

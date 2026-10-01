@@ -158,11 +158,14 @@ void main() {
       var lastProcessed = 0;
       var previous = -1;
       var monotonic = true;
-      await service.parseAll(files, onProgress: (p, t, f) {
-        if (p < previous) monotonic = false;
-        previous = p;
-        lastProcessed = p;
-      });
+      await service.parseAll(
+        files,
+        onProgress: (p, t, f) {
+          if (p < previous) monotonic = false;
+          previous = p;
+          lastProcessed = p;
+        },
+      );
       expect(lastProcessed, 3, reason: '收尾应回拨到总数');
       expect(monotonic, isTrue, reason: '进度应单调递增');
     });

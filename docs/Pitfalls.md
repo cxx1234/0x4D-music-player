@@ -218,6 +218,10 @@
 - **顺带**：`package:animations` 的 `OpenContainer` 做不了这件事 —— 它的终点矩形
   写死是**整个 Navigator**（`open_container.dart`：`_rectTween.end = Offset.zero &
   navSize`），只适合“小控件 → 整页”的容器变换。
+- **同一天补的第二个坑**：自己控制生长锚点后，向上生长只留了 8px 屏幕边距，
+  而 macOS 那 52px 是**原生红绿灯**（标题栏透明、Flutter 视图铺满整窗）——
+  面板装不下时顶边被钳到 y=8，正好钻进红绿灯底下。修法：扣
+  `layoutConfig.menuTopInset`（macOS 52，其余 0），装不下就在面板内部滚动。
 
 ## D. 领域事故索引（细节留在原文档）
 

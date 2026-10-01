@@ -1,9 +1,5 @@
 /// Supported audio file extensions.
-const Set<String> supportedAudioExtensions = {
-  '.mp3',
-  '.flac',
-  '.m4a',
-};
+const Set<String> supportedAudioExtensions = {'.mp3', '.flac', '.m4a'};
 
 /// Whether the given file path has a supported audio extension.
 bool isSupportedAudioExtension(String path) {

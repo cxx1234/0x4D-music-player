@@ -20,8 +20,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   player-bar button at the very bottom of the window always hits. Position,
   size, corner radius and colour are now interpolated from the button, and the
   panel is positioned once and revealed by its own clip
+- The playlist card menu grows up from the card's bottom edge instead of
+  morphing from the whole card. The card (≈229 tall) and the panel (208 tall)
+  are nearly the same size, so morphing from the card read as a shrink — the
+  only visible movement was the bottom edge coming up. Starting from a 12px
+  strip pinned to the card's bottom edge reads as filling upward, and leaves the
+  top of the card (its cover) visible. The three-dot button and the long press
+  share it, anchored on the card, and the panel is exactly as wide as the card;
+  its row layout and size rules live in a shared `morph_menu.dart`, which the
+  sleep timer uses as well
+- Check slots in the morph menus are per row now. Entries that cannot be checked
+  start at the panel padding instead of being indented for a check mark they
+  would never show, so the sleep timer's preset rows and its "cancel" row no
+  longer shift when a mode gets selected — and the playlist card, which has
+  nothing checkable, has no dead space left of its labels. Panel width is
+  measured per group (plain rows vs checkable rows), so the indent cannot push a
+  long label into an ellipsis
+- The in-app sleep-timer menu offers five presets (15/30/45/60/90) instead of
+  seven. Its panel has a fixed height, and seven presets plus an active "cancel"
+  row came to 512px — taller than the smallest window allows, so it had to
+  scroll. The macOS menu-bar entry keeps 5/10, since a menu has no height limit
 
 ### Fixed
+- Morph menus that grow upward no longer slide under the traffic lights. The
+  geometry kept only an 8px margin from the top of the window, but on macOS the
+  titlebar is transparent and the Flutter view spans the whole window, so those
+  first 52px are exactly where the traffic lights are drawn. Any panel that did
+  not fit above its anchor had its top edge clamped to y=8 — the sleep-timer
+  menu did it as soon as a timer was active. The top edge now stops below
+  `layoutConfig.menuTopInset` (52 on macOS, 0 elsewhere) and the panel scrolls
+  internally instead
 - Pausing right after picking a song no longer leaves audio playing while the UI,
   the menu title and the macOS Now Playing rate all say "paused". The load window
   (`setSourceDeviceFile` + `getDuration`) is a real await, so the resume after it

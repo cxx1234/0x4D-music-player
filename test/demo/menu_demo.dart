@@ -42,7 +42,10 @@ const String _kEndOfTrack = '播完当前曲目';
 const String _kEndOfQueue = '播完当前播放列表';
 const String _kCancel = '取消定时（4:59）';
 
-/// app 里睡眠定时的预设分钟数（macOS 原生菜单里也同步列了一份）。
+/// app 里睡眠定时的预设分钟数（macOS 原生菜单里另列一份）。
+///
+/// 这里故意保留 7 档 —— app 内已经减到 5 档（面板高度），demo 留长一点当“长菜单”
+/// 样本，用来对比各条曲线的观感。
 const List<int> _kSleepPresetMinutes = [5, 10, 15, 30, 45, 60, 90];
 
 /// 菜单面板的圆角（闭合态按钮用胶囊 18）。

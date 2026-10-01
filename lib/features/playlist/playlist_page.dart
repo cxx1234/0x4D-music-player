@@ -14,6 +14,8 @@ import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
 import '../../widgets/card_surface.dart';
 import '../../widgets/cover_card.dart';
+import '../../widgets/menu_morph_route.dart';
+import '../../widgets/morph_menu.dart';
 import '../../widgets/page_toolbar.dart';
 import '../../widgets/search_empty_state.dart';
 import '../../widgets/toolbar_search_field.dart';
@@ -360,11 +362,16 @@ class _PlaylistPageState extends State<PlaylistPage> {
   }
 
   /// 播放列表卡片的统一菜单（三点按钮与长按共用），内容保持一致。
-  List<PopupMenuEntry<String>> _playlistMenuItems() => const [
-    PopupMenuItem(value: 'play', child: Text('播放')),
-    PopupMenuItem(value: 'rename', child: Text('重命名')),
-    PopupMenuItem(value: 'export', child: Text('导出')),
-    PopupMenuItem(value: 'delete', child: Text('删除')),
+  ///
+  /// 条目文案、渲染、宽度实测都走同一份数据（见 `morph_menu.dart`）。
+  ///
+  /// 顺序按**误操作风险**排：面板从卡片长出来、光标往往压在最下面一行（三点在
+  /// 卡片右下角），所以危险动作放最远的一行，最常用的「播放」压在光标下。
+  List<MorphMenuEntry<String>> _playlistEntries() => const [
+    MorphMenuEntry('删除', 'delete'),
+    MorphMenuEntry('重命名', 'rename'),
+    MorphMenuEntry('导出', 'export'),
+    MorphMenuEntry('播放', 'play'),
   ];
 
   /// 菜单项分发：播放 / 重命名 / 导出 / 删除。
@@ -422,19 +429,57 @@ class _PlaylistPageState extends State<PlaylistPage> {
     ).showSnackBar(SnackBar(content: Text('已导出 ${content.count} 首歌曲')));
   }
 
-  /// 长按卡片弹出统一菜单（与右下角三点按钮一致），锚定在卡片位置。
-  Future<void> _showPlaylistMenu(Playlist playlist, BuildContext anchor) async {
-    final box = anchor.findRenderObject() as RenderBox?;
-    final overlay = Overlay.of(anchor).context.findRenderObject() as RenderBox?;
-    if (box == null || overlay == null) return;
-    final value = await showMenu<String>(
-      context: anchor,
-      popUpAnimationStyle: kPopupMenuAnimationStyle,
-      position: RelativeRect.fromRect(
-        box.localToGlobal(Offset.zero) & box.size,
-        Offset.zero & overlay.size,
+  /// 卡片菜单：右下角三点与长按共用，锚定**整张卡片**。
+  ///
+  /// 用容器变换弹出（[MenuMorphRoute]）：卡片那个矩形连续长成选项面板，而不是
+  /// 在卡片旁边淡入 —— 与睡眠定时菜单同一套观感（见 `docs/UI-Rules.md` §11）。
+  Future<void> _showPlaylistMenu(
+    Playlist playlist,
+    BuildContext cardContext,
+  ) async {
+    final box = cardContext.findRenderObject() as RenderBox?;
+    final overlayBox =
+        Overlay.of(cardContext).context.findRenderObject() as RenderBox?;
+    if (box == null || overlayBox == null) return;
+
+    // 锚点要换算到 overlay 坐标（路由就插在它里面）。
+    final anchorRect =
+        overlayBox.globalToLocal(box.localToGlobal(Offset.zero)) & box.size;
+    final entries = _playlistEntries();
+
+    // 动画起点：贴在**卡片底边**的一条窄边（宽度不变）。配合 grow: up，面板底边
+    // 钉在卡片底边、高度往上填开 —— 起点直接给整张卡片的话，卡片（≈229 高）与
+    // 面板（208 高）几乎一样大，整段动画只剩底边往上收 + 淡入，看着像「卡片塌
+    // 下来」；收成一条窄边才读得出「填充」，而且卡片上半截（封面）还露着。
+    const stripHeight = 12.0;
+    final anchorStrip = Rect.fromLTWH(
+      anchorRect.left,
+      anchorRect.bottom - stripHeight,
+      anchorRect.width,
+      stripHeight,
+    );
+
+    final value = await Navigator.of(cardContext).push<String>(
+      MenuMorphRoute<String>(
+        anchorRect: anchorStrip,
+        grow: MenuMorphGrow.up,
+        // 宽高必须提前算准（终点矩形是算出来的，不能先布局再定位）。
+        // 宽度取**卡片自己的宽度**：面板与卡片严丝合缝，就是它翻开的。
+        panelSize: Size(
+          MorphMenuPanel.widthForAnchor(cardContext, anchorRect.width, entries),
+          MorphMenuPanel.heightFor(entries),
+        ),
+        // 起点取卡片的圆角与底色：看着就是这张卡片自己翻成了选项。
+        anchorShape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
+        panelShape: const RoundedRectangleBorder(
+          borderRadius: kMorphMenuRadius,
+        ),
+        anchorColor: Theme.of(cardContext).colorScheme.surfaceContainerLow,
+        builder: (context, close) =>
+            MorphMenuPanel(entries: entries, onSelected: close),
       ),
-      items: _playlistMenuItems(),
     );
     if (value != null && mounted) {
       await _handlePlaylistMenu(playlist, value);
@@ -623,20 +668,19 @@ class _PlaylistPageState extends State<PlaylistPage> {
                     subtitle: '${_viewModel.songCountFor(playlist)} 首歌曲',
                     onTap: () => _openDetail(playlist),
                     onLongPress: () => _showPlaylistMenu(playlist, cardContext),
-                    trailing: PopupMenuButton<String>(
-                      popUpAnimationStyle: kPopupMenuAnimationStyle,
-                      tooltip: '更多',
-                      // child 模式：用固定 20×20 盒子承载图标，命中区即 20×20。
-                      // （icon 模式内部走 IconButton，默认 48 命中区且不接收
-                      //   constraints；PopupMenuButton.constraints 只控制菜单宽度）
-                      child: const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: Icon(Icons.more_vert, size: 16),
+                    trailing: Tooltip(
+                      message: '更多',
+                      child: InkWell(
+                        onTap: () => _showPlaylistMenu(playlist, cardContext),
+                        // 命中区就是这 20×20 盒子（与原来 PopupMenuButton 的
+                        // child 模式一致）；三点与长按走同一个菜单，锚点都是
+                        // 整张卡片，所以两处弹出来的动画完全一样。
+                        child: const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: Icon(Icons.more_vert, size: 16),
+                        ),
                       ),
-                      onSelected: (value) =>
-                          _handlePlaylistMenu(playlist, value),
-                      itemBuilder: (context) => _playlistMenuItems(),
                     ),
                   ),
                 );

@@ -1,9 +1,8 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../core/services/sleep_timer_service.dart';
 import 'menu_morph_route.dart';
+import 'morph_menu.dart';
 
 /// 按钮高度。同时是悬停高亮的圆角半径的一半（36 → r18，胶囊）。
 const double _kSize = 36;
@@ -11,28 +10,8 @@ const double _kSize = 36;
 /// 按钮悬停/水波高亮形状。
 const BorderRadius _kHoverShape = BorderRadius.all(Radius.circular(_kSize / 2));
 
-/// 面板宽度按**最宽的一行实测**（见 `_panelWidth`），这两个只是上下限：
-/// 下限免得窄得难看，上限取 M3 菜单的 280 附近。
-const double _kMenuMinWidth = 200;
-const double _kMenuMaxWidth = 320;
-
-/// 菜单圆角，与全局 `PopupMenuThemeData` 的观感保持一致。
-const BorderRadius _kMenuShape = BorderRadius.all(Radius.circular(12));
-
-/// 条目左侧勾选框的宽度与它到文字的间距（`_row` 与宽度实测共用）。
-const double _kCheckWidth = 16;
-const double _kCheckGap = 8;
-
-/// 条目高度、分隔线高度、面板上下内边距。
-///
-/// 容器变换要**事先知道面板的准确高度**（终点矩形是算出来的，不能像弹层菜单
-/// 那样先布局再定位），所以条目用固定行高，而不是 `MenuItemButton` 的最小高度。
-const double _kRowHeight = 48;
-const double _kDividerHeight = 8;
-const double _kPanelPaddingV = 8;
-
-/// 条目左右内边距（高亮边缘 → 文字）。
-const double _kItemPaddingX = 20;
+// 菜单的行样式与尺寸约定不在这里：`morph_menu.dart` 里那份是睡眠定时与
+// 播放列表卡片共用的（宽高必须提前算准，两边各写一份迟早会走样）。
 
 /// 播放条左侧的睡眠定时入口：计时器图标（+ 剩余时间），点击弹预设菜单。
 ///
@@ -60,10 +39,12 @@ class SleepTimerButton extends StatelessWidget {
   /// 窄窗口：只显示图标，不显示剩余时间（留给音量块与控制按钮）。
   final bool compact;
 
-  /// 菜单里的预设时长（⚠️ 与 `macos/Runner/AppDelegate.swift` 里那份保持一致）。
+  /// 菜单里的预设时长。
+  ///
+  /// ⚠️ 这里只有 5 档，比 `macos/Runner/AppDelegate.swift` 的原生子菜单（还有
+  /// 5/10 分钟）少两档：这是一张高度固定的容器变换面板，最小窗口（520 高）里
+  /// 7 档会让面板被屏幕钳制、内部滚起来。原生菜单没有高度限制，保留全档。
   static const List<Duration> presets = [
-    Duration(minutes: 5),
-    Duration(minutes: 10),
     Duration(minutes: 15),
     Duration(minutes: 30),
     Duration(minutes: 45),
@@ -146,24 +127,28 @@ class SleepTimerButton extends StatelessWidget {
         overlayBox.globalToLocal(box.localToGlobal(Offset.zero)) & box.size;
 
     // 面板的宽高都必须**提前算准**（终点矩形是算出来的，不能像弹层菜单那样
-    // 先布局再定位）：高度按行数 + 分隔线数，宽度按最宽的一行实测 ——
-    // 写死宽度会被「取消定时（1:30:00）」这种长文案顶破。
+    // 先布局再定位）；尺寸约定与行样式都在 `morph_menu.dart` 里共用。
     final entries = _entries(state);
-    final dividers = state != null ? 2 : 1;
-    final height =
-        entries.length * _kRowHeight +
-        dividers * _kDividerHeight +
-        2 * _kPanelPaddingV;
+    final dividerAfter = _dividerAfter(entries);
 
     Navigator.of(context)
         .push<String>(
           MenuMorphRoute<String>(
             anchorRect: anchor,
-            panelSize: Size(_panelWidth(context, entries), height),
-            panelShape: RoundedRectangleBorder(borderRadius: _kMenuShape),
+            panelSize: Size(
+              MorphMenuPanel.widthFor(context, entries),
+              MorphMenuPanel.heightFor(entries, dividerAfter: dividerAfter),
+            ),
+            panelShape: const RoundedRectangleBorder(
+              borderRadius: kMorphMenuRadius,
+            ),
             // 起点用按钮的底色（面板从按钮里"长"出来，颜色也一起过渡）。
             anchorColor: theme.colorScheme.surfaceContainerHighest,
-            builder: (context, close) => _menuContent(context, close, entries),
+            builder: (context, close) => MorphMenuPanel(
+              entries: entries,
+              dividerAfter: dividerAfter,
+              onSelected: close,
+            ),
           ),
         )
         .then((value) {
@@ -189,17 +174,15 @@ class SleepTimerButton extends StatelessWidget {
   }
 
   /// 菜单条目（顺序固定：预设 → 两个模式 → 激活时的「取消定时」）。
-  ///
-  /// 文案只有这一处 —— `_menuContent` 渲染它、`_panelWidth` 量它，不会走样。
-  List<_MenuEntry> _entries(SleepTimerState? state) => [
+  List<MorphMenuEntry<String>> _entries(SleepTimerState? state) => [
     for (final preset in presets)
-      _MenuEntry('${preset.inMinutes} 分钟', '${preset.inMinutes}'),
-    _MenuEntry(
+      MorphMenuEntry('${preset.inMinutes} 分钟', '${preset.inMinutes}'),
+    MorphMenuEntry.checkable(
       '播完当前曲目',
       _kEndOfTrack,
       checked: state?.mode == SleepTimerMode.endOfTrack,
     ),
-    _MenuEntry(
+    MorphMenuEntry.checkable(
       '播完当前播放列表',
       _kEndOfQueue,
       checked: state?.mode == SleepTimerMode.endOfQueue,
@@ -208,106 +191,14 @@ class SleepTimerButton extends StatelessWidget {
       // 倒计时模式下把剩余时间写在取消项里：菜单里的选项无法"勾选"一个正在
       // 递减的值，这是唯一能显示进度的位置（淡出期间显示「正在淡出…」，
       // 提示用户此刻取消还来得及）。
-      _MenuEntry('取消定时（${sleepTimerLabel(state)}）', _kCancel),
+      MorphMenuEntry('取消定时（${sleepTimerLabel(state)}）', _kCancel),
   ];
 
-  /// 面板宽度 = 最宽一行的实测宽度 + 勾选框 + 两侧内边距，再夹进上下限。
-  ///
-  /// 与原弹出菜单一样"按内容自适应"，但必须在**打开之前**算出来（终点矩形
-  /// 要用），所以用 [TextPainter] 量；带上 `textScaler`，系统放大字号时会跟着
-  /// 变宽。
-  double _panelWidth(BuildContext context, List<_MenuEntry> entries) {
-    final style = theme.textTheme.bodyMedium;
-    final scaler = MediaQuery.textScalerOf(context);
-    var widest = 0.0;
-    for (final entry in entries) {
-      final painter = TextPainter(
-        text: TextSpan(text: entry.label, style: style),
-        textDirection: Directionality.of(context),
-        textScaler: scaler,
-      )..layout();
-      widest = math.max(widest, painter.width);
-      painter.dispose();
-    }
-    final content = widest + _kCheckWidth + _kCheckGap + _kItemPaddingX * 2;
-    return content.clamp(_kMenuMinWidth, _kMenuMaxWidth);
-  }
-
-  /// 菜单内容。行高固定，总高与 `_openMenu` 里算出来的一致；矮窗口下面板会被
-  /// 屏幕高度钳制，那时靠这里的滚动消化。
-  Widget _menuContent(
-    BuildContext context,
-    void Function([String? result]) close,
-    List<_MenuEntry> entries,
-  ) {
-    // 分隔线位置：预设与模式之间一条，激活时模式与「取消定时」之间再来一条。
-    final dividerAfter = <int>{
-      presets.length - 1,
-      if (entries.length > presets.length + 2) entries.length - 2,
-    };
-
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: _kPanelPaddingV),
-          for (var i = 0; i < entries.length; i++) ...[
-            _row(
-              entries[i].label,
-              () => close(entries[i].value),
-              checked: entries[i].checked,
-            ),
-            if (dividerAfter.contains(i))
-              const Divider(height: _kDividerHeight),
-          ],
-          const SizedBox(height: _kPanelPaddingV),
-        ],
-      ),
-    );
-  }
-
-  /// 一行菜单项。勾选框用透明图标占位，避免选中时行内文字左右跳动。
-  ///
-  /// 文字给 `ellipsis` 兜底：面板宽度虽然实测自这张表，但极端字号/字体回退下
-  /// 也不应该出现溢出条纹。
-  Widget _row(String label, VoidCallback onTap, {bool checked = false}) {
-    return InkWell(
-      onTap: onTap,
-      child: SizedBox(
-        height: _kRowHeight,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: _kItemPaddingX),
-          child: Row(
-            children: [
-              Icon(
-                Icons.check,
-                size: _kCheckWidth,
-                color: checked ? theme.colorScheme.primary : Colors.transparent,
-              ),
-              const SizedBox(width: _kCheckGap),
-              Expanded(
-                child: Text(
-                  label,
-                  style: theme.textTheme.bodyMedium,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 菜单里的一行：文案 + 回传值 + 是否勾选。
-class _MenuEntry {
-  const _MenuEntry(this.label, this.value, {this.checked = false});
-
-  final String label;
-  final String value;
-  final bool checked;
+  /// 分隔线位置：预设与模式之间一条，激活时模式与「取消定时」之间再来一条。
+  Set<int> _dividerAfter(List<MorphMenuEntry<String>> entries) => {
+    presets.length - 1,
+    if (entries.length > presets.length + 2) entries.length - 2,
+  };
 }
 
 /// 睡眠定时状态的可读文案（菜单/tooltip 用）。
