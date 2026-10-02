@@ -66,5 +66,7 @@ app.*.map.json
 
 # AI
 .copilot/
-test/impeller_flicker_repro.dart
-test/impeller_flicker_repro_perf.dart
+
+# Personal notes (not part of the project)
+RESUME-NOTES.md
+FLUTTER-NOTES.md

@@ -217,6 +217,18 @@ void main() {
     expect(player.isPlaying, isTrue, reason: '不应因引擎瞬时状态闪成未播放');
   });
 
+  test('加载窗口内按暂停：加载完成后不再起播（声音与界面保持一致）', () async {
+    engine.loadDelay = const Duration(milliseconds: 30);
+
+    // 不 await：点歌后立刻点暂停，暂停请求正好落在 load 的等待窗口内。
+    final loading = player.playFromList([_song(1)]);
+    await player.pause();
+    await loading;
+
+    expect(engine.playCalls, 0, reason: '加载返回后不得无视用户意图起播');
+    expect(player.isPlaying, isFalse);
+  });
+
   test('并发切歌：过期的加载被丢弃，最终只保留最后一次', () async {
     await player.playFromList([_song(1), _song(2), _song(3)]);
     engine.loadDelay = const Duration(milliseconds: 30);

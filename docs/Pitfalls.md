@@ -146,8 +146,8 @@
   专辑页（大量 `Image.file` + `frameBuilder` 的 `AnimatedOpacity` 淡入 + `ClipRRect` +
   elevation 阴影）是重灾区：纹理上传/合成时序变化 → 透明帧与淡入被频繁看到。
 - **状态**：**未修**（等官方或改淡入实现）。提交 **flutter/flutter#191538**，官方在 Apple
-  Silicon 上无法复现，已转 Impeller 团队。最小复现：`test/impeller_flicker_repro.dart`
-  （`flutter run -d macos -t test/impeller_flicker_repro.dart`）。
+  Silicon 上无法复现，已转 Impeller 团队。最小复现：`test/demo/impeller_flicker_repro.dart`
+  （`flutter run -d macos -t test/demo/impeller_flicker_repro.dart`）。
 - **基线事实**：本项目 `macos/Runner/Info.plist` 保留 **`FLTEnableImpeller=false`**（走 Skia）
   —— 所以在本项目里跑复现 demo **是 Skia，不会闪**，要在干净 `flutter create` 项目里跑。
 - **验证方法**：临时删掉该 key 或加 `true`，`flutter run` 控制台会打印
@@ -200,6 +200,28 @@
 - **根因**：`ShortcutManager` 命中后是从 **primaryFocus 的 context 向上**找 Action。`builder` 里的 `Shortcuts` 位于 `WidgetsApp` 默认映射与 Navigator 之间（比对话框那条 `DismissIntent` 更靠近焦点）⇒ 先被它匹配，随后又在 `builder` 自己的 `Actions` 里找到我们的 Action 并消费掉。
 - **修法**：改用 `FocusManager.addLateKeyEventHandler` —— 它只在**没有任何控件 / 路由处理该键**时才运行，对话框 / `MenuAnchor` 菜单 / `ToolbarSearchField` 的 Esc 全部自然优先。
 - **护栏**：`test/keyboard_focus_test.dart`（对话框与弹层菜单两例断言「处理器不被调用、弹层自行关闭」）。
+
+### C7. 2026-10-01 弹出菜单在窗口底部会“从下沿滑上来”
+
+- **症状**：播放条（窗口最底部）里的 `PopupMenuButton`，展开时不像“从按钮展开”，
+  而是整张菜单从窗口下沿往上滑出来；菜单越高滑动越久，感觉“超过 300ms”。
+- **根因**：`_PopupMenuRouteLayout.getPositionForChild` 的 y 来自 `y = position.top`，
+  随后 `_fitInsideScreen` 在放不下时改成 `y = screen.bottom - 8 - childSize.height`
+  —— 这里的 `childSize` 是**当帧动画中的尺寸**（高度 = 内容高 × `heightFactor`），
+  于是每帧都有 `y + height ≡ screen.bottom - 8`：**底边被钉死、顶边随高度往上跑**。
+  又因为 `clipBehavior` 默认 `Clip.none`，内容是整块被带着上移的（不是被裁剪揭示）。
+  时长确实是 300ms（`_kMenuDuration`），但主导观感的滑动占 267ms —— 高度区间是
+  `Interval(0, unit × 项数)`，`unit = 1/(项数 + 1.5)`，12 项时就是 `[0, 0.889]`。
+- **修法**：换成自己控制生长锚点的实现 —— `MenuMorphRoute`
+  （`lib/widgets/menu_morph_route.dart`）：位置只算一次、面板靠裁剪长大，
+  内容在屏幕上不动。
+- **顺带**：`package:animations` 的 `OpenContainer` 做不了这件事 —— 它的终点矩形
+  写死是**整个 Navigator**（`open_container.dart`：`_rectTween.end = Offset.zero &
+  navSize`），只适合“小控件 → 整页”的容器变换。
+- **同一天补的第二个坑**：自己控制生长锚点后，向上生长只留了 8px 屏幕边距，
+  而 macOS 那 52px 是**原生红绿灯**（标题栏透明、Flutter 视图铺满整窗）——
+  面板装不下时顶边被钳到 y=8，正好钻进红绿灯底下。修法：扣
+  `layoutConfig.menuTopInset`（macOS 52，其余 0），装不下就在面板内部滚动。
 
 ## D. 领域事故索引（细节留在原文档）
 

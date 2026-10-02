@@ -52,6 +52,12 @@ class PlatformLayoutConfig {
   /// 播放页顶栏顶部的红绿灯预留区高度：macOS 45，其余平台 0。
   /// 播放页顶栏总高 = 56 控件区 + 本值（macOS 101 = 56 + 45）。
   final double playerTopBarTopReserve;
+
+  /// 容器变换菜单（`MenuMorphRoute`）**向上生长**时的顶部安全区：红绿灯那一栏。
+  ///
+  /// 与 [sidebarTopInset] 同值 —— 两者说的都是「窗口顶部被原生控件占掉的区域」。
+  /// macOS 52；其余平台没有红绿灯，为 0（面板可以一直顶到窗口上沿）。
+  double get menuTopInset => sidebarTopInset;
 }
 
 /// macOS：unified 工具栏，红绿灯原生居中（中心 ≈26，顶栏 52）；侧栏宽 92；

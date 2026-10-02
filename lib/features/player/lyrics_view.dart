@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lyric/core/lyric_model.dart';
 import 'package:flutter_lyric/flutter_lyric.dart';
 
+import '../../core/constants/motion.dart';
 import '../../core/models/lyric_text_size.dart';
 import 'player_ui_state.dart';
 
@@ -108,6 +109,7 @@ class _LyricsViewState extends State<LyricsView> {
     if (box == null || overlay == null) return;
     final selected = await showMenu<LyricTextSize>(
       context: context,
+      popUpAnimationStyle: kPopupMenuAnimationStyle,
       position: RelativeRect.fromRect(
         box.localToGlobal(Offset.zero) & box.size,
         Offset.zero & overlay.size,

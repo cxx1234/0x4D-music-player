@@ -218,6 +218,9 @@ class MenuService {
             'sleepTimerMinutes': state.sleepTimerMinutes,
           })
           .catchError((Object e) {
+            // 通道未就绪 / 调用失败：清掉快照让下次推送重试。否则这次丢掉的
+            // 使能 / 勾选会一直停在原生默认值上，直到状态再变化一次。
+            _lastPushed = null;
             AppLogger.warning('Menu', 'Failed to push menu state', e);
           }),
     );

@@ -111,7 +111,11 @@ class PlaybackFeedbackService {
     );
   }
 
-  /// 停止（菜单 ⌘.）。停止会清空队列，底栏随即变成「未在播放」。
+  /// 停止（菜单 ⌘.）。
+  ///
+  /// 调 [PlayerService.stopPlayback]：**保留队列与当前曲目**、位置归零，底栏
+  /// 仍然显示这首歌（再点播放会从头开始）。与 [PlayerService.stop]（停止并
+  /// 清空队列）是两件事，菜单项叫的是「停止」而不是「停止并清空」。
   ///
   /// 只发 HUD、**不发控件脉冲**：应用里没有「停止」按钮可点亮（原生菜单项
   /// 自己会高亮），HUD 是唯一反馈。
@@ -120,7 +124,7 @@ class PlaybackFeedbackService {
     _hud.show(
       const HudMessage(
         icon: Icons.stop_rounded,
-        text: '已停止',
+        text: '已停止 · 保留队列',
         kind: HudKind.playback,
       ),
     );

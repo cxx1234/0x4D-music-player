@@ -5,6 +5,109 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Right-click (secondary click) context menus on the desktop surfaces that carry
+  a set of actions. Which menu opens is decided by the control, not by the right
+  click, so the two agree: a row that already has a three-dot button opens *that*
+  menu (same position, same animation — the button's own `showButtonMenu()`), so
+  the five song-list call sites needed no change; row-shaped entries without a
+  button (queue rows, artist rows, the "favourites" bar in the playlists page)
+  use the standard popup menu anchored on the row's trailing slot, i.e. exactly
+  where a three-dot button would be; grid cards (album, playlist) use the
+  container-transform menu they already have for their three-dot and long press.
+  Entries do not repeat what a plain click already does — a row click plays or
+  opens, so the new menus hold only the *other* actions (queue rows get "remove
+  from queue", artist rows get "play all", the album card gets "play all / add to
+  queue"). Right-clicking is turned off while a list is in reorder or
+  multi-select mode, since the row gestures there are already drag and check
+
+### Changed
+- The grid-card menus (album card, playlist card — three-dot, long press and
+  right click alike) grow open in 240ms instead of 320ms and close in 180ms
+  instead of 220ms. "The card unfolds into its options" does not need to take
+  that long; at 320ms it read as slow next to the plain popup menus. The scope is
+  `showCardMenu`, so the sleep-timer menu, which also uses the container
+  transform, keeps the default timing it was tuned with
+- Popup menus across the app ease out (`Curves.easeOutCubic`) instead of moving
+  linearly. The framework's choreography spends the last third of its 300ms on
+  the last few percent of the animated value, so a linear curve made the panel
+  look settled while items were still trickling in. Keeping the framework's
+  300ms, the last item now arrives at roughly 156ms instead of 267ms
+- The sleep-timer menu grows out of its button instead of sliding up from the
+  window edge. `PopupMenuRoute` recomputes its position every frame from the
+  *current* panel size, so a menu taller than the space below the button gets
+  its bottom edge pinned to the window and slides up from below — which the
+  player-bar button at the very bottom of the window always hits. Position,
+  size, corner radius and colour are now interpolated from the button, and the
+  panel is positioned once and revealed by its own clip
+- The playlist card menu grows up from the card's bottom edge instead of
+  morphing from the whole card. The card (≈229 tall) and the panel (208 tall)
+  are nearly the same size, so morphing from the card read as a shrink — the
+  only visible movement was the bottom edge coming up. Starting from a 12px
+  strip pinned to the card's bottom edge reads as filling upward, and leaves the
+  top of the card (its cover) visible. The three-dot button and the long press
+  share it, anchored on the card, and the panel is exactly as wide as the card;
+  its row layout and size rules live in a shared `morph_menu.dart`, which the
+  sleep timer uses as well
+- Check slots in the morph menus are per row now. Entries that cannot be checked
+  start at the panel padding instead of being indented for a check mark they
+  would never show, so the sleep timer's preset rows and its "cancel" row no
+  longer shift when a mode gets selected — and the playlist card, which has
+  nothing checkable, has no dead space left of its labels. Panel width is
+  measured per group (plain rows vs checkable rows), so the indent cannot push a
+  long label into an ellipsis
+- The in-app sleep-timer menu offers five presets (15/30/45/60/90) instead of
+  seven. Its panel has a fixed height, and seven presets plus an active "cancel"
+  row came to 512px — taller than the smallest window allows, so it had to
+  scroll. The macOS menu-bar entry keeps 5/10, since a menu has no height limit
+
+### Fixed
+- Morph menus that grow upward no longer slide under the traffic lights. The
+  geometry kept only an 8px margin from the top of the window, but on macOS the
+  titlebar is transparent and the Flutter view spans the whole window, so those
+  first 52px are exactly where the traffic lights are drawn. Any panel that did
+  not fit above its anchor had its top edge clamped to y=8 — the sleep-timer
+  menu did it as soon as a timer was active. The top edge now stops below
+  `layoutConfig.menuTopInset` (52 on macOS, 0 elsewhere) and the panel scrolls
+  internally instead
+- Pausing right after picking a song no longer leaves audio playing while the UI,
+  the menu title and the macOS Now Playing rate all say "paused". The load window
+  (`setSourceDeviceFile` + `getDuration`) is a real await, so the resume after it
+  now re-checks the play intent instead of starting unconditionally
+- The sleep timer can be cancelled during its five-second fade-out. The state used
+  to be cleared the moment the countdown hit zero and only then begin fading, so
+  the "cancel" entry vanished from both the player-bar menu and the native menu,
+  and a play request in that window was undone by the fade-out's own trailing
+  pause. The state now stays active behind a `fading` flag until the fade really
+  ends, cancelling restores the volume immediately, and a new play request aborts
+  the fade instead of fighting it
+- The sleep-timer countdown measures against a deadline instead of subtracting one
+  tick per tick, so a throttled timer or a sleeping machine no longer stretches
+  "30 minutes" into an arbitrary wait. The "paused" notice is also posted only
+  once playback actually stopped, not the moment the fade begins
+- Media keys survive a native registration failure: `MediaControlService.setup` is
+  wrapped in a try/catch like the menu and notification channels, so a startup
+  race reports "media keys unavailable" instead of ending on the error page
+- A failed menu-state push no longer caches its snapshot, so enabling, titles and
+  checkmarks are retried on the next push instead of silently staying at the
+  native defaults
+- Notification album-art copies are reused when the source has not changed, and
+  copies older than a week are cleaned up with the next copy. The throwaway copies
+  directory used to grow with the library and re-copied whole covers on every
+  track change
+- Restoring the window from a notification that fails now logs a warning instead
+  of swallowing the error, and the "stop" HUD reads "已停止 · 保留队列" to match
+  what `stopPlayback` does (queue and current track kept)
+- The sleep-timer menu no longer overflows on its cancel row. The container
+  transform has to know the panel size before it opens, so the width was fixed
+  at 228px, which a 90-minute timer ("取消定时（1:30:00）") is too wide for. The
+  width is now measured from the widest row with the text scaler applied and
+  clamped. The player-bar button label gets the same treatment: in the
+  end-of-queue mode it reads "播完当前播放列表", the widest thing that 128px slot
+  ever shows. Both now ellipsize instead of overflowing
+
 ## [0.2.6] - 2026-09-21
 
 ### Added

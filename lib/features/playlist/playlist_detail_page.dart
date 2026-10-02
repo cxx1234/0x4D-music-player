@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 
+import '../../core/constants/motion.dart';
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../widgets/cached_album_art.dart';
@@ -213,6 +214,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
             onPressed: _addSongs,
           ),
           PopupMenuButton<String>(
+            popUpAnimationStyle: kPopupMenuAnimationStyle,
             tooltip: '更多',
             // 默认 iconTheme.color 是固定纯黑/纯白（M2 遗留），显式指定跟随主题。
             iconColor: theme.colorScheme.onSurfaceVariant,
@@ -327,6 +329,8 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       song: song,
       isCurrentSong: isCurrent,
       isPlaying: isCurrent && ServiceLocator.player.isPlaying,
+      // 排序模式下关掉右键：行左槽已经是拖拽把手，再弹菜单只会打架。
+      contextMenuEnabled: !_reorderMode,
       onTap: () =>
           ServiceLocator.player.playFromList(_songs, startIndex: index),
       leading: Row(

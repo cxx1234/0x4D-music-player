@@ -25,6 +25,7 @@ class ListItemTile extends StatelessWidget {
     this.subtitle,
     this.trailing,
     this.onTap,
+    this.onSecondaryTap,
   });
 
   /// 行首图标（头像/图标等）。
@@ -42,13 +43,18 @@ class ListItemTile extends StatelessWidget {
   /// 点击回调。
   final VoidCallback? onTap;
 
+  /// 鼠标右键（次级点击）回调，参数是行自己的 context（用于算菜单锚点）。
+  ///
+  /// 主键点击仍走 [onTap]；两个手势在手势竞技场里互不抢。
+  final void Function(BuildContext rowContext)? onSecondaryTap;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final subtitleStyle = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
-    return ListTile(
+    final row = ListTile(
       // 与 SongTile 一致：文本块整体垂直居中并保持行高。副标题在 title 里，
       // ListTile 一律按「单行」排版，必须显式给 72 才不会在外层 itemExtent: 72
       // 的列表里被挤到上方（详见 SongTile 同名参数注释）。
@@ -72,6 +78,13 @@ class ListItemTile extends StatelessWidget {
       subtitle: null,
       trailing: trailing,
       onTap: onTap,
+    );
+
+    if (onSecondaryTap == null) return row;
+    // 右键 / Control+点击 / 双指轻点；主键点击仍由 ListTile 自己的 InkWell 处理。
+    return GestureDetector(
+      onSecondaryTap: () => onSecondaryTap!(context),
+      child: row,
     );
   }
 }

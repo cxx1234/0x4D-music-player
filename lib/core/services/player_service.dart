@@ -359,7 +359,9 @@ class PlayerService extends ChangeNotifier {
       if (_engine.loadedPath == null) return false;
       // 加载成功后才标记「已加载」（此前 position/duration 回退到队列保存值）。
       _loadedIndex = targetIndex;
-      if (autoPlay) await _engine.play();
+      // 复查用户意图：加载期间用户可能已经按了暂停（`pause()` 只改 `_shouldPlay`），
+      // 这里若无条件起播，就会出现「声音在放、界面与系统面板显示已暂停」的不一致。
+      if (autoPlay && _shouldPlay) await _engine.play();
       // 加载（并起播）成功 → 复位连续失败计数，避免"隔了很久的旧失败"累积到上限。
       _clearPlaybackError();
       return true;
@@ -609,6 +611,10 @@ class PlayerService extends ChangeNotifier {
 
   Future<void> play() async {
     if (_playQueue.isEmpty) return;
+    // 用户主动播放 → 放弃进行中的睡眠淡出：否则淡出循环的收尾
+    // （`if (_shouldPlay) await pause()`）会把刚恢复的播放又暂停一次，
+    // 表现为「按了播放没反应」（媒体键 / 系统「正在播放」面板走的就是这里）。
+    cancelFadeOut();
     // 惰性加载：启动恢复的队列尚未交给引擎（macOS 沙箱时序）。
     if (!_isLoaded) {
       await _loadCurrent(autoPlay: true);

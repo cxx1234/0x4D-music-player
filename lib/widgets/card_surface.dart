@@ -22,6 +22,7 @@ class CardSurface extends StatelessWidget {
     required this.child,
     this.onTap,
     this.onLongPress,
+    this.onSecondaryTap,
     this.color,
     this.borderRadius = 12,
     this.showShadow = true,
@@ -35,6 +36,12 @@ class CardSurface extends StatelessWidget {
 
   /// 长按回调（可选）。
   final VoidCallback? onLongPress;
+
+  /// 鼠标右键（次级点击）回调，参数是**卡片自己的** context。
+  ///
+  /// 传 context 而不是矩形：锚点必须在点击发生的那一刻现取（网格滚动后卡片
+  /// 位置就变了），由 `context_menu.dart` 换算到 overlay 坐标。
+  final void Function(BuildContext cardContext)? onSecondaryTap;
 
   /// 卡片底色；默认 `surfaceContainerLow`（比页面表面高一档）。
   final Color? color;
@@ -57,8 +64,16 @@ class CardSurface extends StatelessWidget {
       ),
       child: Material(
         type: MaterialType.transparency,
-        child: (onTap != null || onLongPress != null)
-            ? InkWell(onTap: onTap, onLongPress: onLongPress, child: child)
+        child: (onTap != null || onLongPress != null || onSecondaryTap != null)
+            ? InkWell(
+                onTap: onTap,
+                onLongPress: onLongPress,
+                // ListTile 不参与这里：卡片没有内层 InkWell 抢次级点击。
+                onSecondaryTap: onSecondaryTap == null
+                    ? null
+                    : () => onSecondaryTap!(context),
+                child: child,
+              )
             : child,
       ),
     );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/player_service.dart';
+import '../../widgets/context_menu.dart';
 import '../../widgets/song_tile.dart';
 import 'player_ui_state.dart';
 import 'player_view_model.dart';
@@ -287,6 +288,24 @@ class _QueueViewState extends State<QueueView> {
     if (confirmed == true) {
       await vm.clearQueue();
     }
+  }
+
+  /// 队列行的右键菜单：只有「从队列移除」。
+  ///
+  /// 没有「播放这首」——点行本身就是跳过去播（与歌曲行右键不含「播放」是同一条
+  /// 理由）。菜单锚在行尾的菜单槽位，与歌曲行三点按钮同一位置。
+  Future<void> _showRowMenu(BuildContext rowContext, int displayIndex) async {
+    final rowRect = overlayRectOf(rowContext);
+    if (rowRect == null) return;
+
+    final value = await showRowMenu<String>(
+      context: rowContext,
+      rowRect: rowRect,
+      entries: const [PopupMenuItem(value: 'remove', child: Text('从队列移除'))],
+    );
+    if (value != 'remove' || !mounted) return;
+    // 随机模式下展示位置 ≠ 逻辑下标，必须换算（与批量删除同一处理）。
+    await vm.removeFromQueue(_toLogicalIndex(displayIndex));
   }
 
   Future<void> _deleteSelected() async {
@@ -634,6 +653,10 @@ class _QueueViewState extends State<QueueView> {
         isPlaying: isCurrent && vm.isPlaying,
         // 队列用 leading 指示当前项（播放图标/序号），隐藏行尾音量图标避免重复
         showCurrentIndicator: false,
+        // 排序/删除模式下关掉右键：那两个模式里行上的手势已经是拖拽/勾选，
+        // 再弹一个只含「从队列移除」的菜单只会打架。
+        onSecondaryTap: (rowContext, song) => _showRowMenu(rowContext, index),
+        contextMenuEnabled: !_deleteMode && !_reorderMode,
         onTap: _deleteMode
             ? () {
                 setState(() {

@@ -74,10 +74,7 @@ void main() {
   });
 
   testWidgets('有歌手/专辑的歌曲：内容垂直居中（回归保护）', (tester) async {
-    await _pumpList(
-      tester,
-      [_song(1, artist: '歌手', album: '专辑')],
-    );
+    await _pumpList(tester, [_song(1, artist: '歌手', album: '专辑')]);
 
     final row = _rowRect(tester, 0);
     expect(row.height, _kRowExtent);
@@ -92,14 +89,10 @@ void main() {
   });
 
   testWidgets('有/无副标题的行高一致，内容都居中', (tester) async {
-    await _pumpList(
-      tester,
-      [
-        _song(1, artist: '歌手', album: '专辑'),
-        _song(2, artist: null, album: null),
-      ],
-      showIndex: false,
-    );
+    await _pumpList(tester, [
+      _song(1, artist: '歌手', album: '专辑'),
+      _song(2, artist: null, album: null),
+    ], showIndex: false);
     final withMeta = _rowRect(tester, 0);
     final withoutMeta = _rowRect(tester, 1);
     expect(withMeta.height, _kRowExtent);
@@ -109,7 +102,10 @@ void main() {
     final covers = find.byType(CachedAlbumArt);
     expect(
       tester.getRect(covers.at(0)).center.dy - withMeta.center.dy,
-      closeTo(tester.getRect(covers.at(1)).center.dy - withoutMeta.center.dy, 0.5),
+      closeTo(
+        tester.getRect(covers.at(1)).center.dy - withoutMeta.center.dy,
+        0.5,
+      ),
     );
   });
 

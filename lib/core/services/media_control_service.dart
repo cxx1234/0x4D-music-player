@@ -45,7 +45,18 @@ class MediaControlService {
 
   /// Registers with the system and starts listening.
   Future<void> initialize() async {
-    await _controls.setup();
+    // 原生通道在同一次 applicationDidFinishLaunching 里才注册，Dart 侧初始化可能
+    // 先跑；setup 失败不该把「媒体键暂时不可用」升级成整屏启动失败页。
+    // 其余通道（menu / notifications）都是同样的兜底。
+    try {
+      await _controls.setup();
+    } catch (e) {
+      AppLogger.warning(
+        'MediaControl',
+        'Failed to register media controls; media keys unavailable',
+        e,
+      );
+    }
 
     _eventSub = _controls.events.listen(_handleEvent);
     _player.addListener(_onPlayerChanged);
