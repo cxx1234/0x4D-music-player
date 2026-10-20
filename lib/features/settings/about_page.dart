@@ -61,10 +61,16 @@ class AboutPage extends StatelessWidget {
           children: [
             const SizedBox(height: 24),
             Center(
-              child: Icon(
-                Icons.music_note_rounded,
-                size: 64,
-                color: theme.colorScheme.primary,
+              // 明暗两套 logo:深色主题用白字版,浅色主题用深字版。
+              // 两张图均为透明背景,可直接贴合页面底色。
+              child: Image.asset(
+                theme.brightness == Brightness.dark
+                    ? 'assets/icon/0x4D_no_background.png'
+                    : 'assets/icon/0x4D_no_background_b.png',
+                width: 96,
+                height: 96,
+                filterQuality: FilterQuality.medium,
+                excludeFromSemantics: true,
               ),
             ),
             const SizedBox(height: 16),

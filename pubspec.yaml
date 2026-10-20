@@ -83,6 +83,13 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # 关于页 logo:明暗两套,由 AboutPage 按 Theme.brightness 切换。
+  # 0x4D_no_background.png   = 白字版(深色主题)
+  # 0x4D_no_background_b.png = 深字版(浅色主题)
+  assets:
+    - assets/icon/0x4D_no_background.png
+    - assets/icon/0x4D_no_background_b.png
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
