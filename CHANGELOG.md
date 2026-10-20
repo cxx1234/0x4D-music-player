@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- The about page shows the app artwork instead of a generic note glyph. The
+  artwork ships in two variants because one logo cannot serve both surfaces: a
+  dark-glyph set disappears on the dark theme, and a white-glyph set disappears
+  on the light one. The variant is picked from `Theme.brightness` at build time,
+  so switching the theme swaps the image with no reload
 - Right-click (secondary click) context menus on the desktop surfaces that carry
   a set of actions. Which menu opens is decided by the control, not by the right
   click, so the two agree: a row that already has a three-dot button opens *that*
