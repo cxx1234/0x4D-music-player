@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.2.6+9
+version: 0.2.6+10
 
 environment:
   sdk: ^3.12.2
@@ -33,7 +33,7 @@ dependencies:
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
+  cupertino_icons: ^2.0.0
   file_picker: ^13.0.0
   drift: ^2.26.0
   sqlite3: ^3.3.4
@@ -42,11 +42,12 @@ dependencies:
   # fork 补强后的 audio_metadata_reader：
   # 纯 Dart，支持 albumArtist（TPE1/ALBUMARTIST/aART）+ 嵌入歌词解析。
   # 固定到 feat/album-artist 分支的具体 commit（而非分支名），保证构建可复现；
-  # 上游 PR 合并发布后换 ^1.8.0。
+  # 已并入 upstream 1.8.1 的全部修复（三次 upstream/main merge），但跨格式
+  # albumArtist 与嵌入歌词仍是 fork 独有、upstream 未合并，故暂不回 pub.dev 的 ^1.8.x。
   audio_metadata_reader:
     git:
       url: https://github.com/cxx1234/audio_metadata_reader.git
-      ref: 4a6f245413d8f0f11f4a8e7613a9ae9ee0681eae
+      ref: 47bf3f76231e85b83a6264d13ad04347630666bb
   watcher: ^1.1.0
   lpinyin: ^2.0.3
   flutter_lyric: ^3.0.0
