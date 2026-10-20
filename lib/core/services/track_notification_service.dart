@@ -194,8 +194,8 @@ class TrackNotificationService {
   /// 的符号链接），实测系统读不到该位置 → 通知里不显示缩略图；而容器内
   /// `Documents` 下的路径已被证明可用（修复前直接传原始的封面路径时缩略图能显示）。
   ///
-  /// 副本按 song id 固定命名：上次副本若未被系统搬走，先删掉再复制；扩展名沿用
-  /// 原图（封面可能是 `.jpg` 或 `.png`，通知系统按扩展名判断类型）。
+  /// 副本按 song id + 源文件版本（大小/mtime）命名：封面换了名字就变，
+  /// 不会复用旧副本；扩展名沿用原图（封面可能是 `.jpg` 或 `.png`）。
   Future<String?> _copyCoverForAttachment(Song song) async {
     final coverPath = song.albumArtFilePath;
     if (coverPath == null) return null;
@@ -209,32 +209,27 @@ class TrackNotificationService {
       final dir = Directory(p.join(appDir.path, 'notif_attachments'));
       if (!await dir.exists()) await dir.create(recursive: true);
       final ext = p.extension(coverPath);
-      final name = 'cover_${song.id}${ext.isEmpty ? '.jpg' : ext}';
+      final stat = await src.stat();
+      final name =
+          'cover_${song.id}_${stat.size}_'
+          '${stat.modified.millisecondsSinceEpoch}${ext.isEmpty ? '.jpg' : ext}';
       final dest = File(p.join(dir.path, name));
-      // 已经拷过且源文件没变（封面换掉时大小/mtime 会变）→ 直接复用：
-      // 来回切同一首歌不该反复搬运整张 Hi-Res 封面。
-      if (await dest.exists() && await _sameFile(src, dest)) return dest.path;
-      if (await dest.exists()) await dest.delete();
+      if (await dest.exists()) return dest.path;
       await src.copy(dest.path);
+      // ⚠️ `File.copy` 会**保留源文件的 mtime**：封面缓存可能是几个月前写的，
+      // 副本一生成就"超过 TTL"，会被 _cleanupAttachments 立刻删掉 —— 既刷出
+      // "Removed N stale cover copies"，又让附件指向一个已删除的文件。
+      // 显式把副本 mtime 设为当前时间，让 TTL 真正表示"副本多久没被用过"。
+      try {
+        await dest.setLastModified(DateTime.now());
+      } catch (_) {
+        // 设置失败不影响通知本身（下次仍会重新拷贝）。
+      }
       await _cleanupAttachments(dir);
       return dest.path;
     } catch (e) {
       AppLogger.warning('Notify', 'Failed to prepare cover attachment', e);
       return null;
-    }
-  }
-
-  /// 粗略判断两个文件是否同源：大小相同且修改时间相差 1 秒内即视为同一份。
-  static Future<bool> _sameFile(File a, File b) async {
-    try {
-      final sa = await a.stat();
-      final sb = await b.stat();
-      return sa.size == sb.size &&
-          sb.modified.difference(sa.modified).abs() <
-              const Duration(seconds: 1);
-    } catch (e) {
-      // 读不到状态就当作不同（宁可多拷一次，不要用坏副本）。
-      return false;
     }
   }
 
@@ -246,17 +241,12 @@ class TrackNotificationService {
     _lastAttachmentCleanup = now;
     try {
       final cutoff = now.subtract(_attachmentTtl);
-      var removed = 0;
       await for (final entity in dir.list()) {
         if (entity is! File) continue;
         final stat = await entity.stat();
         if (stat.modified.isBefore(cutoff)) {
           await entity.delete();
-          removed++;
         }
-      }
-      if (removed > 0) {
-        AppLogger.info('Notify', 'Removed $removed stale cover copies');
       }
     } catch (e) {
       // 清理是尽力而为：失败不该影响本次通知。
