@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -5,6 +6,7 @@ import 'package:flutter_lyric/flutter_lyric.dart';
 import 'package:path/path.dart' as p;
 
 import '../database/database.dart';
+import '../models/lyric_load_state.dart';
 import '../utils/lyric_document_parser.dart';
 import '../utils/logger.dart';
 import 'metadata_service.dart';
@@ -91,8 +93,11 @@ class LyricsViewModel {
 
   late final PlayerLyricProgressSource _progressSource;
 
-  /// 正在加载歌词的歌曲 id（防快速切歌时过期结果覆盖新歌）。
-  int? _loadingForId;
+  /// 异步加载代际：每次切歌 / 翻译重载自增，过期结果直接丢弃。
+  int _loadGeneration = 0;
+
+  /// 当前歌曲已经读到的原始歌词；翻译开关直接重解析，避免再次读盘。
+  String? _currentContent;
 
   /// 是否显示翻译副行（由歌词菜单栏开关控制）。
   bool _showTranslation = true;
@@ -101,55 +106,139 @@ class LyricsViewModel {
   /// 无歌词、纯文本降级、或拆分后无翻译时均为 false；UI 据此禁用翻译开关。
   final ValueNotifier<bool> hasTranslationNotifier = ValueNotifier(false);
 
-  /// 切换翻译副行显隐（重新加载当前歌词）。
+  /// 当前曲目的歌词加载状态（切歌时先进入 loading，避免旧歌词继续显示）。
+  final ValueNotifier<LyricLoadState> loadStateNotifier =
+      ValueNotifier<LyricLoadState>(LyricLoadState.idle);
+
+  /// 是否已经跟踪过一首歌。首次加载（启动恢复队列）没有旧歌词需要保护，
+  /// 不应等待引擎加载，否则恢复队列未播放时会一直停在 loading。
+  bool _hasSeenSong = false;
+
+  /// 切换翻译副行显隐（重新解析当前歌词，保留当前播放位置）。
   void setShowTranslation(bool show) {
     if (show == _showTranslation) return;
     _showTranslation = show;
-    _loadForSong(_player.currentSong);
+    _loadForSong(_player.currentSong, trackChanged: false);
   }
 
   void _onSongChanged() {
-    _loadForSong(_player.currentSong);
+    final song = _player.currentSong;
+    final waitForTrack = _hasSeenSong && song != null;
+    _hasSeenSong = song != null;
+    _loadForSong(song, waitForTrack: waitForTrack);
   }
 
-  Future<void> _loadForSong(Song? song) async {
-    final songId = song?.id;
-    _loadingForId = songId;
+  Future<void> _loadForSong(
+    Song? song, {
+    bool trackChanged = true,
+    bool waitForTrack = true,
+  }) async {
+    final generation = ++_loadGeneration;
+
+    if (trackChanged) {
+      _currentContent = null;
+      // 切歌瞬间摘掉旧文档和进度源：旧歌词不能继续挂在新歌标题下，
+      // 也不能在加载窗口里被旧位置重新定位。
+      controller.progressSource = null;
+      controller.clear();
+      hasTranslationNotifier.value = false;
+      loadStateNotifier.value = song == null
+          ? LyricLoadState.idle
+          : LyricLoadState.loading;
+    }
 
     if (song == null) {
-      // 无歌词：清空上次歌词（LyricView 据此显示"暂无歌词"占位）。
-      hasTranslationNotifier.value = false;
-      controller.clear();
+      if (!trackChanged) loadStateNotifier.value = LyricLoadState.empty;
       return;
     }
 
     // 歌词来源优先级：内嵌歌词优先，外部 `.lrc` 兜底。
-    String? content;
-    if (song.hasEmbeddedLyrics == 1) {
-      content = await _readEmbeddedLyrics(song);
-    }
+    var content = !trackChanged ? _currentContent : null;
     if (content == null) {
-      final path = resolveLrcPath(song);
-      if (path != null) {
-        try {
-          content = await File(path).readAsString();
-        } catch (e, s) {
-          AppLogger.warning('Lyric', 'Failed to read lyrics: $path', e, s);
-          content = null;
+      if (song.hasEmbeddedLyrics == 1) {
+        content = await _readEmbeddedLyrics(song);
+      }
+      if (content == null) {
+        final path = resolveLrcPath(song);
+        if (path != null) {
+          try {
+            content = await File(path).readAsString();
+          } catch (e, s) {
+            AppLogger.warning('Lyric', 'Failed to read lyrics: $path', e, s);
+            content = null;
+          }
         }
       }
     }
 
-    // 竞态校验：读取期间切了歌则丢弃本次结果。
-    if (_loadingForId != songId) return;
+    // 读取期间切歌 / 重载了翻译：丢弃过期结果。
+    if (generation != _loadGeneration || !_isCurrent(song)) return;
+
+    _currentContent = content;
 
     if (content == null || content.trim().isEmpty) {
       hasTranslationNotifier.value = false;
       controller.clear();
+      loadStateNotifier.value = LyricLoadState.empty;
       return;
     }
 
+    // 切歌后必须等播放器真正加载好新曲，再让 source 同步采样一次位置；
+    // 否则 loadDocument 会沿用上一首的最后位置，先渲染到旧时间点再跳回开头。
+    // 翻译开关重载时 source 通常已经挂着，不需要等待，也不会重置位置。
+    final needsSource = trackChanged || controller.progressSource == null;
+    if (needsSource) {
+      if (waitForTrack) {
+        final ready = await _waitForTrackLoaded(song, generation);
+        if (generation != _loadGeneration || !_isCurrent(song)) return;
+        if (!ready) {
+          // 音频加载失败/超时仍挂上歌词，但位置来自当前播放器（通常已归零）；
+          // 不能因为音频问题把歌词永久卡在 loading。
+          AppLogger.warning(
+            'Lyric',
+            'Track did not report loaded before lyrics: ${song.filePath}',
+          );
+        }
+      }
+      controller.progressSource = _progressSource;
+    }
+
     _loadLyricText(content);
+    loadStateNotifier.value = LyricLoadState.ready;
+  }
+
+  bool _isCurrent(Song song) {
+    final current = _player.currentSong;
+    return current != null &&
+        current.id == song.id &&
+        current.filePath == song.filePath;
+  }
+
+  Future<bool> _waitForTrackLoaded(Song song, int generation) async {
+    if (_player.loadedSongNotifier.value?.id == song.id) return true;
+
+    final completer = Completer<bool>();
+    void listener() {
+      if (generation != _loadGeneration) {
+        _player.loadedSongNotifier.removeListener(listener);
+        if (!completer.isCompleted) completer.complete(false);
+        return;
+      }
+      if (_player.loadedSongNotifier.value?.id == song.id) {
+        _player.loadedSongNotifier.removeListener(listener);
+        if (!completer.isCompleted) completer.complete(true);
+      }
+    }
+
+    _player.loadedSongNotifier.addListener(listener);
+    // 注册后立即复查，避免在初次检查与监听之间刚好完成加载。
+    listener();
+    try {
+      return await completer.future.timeout(const Duration(seconds: 8));
+    } on TimeoutException {
+      _player.loadedSongNotifier.removeListener(listener);
+      return false;
+    }
   }
 
   /// 把歌词文本加载进 flutter_lyric。
@@ -194,5 +283,6 @@ class LyricsViewModel {
     _progressSource.dispose();
     controller.dispose();
     hasTranslationNotifier.dispose();
+    loadStateNotifier.dispose();
   }
 }

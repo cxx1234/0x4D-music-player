@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.7+1] - 2026-10-22
+
+### Fixed
+- Track changes no longer leave the previous song's lyrics under the new title
+  or replay the old line scroll. The lyric view clears immediately, shows a
+  loading state, and only loads the new document after
+  `PlayerService.loadedSongNotifier` reports that the new track is in the
+  engine. Async reads are generation-guarded, so a late result from a rapid
+  switch cannot overwrite the current song
+- Toggling translation now reparses the current document without resetting the
+  playback position
+
 ## [0.2.7] - 2026-10-22
 
 ### Added

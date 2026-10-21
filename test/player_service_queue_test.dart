@@ -43,6 +43,28 @@ void main() {
     expect(engine.loads.last, '/music/1.mp3');
   });
 
+  test('loadedSongNotifier：只在引擎真正加载完成后指向当前曲', () async {
+    final first = _song(1);
+    final second = _song(2);
+    await player.playFromList([first, second]);
+    expect(player.loadedSongNotifier.value?.id, first.id);
+
+    engine.loadDelay = const Duration(milliseconds: 20);
+    final switching = player.next();
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    expect(
+      player.loadedSongNotifier.value,
+      isNull,
+      reason: '新的 setSource 完成前不能把旧曲当成已加载',
+    );
+
+    await switching;
+    expect(player.loadedSongNotifier.value?.id, second.id);
+
+    await player.stopPlayback();
+    expect(player.loadedSongNotifier.value, isNull);
+  });
+
   test('队尾 repeat off：播完收尾——释放引擎、索引回 0、位置归零、不再自动播放', () async {
     await player.playFromList([_song(1), _song(2)]);
     await player.jumpTo(1);

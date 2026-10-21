@@ -373,6 +373,10 @@
 - 入口：设置 › 外观 › 歌词显示（`lib/features/settings/lyrics_settings_page.dart`），
   以及播放页歌词工具栏的 `tune_rounded` 按钮；从播放页进入后返回，播放页必须重新同步设置并立即应用。
 - 设置 › 外观的卡片顺序固定为：主题模式 → 主题色 → 歌词显示 → 底栏播放进度填充。
+- 切歌时歌词区必须先清空旧文档并进入 loading；等 `PlayerService.loadedSongNotifier`
+  指向当前曲后，再重新挂上 progress source 并 `loadDocument`。不能把
+  `currentSongNotifier` 当成“新曲已加载”信号，否则旧歌词会挂在新歌下面，且
+  `loadDocument` 可能沿用上一首的最后位置。
 - **宽屏（≥ 780）**：左侧实时循环预览，右侧独立滚动的设置列表；
   **窄屏不显示预览**，只保留设置项（`LayoutBuilder` 断点见页面内 `_kPreviewBreakpoint`）。
 - 预览用独立 `LyricController` + 页面 `Ticker` 驱动的假进度源，循环内置示例歌词，

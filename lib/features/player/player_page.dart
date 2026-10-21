@@ -7,6 +7,7 @@ import 'package:flutter_lyric/flutter_lyric.dart';
 
 import '../../core/constants/layout.dart';
 import '../../core/database/database.dart';
+import '../../core/models/lyric_load_state.dart';
 import '../../core/models/lyric_text_size.dart';
 import '../../core/services/lyrics_view_model.dart';
 import '../../core/services/service_locator.dart';
@@ -314,6 +315,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       locateOnOpen: _locateOnQueueOpen,
                       lyricsController: _lyrics.controller,
                       hasTranslation: _lyrics.hasTranslationNotifier,
+                      lyricsLoadState: _lyrics.loadStateNotifier,
                       onToggleTranslation: _toggleTranslation,
                       onTextSizeChanged: _onTextSizeChanged,
                       onLineTap: _handleLyricLineTap,
@@ -460,6 +462,7 @@ class _PlayerPageState extends State<PlayerPage> {
             locateOnOpen: _locateOnQueueOpen,
             lyricsController: _lyrics.controller,
             hasTranslation: _lyrics.hasTranslationNotifier,
+            lyricsLoadState: _lyrics.loadStateNotifier,
             onToggleTranslation: _toggleTranslation,
             onTextSizeChanged: _onTextSizeChanged,
             onLineTap: _handleLyricLineTap,
@@ -602,6 +605,9 @@ class _NarrowLyricsQueue extends StatefulWidget {
   /// 当前歌词是否含翻译副行（无翻译时禁用翻译开关）。
   final ValueListenable<bool>? hasTranslation;
 
+  /// 当前曲目的歌词加载状态。
+  final ValueListenable<LyricLoadState>? lyricsLoadState;
+
   /// 翻译显示开关变化回调（页面级，触发歌词重载）。
   final VoidCallback? onToggleTranslation;
 
@@ -621,6 +627,7 @@ class _NarrowLyricsQueue extends StatefulWidget {
     required this.uiState,
     required this.lyricsController,
     this.hasTranslation,
+    this.lyricsLoadState,
     this.onToggleTranslation,
     this.onTextSizeChanged,
     this.onLineTap,
@@ -677,6 +684,7 @@ class _NarrowLyricsQueueState extends State<_NarrowLyricsQueue> {
                 uiState: widget.uiState,
                 isNarrow: true,
                 hasTranslation: widget.hasTranslation,
+                loadState: widget.lyricsLoadState,
                 onToggleTranslation: widget.onToggleTranslation,
                 onTextSizeChanged: widget.onTextSizeChanged,
                 onLineTap: widget.onLineTap,
@@ -731,6 +739,9 @@ class _RightPanel extends StatefulWidget {
   /// 当前歌词是否含翻译副行（无翻译时禁用翻译开关）。
   final ValueListenable<bool>? hasTranslation;
 
+  /// 当前曲目的歌词加载状态。
+  final ValueListenable<LyricLoadState>? lyricsLoadState;
+
   /// 翻译显示开关变化回调（页面级，触发歌词重载）。
   final VoidCallback? onToggleTranslation;
 
@@ -750,6 +761,7 @@ class _RightPanel extends StatefulWidget {
     required this.uiState,
     required this.lyricsController,
     this.hasTranslation,
+    this.lyricsLoadState,
     this.onToggleTranslation,
     this.onTextSizeChanged,
     this.onLineTap,
@@ -806,6 +818,7 @@ class _RightPanelState extends State<_RightPanel> {
                       theme: widget.theme,
                       uiState: widget.uiState,
                       hasTranslation: widget.hasTranslation,
+                      loadState: widget.lyricsLoadState,
                       onToggleTranslation: widget.onToggleTranslation,
                       onTextSizeChanged: widget.onTextSizeChanged,
                       onLineTap: widget.onLineTap,

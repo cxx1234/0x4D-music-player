@@ -6,6 +6,7 @@ import '../../core/constants/motion.dart';
 import '../../core/models/lyric_distance_blur_level.dart';
 import '../../core/models/lyric_effect_strength.dart';
 import '../../core/models/lyric_line_transition_style.dart';
+import '../../core/models/lyric_load_state.dart';
 import '../../core/models/lyric_slide_alignment.dart';
 import '../../core/models/lyric_text_size.dart';
 import '../../core/utils/lyric_preset.dart';
@@ -37,6 +38,9 @@ class LyricsView extends StatefulWidget {
   /// 为 null 时不限制（按钮始终可点）；非 null 且为 false 时翻译按钮禁用。
   final ValueListenable<bool>? hasTranslation;
 
+  /// 当前曲目的歌词加载状态；为 null 时按旧行为只区分有/无歌词。
+  final ValueListenable<LyricLoadState>? loadState;
+
   /// 点击某句歌词的回调（4.x 把 tap 从 controller 移到了 View 上，
   /// `seekPosition` 已按 timeOffset 修正）。
   final ValueChanged<LyricLineDetails>? onLineTap;
@@ -51,6 +55,7 @@ class LyricsView extends StatefulWidget {
     required this.uiState,
     this.isNarrow = false,
     this.hasTranslation,
+    this.loadState,
     this.onToggleTranslation,
     this.onTextSizeChanged,
     this.onLineTap,
@@ -271,6 +276,34 @@ class _LyricsViewState extends State<LyricsView> {
     );
   }
 
+  Widget _buildLoading() {
+    return Center(
+      child: SizedBox(
+        width: 22,
+        height: 22,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLyricsBody(LyricLoadState? loadState) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: _hasLyrics,
+      builder: (context, hasLyrics, _) {
+        if (loadState == LyricLoadState.loading) return _buildLoading();
+        if (!hasLyrics) return _buildEmpty();
+        return LyricView(
+          controller: widget.controller,
+          preset: _buildPreset(),
+          onLineTap: widget.onLineTap,
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // 歌词区自成一合成层：当前行高亮/滚动刷新不波及相邻面板。
@@ -282,17 +315,13 @@ class _LyricsViewState extends State<LyricsView> {
             // 宽模式仅内容区右侧留白 10（顶栏保持与队列一致，窄模式不额外加）。
             child: Padding(
               padding: EdgeInsets.only(right: widget.isNarrow ? 0 : 20),
-              child: ValueListenableBuilder<bool>(
-                valueListenable: _hasLyrics,
-                builder: (context, hasLyrics, _) {
-                  if (!hasLyrics) return _buildEmpty();
-                  return LyricView(
-                    controller: widget.controller,
-                    preset: _buildPreset(),
-                    onLineTap: widget.onLineTap,
-                  );
-                },
-              ),
+              child: widget.loadState == null
+                  ? _buildLyricsBody(null)
+                  : ValueListenableBuilder<LyricLoadState>(
+                      valueListenable: widget.loadState!,
+                      builder: (context, loadState, _) =>
+                          _buildLyricsBody(loadState),
+                    ),
             ),
           ),
         ],
