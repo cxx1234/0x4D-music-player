@@ -79,14 +79,17 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void initState() {
     super.initState();
-    // 点击歌词行 → 跳转播放位置。
-    _lyrics.controller.setOnTapLineCallback((duration) {
-      ServiceLocator.player.seek(duration);
-    });
     // 常驻 VM 的翻译开关与跨会话 uiState 对齐（仅值不同才重载，幂等兜底）。
     _lyrics.setShowTranslation(widget.uiState.showTranslation);
     // 打开播放页即对账：把状态对齐到引擎真实值（兜住卡死/热重载失同步）。
     WidgetsBinding.instance.addPostFrameCallback((_) => _viewModel.resync());
+  }
+
+  /// 点击歌词行 → 跳转播放位置。
+  /// 4.x 把 tap 回调从 controller 移到了 `LyricView.onLineTap`，传入的
+  /// [LyricLineDetails.seekPosition] 已按 controller.timeOffset 修正。
+  void _handleLyricLineTap(LyricLineDetails details) {
+    ServiceLocator.player.seek(details.seekPosition);
   }
 
   @override
@@ -283,6 +286,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       hasTranslation: _lyrics.hasTranslationNotifier,
                       onToggleTranslation: _toggleTranslation,
                       onTextSizeChanged: _onTextSizeChanged,
+                      onLineTap: _handleLyricLineTap,
                     ),
                   ),
                 ],
@@ -427,6 +431,7 @@ class _PlayerPageState extends State<PlayerPage> {
             hasTranslation: _lyrics.hasTranslationNotifier,
             onToggleTranslation: _toggleTranslation,
             onTextSizeChanged: _onTextSizeChanged,
+            onLineTap: _handleLyricLineTap,
           ),
         ),
         _InfoReveal(
@@ -571,6 +576,9 @@ class _NarrowLyricsQueue extends StatefulWidget {
   /// 歌词字号档位变化回调（页面级，负责写盘持久化）。
   final ValueChanged<LyricTextSize>? onTextSizeChanged;
 
+  /// 点击歌词行回调（转交给 [LyricsView]，4.x 走 `LyricView.onLineTap`）。
+  final ValueChanged<LyricLineDetails>? onLineTap;
+
   const _NarrowLyricsQueue({
     required this.viewModel,
     required this.theme,
@@ -580,6 +588,7 @@ class _NarrowLyricsQueue extends StatefulWidget {
     this.hasTranslation,
     this.onToggleTranslation,
     this.onTextSizeChanged,
+    this.onLineTap,
     this.locateOnOpen = false,
   });
 
@@ -634,6 +643,7 @@ class _NarrowLyricsQueueState extends State<_NarrowLyricsQueue> {
                 hasTranslation: widget.hasTranslation,
                 onToggleTranslation: widget.onToggleTranslation,
                 onTextSizeChanged: widget.onTextSizeChanged,
+                onLineTap: widget.onLineTap,
               ),
             ),
     );
@@ -690,6 +700,9 @@ class _RightPanel extends StatefulWidget {
   /// 歌词字号档位变化回调（页面级，负责写盘持久化）。
   final ValueChanged<LyricTextSize>? onTextSizeChanged;
 
+  /// 点击歌词行回调（转交给 [LyricsView]，4.x 走 `LyricView.onLineTap`）。
+  final ValueChanged<LyricLineDetails>? onLineTap;
+
   const _RightPanel({
     required this.viewModel,
     required this.theme,
@@ -699,6 +712,7 @@ class _RightPanel extends StatefulWidget {
     this.hasTranslation,
     this.onToggleTranslation,
     this.onTextSizeChanged,
+    this.onLineTap,
     this.locateOnOpen = false,
   });
 
@@ -753,6 +767,7 @@ class _RightPanelState extends State<_RightPanel> {
                       hasTranslation: widget.hasTranslation,
                       onToggleTranslation: widget.onToggleTranslation,
                       onTextSizeChanged: widget.onTextSizeChanged,
+                      onLineTap: widget.onLineTap,
                     ),
                   ),
           ),

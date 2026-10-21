@@ -1,7 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-// LyricModel 未从 flutter_lyric.dart 主入口导出，需单独导入。
-import 'package:flutter_lyric/core/lyric_model.dart';
 import 'package:flutter_lyric/flutter_lyric.dart';
 
 import '../../core/constants/motion.dart';
@@ -34,6 +32,10 @@ class LyricsView extends StatefulWidget {
   /// 为 null 时不限制（按钮始终可点）；非 null 且为 false 时翻译按钮禁用。
   final ValueListenable<bool>? hasTranslation;
 
+  /// 点击某句歌词的回调（4.x 把 tap 从 controller 移到了 View 上，
+  /// `seekPosition` 已按 timeOffset 修正）。
+  final ValueChanged<LyricLineDetails>? onLineTap;
+
   const LyricsView({
     super.key,
     required this.controller,
@@ -43,6 +45,7 @@ class LyricsView extends StatefulWidget {
     this.hasTranslation,
     this.onToggleTranslation,
     this.onTextSizeChanged,
+    this.onLineTap,
   });
 
   @override
@@ -53,53 +56,100 @@ class _LyricsViewState extends State<LyricsView> {
   /// 高亮（当前播放）行相对普通行的额外字号放大系数（在三档缩放基础上再乘）。
   static const double _kActiveTextScale = 1.2;
 
-  // 缓存 LyricStyle：仅字号档位/主题变化时重建（LyricView 有 style 变更检测，
-  // 播放页高频 rebuild 时传同一对象可避免反复 relayout/repaint）。
-  LyricStyle? _style;
-  LyricTextSize? _styleSize;
-  ThemeData? _styleTheme;
+  // 缓存 LyricPreset：仅字号档位/主题变化时重建（避免播放页高频 rebuild 反复
+  // relayout/repaint）。
+  LyricPreset? _preset;
+  LyricTextSize? _presetSize;
+  ThemeData? _presetTheme;
+
+  /// 「当前是否有歌词」：只在有/无切换时通知，避免 setPosition 每帧重建歌词树。
+  final ValueNotifier<bool> _hasLyrics = ValueNotifier(false);
 
   ThemeData get theme => widget.theme;
 
-  LyricStyle _buildStyle() {
-    final size = widget.uiState.lyricTextSize;
-    if (_style == null || _styleSize != size || _styleTheme != theme) {
-      _style = _computeStyle(size);
-      _styleSize = size;
-      _styleTheme = theme;
-    }
-    return _style!;
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_syncHasLyrics);
+    _syncHasLyrics();
   }
 
-  /// 按主题 + 字号档位派生 LyricStyle：文字色用 onSurface（明暗适配）、
-  /// 高亮条用主题主色、字号按档位缩放。
-  LyricStyle _computeStyle(LyricTextSize size) {
+  @override
+  void didUpdateWidget(covariant LyricsView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_syncHasLyrics);
+      widget.controller.addListener(_syncHasLyrics);
+      _syncHasLyrics();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_syncHasLyrics);
+    _hasLyrics.dispose();
+    super.dispose();
+  }
+
+  void _syncHasLyrics() {
+    final has = widget.controller.document?.lines.isNotEmpty ?? false;
+    if (_hasLyrics.value != has) _hasLyrics.value = has;
+  }
+
+  LyricPreset _buildPreset() {
+    final size = widget.uiState.lyricTextSize;
+    if (_preset == null || _presetSize != size || _presetTheme != theme) {
+      _preset = _computePreset(size);
+      _presetSize = size;
+      _presetTheme = theme;
+    }
+    return _preset!;
+  }
+
+  /// 按主题 + 字号档位派生 LyricPreset。
+  ///
+  /// 基底用 4.x 的默认 [LyricPreset]（居中、14/18 字号、左右 20 padding，
+  /// 与 3.x `LyricStyles.default1` 基本一致），再按迁移前的实际观感覆盖
+  /// 字号基准、行距、上下淡出、滚动时长与高亮色。
+  LyricPreset _computePreset(LyricTextSize size) {
     final scale = size.scale;
-    final base = LyricStyles.default1;
     final onSurface = theme.colorScheme.onSurface;
     final primary = theme.colorScheme.primary;
     TextStyle scaled(TextStyle s) =>
         s.copyWith(fontSize: (s.fontSize ?? 14) * scale);
+    const base = LyricPreset();
     return base.copyWith(
       textStyle: scaled(
         base.textStyle,
       ).copyWith(color: onSurface.withValues(alpha: 0.7)),
-      activeStyle: scaled(base.activeStyle).copyWith(
-        // 高亮行在三档缩放基础上再单独放大，视觉更突出。
-        fontSize: (base.activeStyle.fontSize ?? 16) * scale * _kActiveTextScale,
+      activeTextStyle: scaled(base.activeTextStyle).copyWith(
+        // 3.x default1 的高亮字号基准是 16（4.x 默认 18）；再叠加档位缩放
+        // 与 _kActiveTextScale，保持迁移前的放大手感。
+        fontSize: 16 * scale * _kActiveTextScale,
         color: onSurface,
         fontWeight: FontWeight.w600,
       ),
-      translationStyle: scaled(base.translationStyle).copyWith(
+      translationTextStyle: scaled(base.translationTextStyle).copyWith(
         color: onSurface.withValues(alpha: 0.7),
         // 翻译副行加粗（与高亮主歌词字重一致）。
         fontWeight: FontWeight.w600,
       ),
-      // 当前播放行的翻译副行跟随高亮（不设则保持淡色，视觉上像没参与高亮）。
-      translationActiveColor: onSurface,
-      selectedColor: onSurface,
-      selectedTranslationColor: onSurface.withValues(alpha: 0.8),
-      activeHighlightColor: primary.withValues(alpha: 0.5),
+      // 当前播放行的翻译副行跟随高亮（3.x 只改颜色，字号/字重继承副行样式）。
+      activeTranslationTextStyle: scaled(base.translationTextStyle).copyWith(
+        color: onSurface,
+        fontWeight: FontWeight.w600,
+      ),
+      selectedTextColor: onSurface,
+      selectedTranslationTextColor: onSurface.withValues(alpha: 0.8),
+      // 3.x default1：lineGap 26 / translationLineGap 10 / fadeRange 80px。
+      lineSpacing: 26,
+      translationSpacing: 10,
+      edgeFade: const LyricEdgeFade.pixels(top: 80, bottom: 80),
+      // 3.x scrollDuration 240ms。
+      scrollAnimation: const LyricScrollAnimation.fixed(
+        duration: Duration(milliseconds: 240),
+      ),
+      highlight: LyricHighlight.solid(primary.withValues(alpha: 0.5)),
     );
   }
 
@@ -234,14 +284,14 @@ class _LyricsViewState extends State<LyricsView> {
             // 宽模式仅内容区右侧留白 10（顶栏保持与队列一致，窄模式不额外加）。
             child: Padding(
               padding: EdgeInsets.only(right: widget.isNarrow ? 0 : 20),
-              child: ValueListenableBuilder<LyricModel?>(
-                valueListenable: widget.controller.lyricNotifier,
-                builder: (context, model, _) {
-                  final hasLyrics = model != null && model.lines.isNotEmpty;
+              child: ValueListenableBuilder<bool>(
+                valueListenable: _hasLyrics,
+                builder: (context, hasLyrics, _) {
                   if (!hasLyrics) return _buildEmpty();
                   return LyricView(
                     controller: widget.controller,
-                    style: _buildStyle(),
+                    preset: _buildPreset(),
+                    onLineTap: widget.onLineTap,
                   );
                 },
               ),

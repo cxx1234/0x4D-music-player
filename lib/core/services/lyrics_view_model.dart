@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_lyric/core/lyric_model.dart';
 import 'package:flutter_lyric/flutter_lyric.dart';
 import 'package:path/path.dart' as p;
 
@@ -31,8 +30,8 @@ String? resolveLrcPath(Song song) {
 /// 歌词视图模型：驱动 flutter_lyric 的 [LyricController]。
 ///
 /// - 监听当前歌曲变化（[PlayerService.currentSongNotifier]，按歌曲去重）→
-///   读取 `.lrc` → [LyricController.loadLyric]；
-/// - 监听播放进度（[PlayerService.positionStream]）→ [LyricController.setProgress]，
+///   读取 `.lrc` → [LyricController.load]；
+/// - 监听播放进度（[PlayerService.positionStream]）→ [LyricController.setPosition]，
 ///   驱动歌词高亮与滚动。
 ///
 /// 歌词路径解析：[Song.lyricsFilePath]（数据库扫描时记录）优先；不存在时
@@ -64,7 +63,7 @@ class LyricsViewModel {
     // 页面级新实例场景保持默认 true）。须在首次 _onSongChanged() 前生效。
     _showTranslation = initialShowTranslation;
     // 高亮/滚动提前一点切换（跟唱更顺）。
-    controller.lyricOffset = _kLyricOffsetMs;
+    controller.timeOffset = const Duration(milliseconds: _kLyricOffsetMs);
     _player.currentSongNotifier.addListener(_onSongChanged);
     _positionSub = _player.positionStream.listen(_onPosition);
     // 初始加载当前歌曲（若打开播放页前已有歌在播）。
@@ -114,12 +113,12 @@ class LyricsViewModel {
   }
 
   void _onPosition(Duration position) {
-    controller.setProgress(position);
+    controller.setPosition(position);
   }
 
   /// 用当前播放位置（含未播放时的恢复/保存位置）同步歌词高亮。
   void _syncPosition() {
-    controller.setProgress(_player.position);
+    controller.setPosition(_player.position);
   }
 
   Future<void> _loadForSong(Song? song) async {
@@ -129,7 +128,7 @@ class LyricsViewModel {
     if (song == null) {
       // 无歌词：清空上次歌词（LyricView 据此显示"暂无歌词"占位）。
       hasTranslationNotifier.value = false;
-      controller.loadLyric('');
+      controller.clear();
       return;
     }
 
@@ -155,7 +154,7 @@ class LyricsViewModel {
 
     if (content == null || content.trim().isEmpty) {
       hasTranslationNotifier.value = false;
-      controller.loadLyric('');
+      controller.clear();
       return;
     }
 
@@ -175,8 +174,8 @@ class LyricsViewModel {
     if (!isLrc) {
       // 纯文本降级：单行静态歌词（不跟随进度高亮/滚动，仅展示全文）。
       hasTranslationNotifier.value = false;
-      controller.loadLyricModel(
-        LyricModel(
+      controller.loadDocument(
+        LyricDocument(
           lines: [LyricLine(start: Duration.zero, text: content.trim())],
         ),
       );
@@ -185,11 +184,11 @@ class LyricsViewModel {
     final split = splitBilingualLrc(content);
     // 歌词是否含翻译副行（内容事实，不随用户翻译开关/界面语言变化）。
     hasTranslationNotifier.value = split.translationLyric.isNotEmpty;
-    controller.loadLyric(
+    controller.load(
       split.mainLyric,
-      // 翻译副行：翻译开关开启 且 界面语言为中文 才显示（英文界面暂未提供
+      // 翻译副行：翻译开关开启 且 界面语言为中文才显示（英文界面暂未提供
       // 英文翻译源，隐藏中文翻译副行）；否则传空串按无翻译渲染。
-      translationLyric: _showTranslation && _isChineseUi()
+      translation: _showTranslation && _isChineseUi()
           ? split.translationLyric
           : '',
     );

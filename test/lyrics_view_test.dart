@@ -33,8 +33,7 @@ void main() {
   });
 
   testWidgets('有歌词：渲染 LyricView，不显示占位', (tester) async {
-    final controller = LyricController()
-      ..loadLyric('[00:01.00]第一行\n[00:05.00]第二行');
+    final controller = LyricController()..load('[00:01.00]第一行\n[00:05.00]第二行');
     addTearDown(controller.dispose);
     await tester.pumpWidget(
       _wrap(

@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.2.6+10
+version: 0.2.6+11
 
 environment:
   sdk: ^3.12.2
@@ -50,7 +50,7 @@ dependencies:
       ref: 47bf3f76231e85b83a6264d13ad04347630666bb
   watcher: ^1.1.0
   lpinyin: ^2.0.3
-  flutter_lyric: ^3.0.0
+  flutter_lyric: ^4.1.0
   # 运行时读取 pubspec.yaml 的应用版本号（设置页/关于页统一来源）。
   package_info_plus: ^10.2.1
   audioplayers: ^6.8.1
