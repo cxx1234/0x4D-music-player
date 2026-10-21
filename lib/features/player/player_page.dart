@@ -15,6 +15,7 @@ import '../../widgets/song_info_card.dart';
 import '../album/album_page.dart';
 import '../artist/artist_page.dart';
 import '../playlist/song_actions.dart';
+import '../settings/lyrics_settings_page.dart';
 import '../shell/shell_page.dart';
 import 'lyrics_view.dart';
 import 'player_ui_state.dart';
@@ -76,9 +77,38 @@ class _PlayerPageState extends State<PlayerPage> {
   /// 播放页即复位（不影响重开页面恢复滚动位置的行为）。
   bool _locateOnQueueOpen = false;
 
+  /// 把持久化的歌词显示设置同步进跨会话 [PlayerUiState]。
+  void _syncLyricSettings() {
+    final settings = ServiceLocator.settings;
+    final ui = widget.uiState;
+    ui.lyricTextSize = settings.lyricTextSize;
+    ui.showTranslation = settings.showTranslation;
+    ui.lyricWordHighlight = settings.lyricWordHighlight;
+    ui.lyricWordLift = settings.lyricWordLift;
+    ui.lyricEffectStrength = settings.lyricEffectStrength;
+    ui.lyricLineTransition = settings.lyricLineTransition;
+    ui.lyricSlideAlignment = settings.lyricSlideAlignment;
+    ui.lyricLineWave = settings.lyricLineWave;
+    ui.lyricDistanceBlur = settings.lyricDistanceBlur;
+    ui.lyricCountdown = settings.lyricCountdown;
+  }
+
+  /// 歌词菜单栏的设置入口：打开歌词显示页，返回后立即应用改动。
+  Future<void> _openLyricsSettings() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const LyricsSettingsPage()));
+    if (!mounted) return;
+    setState(_syncLyricSettings);
+    // 设置页已同步常驻 VM；这里兜一次，独立构建场景也保持一致。
+    _lyrics.setShowTranslation(widget.uiState.showTranslation);
+  }
+
   @override
   void initState() {
     super.initState();
+    // 设置页（外观 › 歌词显示）可能改过设置；进入播放页时从持久化设置对齐一次。
+    _syncLyricSettings();
     // 常驻 VM 的翻译开关与跨会话 uiState 对齐（仅值不同才重载，幂等兜底）。
     _lyrics.setShowTranslation(widget.uiState.showTranslation);
     // 打开播放页即对账：把状态对齐到引擎真实值（兜住卡死/热重载失同步）。
@@ -287,6 +317,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       onToggleTranslation: _toggleTranslation,
                       onTextSizeChanged: _onTextSizeChanged,
                       onLineTap: _handleLyricLineTap,
+                      onOpenSettings: _openLyricsSettings,
                     ),
                   ),
                 ],
@@ -432,6 +463,7 @@ class _PlayerPageState extends State<PlayerPage> {
             onToggleTranslation: _toggleTranslation,
             onTextSizeChanged: _onTextSizeChanged,
             onLineTap: _handleLyricLineTap,
+            onOpenSettings: _openLyricsSettings,
           ),
         ),
         _InfoReveal(
@@ -579,6 +611,9 @@ class _NarrowLyricsQueue extends StatefulWidget {
   /// 点击歌词行回调（转交给 [LyricsView]，4.x 走 `LyricView.onLineTap`）。
   final ValueChanged<LyricLineDetails>? onLineTap;
 
+  /// 打开歌词显示设置页。
+  final VoidCallback? onOpenSettings;
+
   const _NarrowLyricsQueue({
     required this.viewModel,
     required this.theme,
@@ -589,6 +624,7 @@ class _NarrowLyricsQueue extends StatefulWidget {
     this.onToggleTranslation,
     this.onTextSizeChanged,
     this.onLineTap,
+    this.onOpenSettings,
     this.locateOnOpen = false,
   });
 
@@ -644,6 +680,7 @@ class _NarrowLyricsQueueState extends State<_NarrowLyricsQueue> {
                 onToggleTranslation: widget.onToggleTranslation,
                 onTextSizeChanged: widget.onTextSizeChanged,
                 onLineTap: widget.onLineTap,
+                onOpenSettings: widget.onOpenSettings,
               ),
             ),
     );
@@ -703,6 +740,9 @@ class _RightPanel extends StatefulWidget {
   /// 点击歌词行回调（转交给 [LyricsView]，4.x 走 `LyricView.onLineTap`）。
   final ValueChanged<LyricLineDetails>? onLineTap;
 
+  /// 打开歌词显示设置页。
+  final VoidCallback? onOpenSettings;
+
   const _RightPanel({
     required this.viewModel,
     required this.theme,
@@ -713,6 +753,7 @@ class _RightPanel extends StatefulWidget {
     this.onToggleTranslation,
     this.onTextSizeChanged,
     this.onLineTap,
+    this.onOpenSettings,
     this.locateOnOpen = false,
   });
 
@@ -768,6 +809,7 @@ class _RightPanelState extends State<_RightPanel> {
                       onToggleTranslation: widget.onToggleTranslation,
                       onTextSizeChanged: widget.onTextSizeChanged,
                       onLineTap: widget.onLineTap,
+                      onOpenSettings: widget.onOpenSettings,
                     ),
                   ),
           ),

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:txvziwm/core/database/database.dart';
 import 'package:txvziwm/core/services/lyrics_view_model.dart';
+import 'package:txvziwm/core/utils/lyric_document_parser.dart';
 import 'package:txvziwm/core/services/play_queue.dart';
 import 'package:txvziwm/core/services/player_service.dart';
 

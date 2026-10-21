@@ -22,6 +22,7 @@
 | 文件 | 职责 |
 |---|---|
 | `lib/core/utils/bilingual_lrc.dart` | 双语 LRC 自动拆分(**本文档核心**) |
+| `lib/core/utils/lyric_document_parser.dart` | `parseLyricContent`:格式判定 + 组装 `LyricDocument`(播放器与设置页预览共用) |
 | `lib/core/services/lyrics_view_model.dart` | 运行时调用方:读歌词 → `parseLyricContent` → `loadDocument` |
 | `lib/core/services/player_lyric_progress_source.dart` | 把 `PlayerService` 适配成 `LyricProgressSource`(逐帧采样) |
 | `test/lyrics_split_test.dart` | 拆分逻辑回归测试(当前 18 例) |
@@ -228,5 +229,6 @@ flowchart TD
 
 * 渲染:依赖 `flutter_lyric`(`LyricDocument.parse(mainLyric, translation: …)`,按时间戳 ±10ms 对齐)
 * 运行时歌词加载/降级:`lib/core/services/lyrics_view_model.dart`
+* 格式判定与文档组装:`lib/core/utils/lyric_document_parser.dart`
 * 播放进度适配:`lib/core/services/player_lyric_progress_source.dart`
 * 错误处理与日志总约定:`docs/ErrorHandling.md`

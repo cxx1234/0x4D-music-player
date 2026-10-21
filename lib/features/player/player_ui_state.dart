@@ -1,3 +1,7 @@
+import '../../core/models/lyric_distance_blur_level.dart';
+import '../../core/models/lyric_effect_strength.dart';
+import '../../core/models/lyric_line_transition_style.dart';
+import '../../core/models/lyric_slide_alignment.dart';
 import '../../core/models/lyric_text_size.dart';
 
 /// 播放器 UI 界面状态：跨「打开/关闭」会话保留（App 持有，pop 不销毁）。
@@ -31,6 +35,31 @@ class PlayerUiState {
 
   /// 是否显示翻译副行（跨会话保留，重开播放页不重置）。
   bool showTranslation = true;
+
+  /// 歌词逐字填充（高亮遮罩）。
+  bool lyricWordHighlight = true;
+
+  /// 歌词逐字跳动（Word Pop）。
+  bool lyricWordLift = false;
+
+  /// 行间波浪（整行依次错位 + 起伏）。
+  bool lyricLineWave = false;
+
+  /// 距离模糊档位。
+  LyricDistanceBlurLevel lyricDistanceBlur = LyricDistanceBlurLevel.off;
+
+  /// 是否显示前奏/间奏倒计时圆点。
+  bool lyricCountdown = true;
+
+  /// 文本效果强度（默认/强）。
+  LyricEffectStrength lyricEffectStrength = LyricEffectStrength.standard;
+
+  /// 切句动画风格。
+  LyricLineTransitionStyle lyricLineTransition =
+      LyricLineTransitionStyle.classic;
+
+  /// 「滑入」的对齐方向。
+  LyricSlideAlignment lyricSlideAlignment = LyricSlideAlignment.left;
 }
 
 /// 窄模式下的可切换标签：播放器 / 歌词 / 播放队列。

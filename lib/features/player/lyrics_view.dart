@@ -3,7 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_lyric/flutter_lyric.dart';
 
 import '../../core/constants/motion.dart';
+import '../../core/models/lyric_distance_blur_level.dart';
+import '../../core/models/lyric_effect_strength.dart';
+import '../../core/models/lyric_line_transition_style.dart';
+import '../../core/models/lyric_slide_alignment.dart';
 import '../../core/models/lyric_text_size.dart';
+import '../../core/utils/lyric_preset.dart';
 import 'player_ui_state.dart';
 
 /// 歌词视图：上方菜单栏（文本大小）+ 歌词内容区。
@@ -36,6 +41,9 @@ class LyricsView extends StatefulWidget {
   /// `seekPosition` 已按 timeOffset 修正）。
   final ValueChanged<LyricLineDetails>? onLineTap;
 
+  /// 打开「歌词显示设置」页；为 null 时不显示该按钮。
+  final VoidCallback? onOpenSettings;
+
   const LyricsView({
     super.key,
     required this.controller,
@@ -46,6 +54,7 @@ class LyricsView extends StatefulWidget {
     this.onToggleTranslation,
     this.onTextSizeChanged,
     this.onLineTap,
+    this.onOpenSettings,
   });
 
   @override
@@ -53,13 +62,21 @@ class LyricsView extends StatefulWidget {
 }
 
 class _LyricsViewState extends State<LyricsView> {
-  /// 高亮（当前播放）行相对普通行的额外字号放大系数（在三档缩放基础上再乘）。
-  static const double _kActiveTextScale = 1.2;
-
-  // 缓存 LyricPreset：仅字号档位/主题变化时重建（避免播放页高频 rebuild 反复
-  // relayout/repaint）。
+  // 缓存 LyricPreset：仅字号档位/文本效果/主题变化时重建（避免播放页高频
+  // rebuild 反复 relayout/repaint）。
   LyricPreset? _preset;
-  LyricTextSize? _presetSize;
+  ({
+    LyricTextSize size,
+    bool wordHighlight,
+    bool wordLift,
+    LyricEffectStrength effectStrength,
+    LyricLineTransitionStyle lineTransition,
+    LyricSlideAlignment slideAlignment,
+    bool lineWave,
+    LyricDistanceBlurLevel distanceBlur,
+    bool countdown,
+  })?
+  _presetKey;
   ThemeData? _presetTheme;
 
   /// 「当前是否有歌词」：只在有/无切换时通知，避免 setPosition 每帧重建歌词树。
@@ -97,60 +114,35 @@ class _LyricsViewState extends State<LyricsView> {
   }
 
   LyricPreset _buildPreset() {
-    final size = widget.uiState.lyricTextSize;
-    if (_preset == null || _presetSize != size || _presetTheme != theme) {
-      _preset = _computePreset(size);
-      _presetSize = size;
+    final ui = widget.uiState;
+    final key = (
+      size: ui.lyricTextSize,
+      wordHighlight: ui.lyricWordHighlight,
+      wordLift: ui.lyricWordLift,
+      effectStrength: ui.lyricEffectStrength,
+      lineTransition: ui.lyricLineTransition,
+      slideAlignment: ui.lyricSlideAlignment,
+      lineWave: ui.lyricLineWave,
+      distanceBlur: ui.lyricDistanceBlur,
+      countdown: ui.lyricCountdown,
+    );
+    if (_preset == null || _presetKey != key || _presetTheme != theme) {
+      _preset = buildLyricPreset(
+        theme: theme,
+        size: key.size,
+        wordHighlight: key.wordHighlight,
+        wordLift: key.wordLift,
+        effectStrength: key.effectStrength,
+        lineTransition: key.lineTransition,
+        slideAlignment: key.slideAlignment,
+        lineWave: key.lineWave,
+        distanceBlur: key.distanceBlur,
+        countdown: key.countdown,
+      );
+      _presetKey = key;
       _presetTheme = theme;
     }
     return _preset!;
-  }
-
-  /// 按主题 + 字号档位派生 LyricPreset。
-  ///
-  /// 基底用 4.x 的默认 [LyricPreset]（居中、14/18 字号、左右 20 padding，
-  /// 与 3.x `LyricStyles.default1` 基本一致），再按迁移前的实际观感覆盖
-  /// 字号基准、行距、上下淡出、滚动时长与高亮色。
-  LyricPreset _computePreset(LyricTextSize size) {
-    final scale = size.scale;
-    final onSurface = theme.colorScheme.onSurface;
-    final primary = theme.colorScheme.primary;
-    TextStyle scaled(TextStyle s) =>
-        s.copyWith(fontSize: (s.fontSize ?? 14) * scale);
-    const base = LyricPreset();
-    return base.copyWith(
-      textStyle: scaled(
-        base.textStyle,
-      ).copyWith(color: onSurface.withValues(alpha: 0.7)),
-      activeTextStyle: scaled(base.activeTextStyle).copyWith(
-        // 3.x default1 的高亮字号基准是 16（4.x 默认 18）；再叠加档位缩放
-        // 与 _kActiveTextScale，保持迁移前的放大手感。
-        fontSize: 16 * scale * _kActiveTextScale,
-        color: onSurface,
-        fontWeight: FontWeight.w600,
-      ),
-      translationTextStyle: scaled(base.translationTextStyle).copyWith(
-        color: onSurface.withValues(alpha: 0.7),
-        // 翻译副行加粗（与高亮主歌词字重一致）。
-        fontWeight: FontWeight.w600,
-      ),
-      // 当前播放行的翻译副行跟随高亮（3.x 只改颜色，字号/字重继承副行样式）。
-      activeTranslationTextStyle: scaled(base.translationTextStyle).copyWith(
-        color: onSurface,
-        fontWeight: FontWeight.w600,
-      ),
-      selectedTextColor: onSurface,
-      selectedTranslationTextColor: onSurface.withValues(alpha: 0.8),
-      // 3.x default1：lineGap 26 / translationLineGap 10 / fadeRange 80px。
-      lineSpacing: 26,
-      translationSpacing: 10,
-      edgeFade: const LyricEdgeFade.pixels(top: 80, bottom: 80),
-      // 3.x scrollDuration 240ms。
-      scrollAnimation: const LyricScrollAnimation.fixed(
-        duration: Duration(milliseconds: 240),
-      ),
-      highlight: LyricHighlight.solid(primary.withValues(alpha: 0.5)),
-    );
   }
 
   Future<void> _showTextSizeMenu(BuildContext anchor) async {
@@ -209,6 +201,12 @@ class _LyricsViewState extends State<LyricsView> {
                 onPressed: () => _showTextSizeMenu(anchor),
               ),
             ),
+            if (widget.onOpenSettings != null)
+              IconButton(
+                icon: const Icon(Icons.tune_rounded, size: 20),
+                tooltip: '歌词显示设置',
+                onPressed: widget.onOpenSettings,
+              ),
           ],
         ),
       ),
