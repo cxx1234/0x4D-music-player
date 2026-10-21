@@ -469,6 +469,14 @@ class PlayerService extends ChangeNotifier {
   /// 瞬间闪成「未播放」。
   bool get isPlaying => _shouldPlay;
 
+  /// Whether a track is loaded and the engine is actually advancing.
+  ///
+  /// Unlike [isPlaying], which reports the playback *intent* and stays true
+  /// while a track is still being loaded, this is false during the load window
+  /// and after a failed load. Frame-sampling consumers (lyrics) use it so a
+  /// stale position is never mistaken for progress.
+  bool get isAdvancing => _isLoaded && _shouldPlay;
+
   /// Current playback position.
   ///
   /// 未加载（如启动恢复的队列尚未播放）时回退到上次保存的位置，
@@ -758,7 +766,7 @@ class PlayerService extends ChangeNotifier {
     if (_playQueue.isEmpty) return;
     // If more than 3 seconds in, restart the current song.
     if (_isLoaded && _engine.position.inSeconds > 3) {
-      await _engine.seek(Duration.zero);
+      await seek(Duration.zero);
       return;
     }
     final slot = _currentSlot;
@@ -780,6 +788,9 @@ class PlayerService extends ChangeNotifier {
       return;
     }
     await _engine.seek(position);
+    // 暂停时引擎不保证再发 position 事件；显式通知一次，让逐帧采样的
+    // 订阅方（歌词）立刻读到新位置。
+    notifyListeners();
   }
 
   /// 切换当前歌曲收藏，并刷新队列中的歌曲对象（UI 经 notify 自动更新）。

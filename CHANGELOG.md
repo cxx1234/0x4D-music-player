@@ -27,8 +27,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from queue", artist rows get "play all", the album card gets "play all / add to
   queue"). Right-clicking is turned off while a list is in reorder or
   multi-select mode, since the row gestures there are already drag and check
+- Lyrics follow playback through `flutter_lyric`'s frame-sampled
+  `LyricProgressSource` instead of the ~200 ms position stream.
+  `LyricsViewModel` binds a `PlayerLyricProgressSource` and drops its own
+  `setPosition` calls, so word-level highlight and line motion update on every
+  display frame; `PlayerService.isAdvancing` tells real playback apart from the
+  load window so a stale position is never sampled as progress
+- Word-timed QRC/YRC lyrics are no longer flattened into one static line. Any
+  text the LRC bilingual splitter does not own is handed to
+  `LyricDocument.parse`, which auto-detects the format; LRC keeps the existing
+  main/translation split, and blank timestamp entries survive so interlude
+  countdowns have something to anchor on
 
 ### Changed
+- Seeking while paused notifies the player's listeners explicitly, so
+  frame-sampled consumers such as lyrics show the new position immediately
+  instead of waiting for playback to resume
 - The grid-card menus (album card, playlist card — three-dot, long press and
   right click alike) grow open in 240ms instead of 320ms and close in 180ms
   instead of 220ms. "The card unfolds into its options" does not need to take

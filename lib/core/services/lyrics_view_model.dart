@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -7,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../database/database.dart';
 import 'metadata_service.dart';
+import 'player_lyric_progress_source.dart';
 import 'player_service.dart';
 import '../utils/bilingual_lrc.dart';
 import '../utils/logger.dart';
@@ -27,12 +27,53 @@ String? resolveLrcPath(Song song) {
   return null;
 }
 
+/// 把歌词文本解析成 [LyricDocument]。
+///
+/// - LRC：先经 [splitBilingualLrc] 拆出主歌词 + 翻译两条时间轴；
+///   [includeTranslation] 只决定是否带上副行。
+/// - QRC / YRC 等词级时间轴：交给 flutter_lyric 自动探测，避免被误当成
+///   纯文本压成一行静态歌词。
+/// - 完全无时间轴：降级为单行静态歌词。
+///
+/// [hasTranslation] 是内容事实，与翻译开关/界面语言无关。
+({LyricDocument document, bool hasTranslation}) parseLyricContent(
+  String content, {
+  bool includeTranslation = true,
+}) {
+  final isLrc = RegExp(r'^\[\d{1,}:\d{2}', multiLine: true).hasMatch(content);
+  if (isLrc) {
+    final split = splitBilingualLrc(content);
+    final hasTranslation = split.translationLyric.isNotEmpty;
+    return (
+      document: LyricDocument.parse(
+        split.mainLyric,
+        translation: includeTranslation && hasTranslation
+            ? split.translationLyric
+            : null,
+      ),
+      hasTranslation: hasTranslation,
+    );
+  }
+
+  final timed = LyricDocument.parse(content);
+  if (timed.lines.isNotEmpty) {
+    return (document: timed, hasTranslation: false);
+  }
+
+  return (
+    document: LyricDocument(
+      lines: [LyricLine(start: Duration.zero, text: content.trim())],
+    ),
+    hasTranslation: false,
+  );
+}
+
 /// 歌词视图模型：驱动 flutter_lyric 的 [LyricController]。
 ///
 /// - 监听当前歌曲变化（[PlayerService.currentSongNotifier]，按歌曲去重）→
-///   读取 `.lrc` → [LyricController.load]；
-/// - 监听播放进度（[PlayerService.positionStream]）→ [LyricController.setPosition]，
-///   驱动歌词高亮与滚动。
+///   读取 `.lrc` → [LyricController.loadDocument]；
+/// - 通过 [PlayerLyricProgressSource] 把播放进度交给控制器逐帧采样，
+///   驱动歌词高亮与滚动（不再手动调用 [LyricController.setPosition]）。
 ///
 /// 歌词路径解析：[Song.lyricsFilePath]（数据库扫描时记录）优先；不存在时
 /// 实时按音频文件找同名 `.lrc`/`.LRC` 兜底，因此新放的歌词文件无需重新扫描。
@@ -65,12 +106,12 @@ class LyricsViewModel {
     // 高亮/滚动提前一点切换（跟唱更顺）。
     controller.timeOffset = const Duration(milliseconds: _kLyricOffsetMs);
     _player.currentSongNotifier.addListener(_onSongChanged);
-    _positionSub = _player.positionStream.listen(_onPosition);
-    // 初始加载当前歌曲（若打开播放页前已有歌在播）。
+    // 控制器接管进度订阅：绑定后由它按可见性逐帧采样，不能再手动 setPosition。
+    _progressSource = PlayerLyricProgressSource(_player);
+    controller.progressSource = _progressSource;
+    // 初始加载当前歌曲（若打开播放页前已有歌在播）。绑定 source 时会立即
+    // 采样一次当前位置，续播/暂停状态无需额外同步。
     _onSongChanged();
-    // 恢复播放位置同步到歌词：未播放/序列未加载时 positionStream 不发事件，
-    // 必须主动读一次当前（含续播）位置，否则歌词停在开头直到点播放才跳转。
-    _syncPosition();
   }
 
   final PlayerService _player;
@@ -89,7 +130,7 @@ class LyricsViewModel {
   /// flutter_lyric 控制器（[LyricsView] 直接消费）。
   final LyricController controller = LyricController();
 
-  StreamSubscription<Duration>? _positionSub;
+  late final PlayerLyricProgressSource _progressSource;
 
   /// 正在加载歌词的歌曲 id（防快速切歌时过期结果覆盖新歌）。
   int? _loadingForId;
@@ -110,15 +151,6 @@ class LyricsViewModel {
 
   void _onSongChanged() {
     _loadForSong(_player.currentSong);
-  }
-
-  void _onPosition(Duration position) {
-    controller.setPosition(position);
-  }
-
-  /// 用当前播放位置（含未播放时的恢复/保存位置）同步歌词高亮。
-  void _syncPosition() {
-    controller.setPosition(_player.position);
   }
 
   Future<void> _loadForSong(Song? song) async {
@@ -159,39 +191,18 @@ class LyricsViewModel {
     }
 
     _loadLyricText(content);
-    // 歌词就绪后再对齐一次位置（防御 positionStream 先发 0 的时序）。
-    _syncPosition();
   }
 
   /// 把歌词文本加载进 flutter_lyric。
-  ///
-  /// - 带时间轴的（LRC/QRC）走 [splitBilingualLrc] 拆主歌词 + 翻译副行；
-  /// - 纯文本（无时间轴）flutter_lyric 解析后是空行，降级为静态单行显示全文。
   void _loadLyricText(String content) {
-    // 同行双语（原文 翻译）自动拆成主歌词 + 翻译两条时间轴；
-    // 无翻译时 translationLyric 为空串，flutter_lyric 按无翻译处理。
-    final isLrc = RegExp(r'^\[\d{1,}:\d{2}', multiLine: true).hasMatch(content);
-    if (!isLrc) {
-      // 纯文本降级：单行静态歌词（不跟随进度高亮/滚动，仅展示全文）。
-      hasTranslationNotifier.value = false;
-      controller.loadDocument(
-        LyricDocument(
-          lines: [LyricLine(start: Duration.zero, text: content.trim())],
-        ),
-      );
-      return;
-    }
-    final split = splitBilingualLrc(content);
-    // 歌词是否含翻译副行（内容事实，不随用户翻译开关/界面语言变化）。
-    hasTranslationNotifier.value = split.translationLyric.isNotEmpty;
-    controller.load(
-      split.mainLyric,
+    final parsed = parseLyricContent(
+      content,
       // 翻译副行：翻译开关开启 且 界面语言为中文才显示（英文界面暂未提供
-      // 英文翻译源，隐藏中文翻译副行）；否则传空串按无翻译渲染。
-      translation: _showTranslation && _isChineseUi()
-          ? split.translationLyric
-          : '',
+      // 英文翻译源，隐藏中文翻译副行）。
+      includeTranslation: _showTranslation && _isChineseUi(),
     );
+    hasTranslationNotifier.value = parsed.hasTranslation;
+    controller.loadDocument(parsed.document);
   }
 
   /// 读取内嵌歌词，带内存缓存 + 文件修改时间时效。
@@ -221,7 +232,7 @@ class LyricsViewModel {
 
   void dispose() {
     _player.currentSongNotifier.removeListener(_onSongChanged);
-    _positionSub?.cancel();
+    _progressSource.dispose();
     controller.dispose();
     hasTranslationNotifier.dispose();
   }

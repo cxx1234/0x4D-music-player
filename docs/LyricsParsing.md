@@ -9,7 +9,7 @@
 * **LRC 标准只有一条时间轴**。主歌词 + 翻译是各平台(QQ 音乐 / 网易云 / 酷狗…)自行扩展的**非标准**格式,各家约定不一,常见的混乱形态见 §4。
 * 渲染库 `flutter_lyric` 的翻译副行需要**两条独立时间轴**:
   ```dart
-  controller.loadLyric(mainLyric, translationLyric: translationLyric);
+  LyricDocument.parse(mainLyric, translation: translationLyric);
   ```
   它**不做自动拆分**,只负责把调用方给的两条文本按时间戳对齐渲染。
 * 因此本 App 需要把用户拿到的**单个 `.lrc` 文件**先拆成两条时间轴,再喂给 `flutter_lyric`。
@@ -22,18 +22,22 @@
 | 文件 | 职责 |
 |---|---|
 | `lib/core/utils/bilingual_lrc.dart` | 双语 LRC 自动拆分(**本文档核心**) |
-| `lib/core/services/lyrics_view_model.dart` | 运行时调用方:读歌词 → 拆分 → `loadLyric` |
+| `lib/core/services/lyrics_view_model.dart` | 运行时调用方:读歌词 → `parseLyricContent` → `loadDocument` |
+| `lib/core/services/player_lyric_progress_source.dart` | 把 `PlayerService` 适配成 `LyricProgressSource`(逐帧采样) |
 | `test/lyrics_split_test.dart` | 拆分逻辑回归测试(当前 18 例) |
+| `test/lyrics_view_model_test.dart` | 格式判定(LRC/QRC/YRC/纯文本)与进度源回归 |
 | 依赖 `flutter_lyric` | 渲染,按时间戳对齐主/翻译 |
 
 调用链(`lyrics_view_model.dart`):
 
 ```
 读取歌词(内嵌优先 → resolveLrcPath 同名 .lrc 兜底)
-   └─ 判断是否带时间轴: /^\[\d{1,}:\d{2}/m
-        ├─ 否: 纯文本 → 降级为静态单行 LyricModel(不滚动高亮)
-        └─ 是: splitBilingualLrc(content)
-                  └─ controller.loadLyric(mainLyric, translationLyric: …)
+   └─ parseLyricContent(content)
+        ├─ LRC(/^\[\d{1,}:\d{2}/m): splitBilingualLrc → LyricDocument.parse(main, translation: …)
+        ├─ QRC / YRC 等: LyricDocument.parse(content) 自动探测(含逐字时间)
+        └─ 无时间轴: 单行静态 LyricDocument(不滚动高亮)
+   └─ controller.loadDocument(document)
+   └─ 播放进度: PlayerLyricProgressSource → LyricController 逐帧采样
 ```
 
 ⸻
@@ -57,7 +61,8 @@
 | **同行双语**(krc 转 lrc 常见) | `[00:13.45]あの日…秘め事は 那天我们唯一一次立下誓言…` | 单行拆分 → 两条时间轴 |
 | **两段式**(QQ 音乐英文歌) | 前半英文时间轴 + 后半中文翻译时间轴,时间戳从头对齐 | 整首检测 → 按段整体分配 |
 | **一行多时间戳**(网易云等) | `[00:00.00][00:05.00]xxx` | 主/翻译都保留全部时间戳前缀 |
-| 纯文本(无时间轴) | 普通文本 | `lyrics_view_model` 降级静态单行 |
+| **QRC / YRC**(词级时间轴) | `[1000,2000]Hello(1000,500)` / `(1000,500,0)Hello` | 不拆翻译,交给 `LyricDocument.parse` 自动探测后直接渲染 |
+| 纯文本(无时间轴) | 普通文本 | `parseLyricContent` 降级静态单行 |
 | 内嵌歌词 / 同名 `.lrc` | — | 由 `lyrics_view_model` 决定来源,不在此文件 |
 
 ⸻
@@ -181,7 +186,8 @@ flowchart TD
 * 含假名/拉丁的原文行若「以两个汉字名词并列结尾且后接翻译」(如 `未来 世界 你的未来 是世界`)可能把第二个名词当翻译起点,罕见,接受。
 * 两段式检测依赖「首个时间戳在后部再次出现」:若翻译段起始时间戳与原文段不一致(极罕见)会检测不到,退回逐行拆分。
 * 内嵌歌词仅 MP3/FLAC、需 UTF-8(由读取层负责),不在此文件范围。
-* 本文件只拆「主 / 翻译」两轴,不处理逐字(QRC 带词级时间)歌词的翻译。
+* 本文件只拆「主 / 翻译」两轴。QRC/YRC 原样交给 `flutter_lyric` 解析(逐字时间可用),但它们的翻译副行需要独立字段,不在本文件的拆分范围内。
+* LRC 里的**空白时间戳行**(`[00:12]`)会保留为空歌词条目,是间奏倒计时的识别依据;不要在清洗阶段丢掉。
 
 ⸻
 
@@ -195,6 +201,14 @@ flowchart TD
 
 **约定**:新加启发式/新发现格式 → 先补这里一条回归,再改实现。
 
+`lyrics_view_model_test.dart` 另外覆盖格式判定与进度源:
+
+| 分组 | 覆盖点 |
+|---|---|
+| `parseLyricContent` | LRC 空白时间戳保留 / 翻译开关不影响 `hasTranslation` / QRC、YRC 不降级为单行 / 纯文本降级 |
+| `LyricsViewModel 播放进度` | 绑定进度源后位置自动跟随、手动 `setPosition` 抛 `StateError` |
+| `player_lyric_progress_source_test.dart` | 位置、`isAdvancing`、变更流；暂停时 seek 仍发出变更 |
+
 ⸻
 
 ## 11. 演进记录
@@ -206,11 +220,13 @@ flowchart TD
 | 2026-08-29 | 新增两段式 LRC 支持(时间戳重复 → 按段分配,避免逐行误拆) |
 | 2026-08-30 | 判据迭代:过滤 C 仅在「原文为纯中文」启用(日文→英文空格分段翻译逐步修复) |
 | 2026-09-08 | 一行多时间戳支持;两段式改按时间戳值(毫秒归一)对齐 |
+| 2026-10-21 | 格式判定改为 LRC → 双语拆分、其余交给 `LyricDocument.parse` 自动探测(QRC/YRC 不再被当纯文本);播放进度改由 `LyricProgressSource` 逐帧采样 |
 
 ⸻
 
 ## 12. 相关链接
 
-* 渲染:依赖 `flutter_lyric`(`loadLyric(mainLyric, translationLyric:)`,按时间戳 ±10ms 对齐)
+* 渲染:依赖 `flutter_lyric`(`LyricDocument.parse(mainLyric, translation: …)`,按时间戳 ±10ms 对齐)
 * 运行时歌词加载/降级:`lib/core/services/lyrics_view_model.dart`
+* 播放进度适配:`lib/core/services/player_lyric_progress_source.dart`
 * 错误处理与日志总约定:`docs/ErrorHandling.md`
