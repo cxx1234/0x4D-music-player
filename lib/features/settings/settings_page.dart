@@ -9,6 +9,7 @@ import '../../widgets/page_toolbar.dart';
 import '../shell/shell_controller.dart';
 import 'about_page.dart';
 import 'log_page.dart';
+import 'lyrics_settings_page.dart';
 
 /// 设置页：分组卡片（音乐库 / 播放设置 / 外观 / 通用）。
 class SettingsPage extends StatefulWidget {
@@ -271,6 +272,14 @@ class _SettingsPageState extends State<SettingsPage> {
     ).push(MaterialPageRoute(builder: (_) => const AboutPage()));
   }
 
+  /// 打开「歌词显示」页（「外观 › 歌词显示」行）。
+  void _openLyricsSettings() {
+    if (!mounted) return;
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const LyricsSettingsPage()));
+  }
+
   /// 「音乐库」分组卡片：目前为强制刷新入口。无文件夹时禁用（ListTile 置灰）。
   Widget _buildLibraryCard() {
     final theme = Theme.of(context);
@@ -519,6 +528,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildAppearanceCard() {
     final theme = Theme.of(context);
+    final chevronColor = theme.colorScheme.onSurfaceVariant;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 24),
       elevation: 0,
@@ -528,18 +538,6 @@ class _SettingsPageState extends State<SettingsPage> {
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          // 底栏播放进度填充开关（「外观」分组）。
-          ListTile(
-            // 与其它设置行一致的行高（续播/通用各行均为 16）。
-            minVerticalPadding: 16,
-            leading: const Icon(Icons.timeline_rounded),
-            title: _buildOptionText(theme, '底栏播放进度填充', '播放时底栏背景从左向右显示进度'),
-            trailing: _buildCompactSwitch(
-              value: _nowPlayingBarFill,
-              onChanged: _setNowPlayingBarFill,
-            ),
-            onTap: () => _setNowPlayingBarFill(!_nowPlayingBarFill),
-          ),
           SizedBox(
             height: 72,
             child: Padding(
@@ -599,6 +597,27 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           _buildAccentRow(theme),
+          // 「歌词显示」二级页：字号 / 翻译 /（后续）样式与动效。
+          ListTile(
+            minVerticalPadding: 16,
+            leading: const Icon(Icons.lyrics_outlined),
+            title: _buildOptionText(theme, '歌词显示', '字号、翻译与歌词动效'),
+            subtitle: null,
+            trailing: Icon(Icons.chevron_right, color: chevronColor),
+            onTap: _openLyricsSettings,
+          ),
+          // 底栏播放进度填充开关（「外观」分组）。
+          ListTile(
+            // 与其它设置行一致的行高（续播/通用各行均为 16）。
+            minVerticalPadding: 16,
+            leading: const Icon(Icons.timeline_rounded),
+            title: _buildOptionText(theme, '底栏播放进度填充', '播放时底栏背景从左向右显示进度'),
+            trailing: _buildCompactSwitch(
+              value: _nowPlayingBarFill,
+              onChanged: _setNowPlayingBarFill,
+            ),
+            onTap: () => _setNowPlayingBarFill(!_nowPlayingBarFill),
+          ),
         ],
       ),
     );

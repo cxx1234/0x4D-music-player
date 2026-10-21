@@ -24,17 +24,17 @@ void main() {
       ),
     );
 
-    // 菜单栏：左文本 + 文本大小按钮。
+    // 菜单栏：左文本 + 文本大小按钮；未传回调时没有设置入口。
     expect(find.text('歌词'), findsOneWidget);
     expect(find.byIcon(Icons.text_fields_rounded), findsOneWidget);
+    expect(find.byTooltip('歌词显示设置'), findsNothing);
     // 无歌词 → 占位，不渲染 LyricView。
     expect(find.text('暂无歌词'), findsOneWidget);
     expect(find.byType(LyricView), findsNothing);
   });
 
   testWidgets('有歌词：渲染 LyricView，不显示占位', (tester) async {
-    final controller = LyricController()
-      ..loadLyric('[00:01.00]第一行\n[00:05.00]第二行');
+    final controller = LyricController()..load('[00:01.00]第一行\n[00:05.00]第二行');
     addTearDown(controller.dispose);
     await tester.pumpWidget(
       _wrap(
@@ -102,5 +102,25 @@ void main() {
 
     expect(uiState.showTranslation, isFalse);
     expect(toggled, 1);
+  });
+
+  testWidgets('设置按钮：点击触发打开歌词显示设置', (tester) async {
+    final controller = LyricController();
+    addTearDown(controller.dispose);
+    var opened = false;
+    await tester.pumpWidget(
+      _wrap(
+        LyricsView(
+          controller: controller,
+          theme: ThemeData(),
+          uiState: PlayerUiState(),
+          onOpenSettings: () => opened = true,
+        ),
+      ),
+    );
+
+    expect(find.byTooltip('歌词显示设置'), findsOneWidget);
+    await tester.tap(find.byTooltip('歌词显示设置'));
+    expect(opened, isTrue);
   });
 }

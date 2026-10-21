@@ -64,6 +64,19 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       // 歌词 UI 状态（字号/翻译）从持久化设置恢复（设置页不展示，跨重启保留）。
       _playerUiState.lyricTextSize = ServiceLocator.settings.lyricTextSize;
       _playerUiState.showTranslation = ServiceLocator.settings.showTranslation;
+      _playerUiState.lyricWordHighlight =
+          ServiceLocator.settings.lyricWordHighlight;
+      _playerUiState.lyricWordLift = ServiceLocator.settings.lyricWordLift;
+      _playerUiState.lyricLineWave = ServiceLocator.settings.lyricLineWave;
+      _playerUiState.lyricDistanceBlur =
+          ServiceLocator.settings.lyricDistanceBlur;
+      _playerUiState.lyricCountdown = ServiceLocator.settings.lyricCountdown;
+      _playerUiState.lyricEffectStrength =
+          ServiceLocator.settings.lyricEffectStrength;
+      _playerUiState.lyricLineTransition =
+          ServiceLocator.settings.lyricLineTransition;
+      _playerUiState.lyricSlideAlignment =
+          ServiceLocator.settings.lyricSlideAlignment;
       // 注入菜单动作 → 切 tab（仅 macOS 有菜单服务）。
       if (defaultTargetPlatform == TargetPlatform.macOS) {
         final menu = ServiceLocator.menu;
@@ -238,7 +251,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
           onGenerateRoute: AppRouter.generateRoute,
           navigatorKey: _navKey,
           navigatorObservers: [
-            _NowPlayingBarVisibilityObserver(_showBar),
+            NowPlayingBarVisibilityObserver(_showBar),
             routeObserver,
           ],
           debugShowCheckedModeBanner: false,
@@ -372,38 +385,51 @@ class _PlayerNoticeConsumerState extends State<_PlayerNoticeConsumer> {
   }
 }
 
-/// 全屏“正在播放”页打开时隐藏底栏，关闭后恢复显示。
-class _NowPlayingBarVisibilityObserver extends NavigatorObserver {
-  _NowPlayingBarVisibilityObserver(this.showBar);
+/// 全屏“正在播放”页在路由栈里时隐藏底栏，关闭后恢复显示。
+///
+/// 必须看整条栈而不是只看栈顶：从播放页再压入歌词设置等子页面时，栈顶不是
+/// [PlayerPage]，但底栏仍应保持隐藏；否则点底栏会再压入一个播放页，形成
+/// 播放页 → 设置 → 播放页 → 设置 的套娃。
+class NowPlayingBarVisibilityObserver extends NavigatorObserver {
+  NowPlayingBarVisibilityObserver(this.showBar);
 
   final ValueNotifier<bool> showBar;
+  final List<Route<dynamic>> _pageRoutes = [];
 
   bool _isPlayer(Route<dynamic> route) =>
       route.settings.name == PlayerPage.routeName;
+
+  void _sync() {
+    showBar.value = !_pageRoutes.any(_isPlayer);
+  }
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     // 只响应真正的页面路由：PopupMenu/Dialog/BottomSheet 等弹层路由
     // 不是 PageRoute，忽略以免（如弹出歌曲菜单时）误触发底栏显隐。
     if (route is! PageRoute) return;
-    showBar.value = !_isPlayer(route);
+    _pageRoutes.add(route);
+    _sync();
   }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (route is! PageRoute) return;
-    showBar.value = previousRoute == null || !_isPlayer(previousRoute);
+    _pageRoutes.remove(route);
+    _sync();
   }
 
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (route is! PageRoute) return;
-    showBar.value = previousRoute == null || !_isPlayer(previousRoute);
+    _pageRoutes.remove(route);
+    _sync();
   }
 
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
-    if (newRoute is! PageRoute) return;
-    showBar.value = !_isPlayer(newRoute);
+    if (oldRoute is PageRoute) _pageRoutes.remove(oldRoute);
+    if (newRoute is PageRoute) _pageRoutes.add(newRoute);
+    _sync();
   }
 }

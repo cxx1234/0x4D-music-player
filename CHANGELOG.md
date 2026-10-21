@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.7] - 2026-10-22
 
 ### Added
 - The about page shows the app artwork instead of a generic note glyph. The
@@ -27,8 +27,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from queue", artist rows get "play all", the album card gets "play all / add to
   queue"). Right-clicking is turned off while a list is in reorder or
   multi-select mode, since the row gestures there are already drag and check
+- Lyrics follow playback through `flutter_lyric`'s frame-sampled
+  `LyricProgressSource` instead of the ~200 ms position stream.
+  `LyricsViewModel` binds a `PlayerLyricProgressSource` and drops its own
+  `setPosition` calls, so word-level highlight and line motion update on every
+  display frame; `PlayerService.isAdvancing` tells real playback apart from the
+  load window so a stale position is never sampled as progress
+- Word-timed QRC/YRC lyrics are no longer flattened into one static line. Any
+  text the LRC bilingual splitter does not own is handed to
+  `LyricDocument.parse`, which auto-detects the format; LRC keeps the existing
+  main/translation split, and blank timestamp entries survive so interlude
+  countdowns have something to anchor on
+- Settings › Appearance › Lyrics display opens a dedicated page. On wide
+  windows a live looped preview sits on the left and the controls scroll on the
+  right; narrow windows keep the controls only. The preview runs its own
+  controller and a ticker-driven progress source, and both it and the player
+  build their `LyricPreset` from one shared function, so font/translation
+  changes cannot look different from playback
+- Lyrics text effects: Word Pop pops each sung character upward and holds it
+  for the rest of the line. A two-step strength preset (默认 / 强) scales the
+  lift only (3.5 / 5 px) and keeps a fixed 900 ms rise; plain
+  LRC simulates word timing so the effect works without QRC/YRC data. The live
+  preview and the player share the same preset
+- Word highlight fill can be switched off independently of Word Pop. With it
+  off, the character sweep disappears while the lift still works; with it on,
+  plain LRC simulates word timing so the fill sweeps per character
+- Line transitions are selectable: classic, a single soft scale-up-and-settle
+  (no spring oscillation), slide or none. The choice goes through the same
+  shared preset as the player and the live preview, so the page shows the real
+  motion instead of a stand-in. Slide exposes a left/right alignment: the text
+  anchors to that edge and enters from the same side. Slide mode uses a 44 px
+  horizontal inset (default 20 + the 24 px inactive offset), so the
+  permanently shifted inactive rows keep a readable 20 px margin instead of
+  being clipped at the viewport edge
+- Line motion: an optional "row wave" uses the Apple Music recipe (35 ms row
+  stagger, 140 ms cap, 600 ms / 12 px wave, 64 px lag limit). It moves whole
+  rows, independent of the per-character lift, and is off by default
+- Distance blur is optional (off / light 2σ / standard 4σ, one extra offscreen
+  blur layer per visible row) and stays crisp while browsing. Off by default;
+  the settings row notes the per-row layer cost
+- Countdown dots can now be switched off; the default stays on to match 4.1.
+  Interludes still need a blank timestamp in plain LRC, and the row says so
+- The playing page's lyric toolbar has a settings button next to translation
+  and text size. It opens the same Lyrics display page; returning re-syncs the
+  player's UI state and applies the changes immediately
 
 ### Changed
+- Settings › Appearance now lists theme mode and accent colour before the
+  lyrics display entry and the bar-fill switch, so the theme controls come
+  first
+- Lyric text size tiers are one step larger: 小 / 中 / 大 now map to
+  1.0 / 1.25 / 1.5, and the old 大 is the new default 中
+- Seeking while paused notifies the player's listeners explicitly, so
+  frame-sampled consumers such as lyrics show the new position immediately
+  instead of waiting for playback to resume
 - The grid-card menus (album card, playlist card — three-dot, long press and
   right click alike) grow open in 240ms instead of 320ms and close in 180ms
   instead of 220ms. "The card unfolds into its options" does not need to take
@@ -69,6 +121,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scroll. The macOS menu-bar entry keeps 5/10, since a menu has no height limit
 
 ### Fixed
+- The mini player bar now stays hidden for the whole player route stack.
+  Opening Lyrics display above the player used to make the bar reappear, and
+  tapping it pushed another player page; visibility now tracks whether any
+  `PlayerPage` remains in the stack instead of only looking at the top route
 - Morph menus that grow upward no longer slide under the traffic lights. The
   geometry kept only an 8px margin from the top of the window, but on macOS the
   titlebar is transparent and the Flutter view spans the whole window, so those

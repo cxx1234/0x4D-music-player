@@ -85,9 +85,9 @@ void main() {
     });
 
     test('scale/label 与既有值一致（迁移后回归护栏）', () {
-      expect(LyricTextSize.small.scale, 0.85);
-      expect(LyricTextSize.medium.scale, 1.0);
-      expect(LyricTextSize.large.scale, 1.25);
+      expect(LyricTextSize.small.scale, 1.0);
+      expect(LyricTextSize.medium.scale, 1.25);
+      expect(LyricTextSize.large.scale, 1.5);
       expect(LyricTextSize.small.label, '小');
       expect(LyricTextSize.medium.label, '中');
       expect(LyricTextSize.large.label, '大');

@@ -7,6 +7,10 @@ import 'package:path_provider/path_provider.dart';
 
 import '../database/song_sort_order.dart';
 import '../models/accent_color.dart';
+import '../models/lyric_distance_blur_level.dart';
+import '../models/lyric_effect_strength.dart';
+import '../models/lyric_line_transition_style.dart';
+import '../models/lyric_slide_alignment.dart';
 import '../models/lyric_text_size.dart';
 import '../utils/logger.dart';
 
@@ -56,6 +60,30 @@ class AppSettings {
   /// 歌词是否显示翻译副行。
   final bool showTranslation;
 
+  /// 歌词逐字填充（高亮遮罩）。
+  final bool lyricWordHighlight;
+
+  /// 歌词逐字跳动（Word Pop）。
+  final bool lyricWordLift;
+
+  /// 行间波浪（整行依次错位 + 起伏）。
+  final bool lyricLineWave;
+
+  /// 距离模糊档位（[LyricDistanceBlurLevel.name]）。
+  final String lyricDistanceBlur;
+
+  /// 是否显示前奏/间奏倒计时圆点。
+  final bool lyricCountdown;
+
+  /// 文本效果强度（[LyricEffectStrength.name]：standard / strong）。
+  final String lyricEffectStrength;
+
+  /// 切句动画风格（[LyricLineTransitionStyle.name]）。
+  final String lyricLineTransition;
+
+  /// 「滑入」的对齐方向（[LyricSlideAlignment.name]）。
+  final String lyricSlideAlignment;
+
   /// 底栏是否显示「按播放进度填充」背景效果。
   final bool nowPlayingBarFill;
 
@@ -79,6 +107,14 @@ class AppSettings {
     this.volume = 1.0,
     this.lyricTextSize = 'medium',
     this.showTranslation = true,
+    this.lyricWordHighlight = true,
+    this.lyricWordLift = false,
+    this.lyricLineWave = false,
+    this.lyricDistanceBlur = 'off',
+    this.lyricCountdown = true,
+    this.lyricEffectStrength = 'standard',
+    this.lyricLineTransition = 'classic',
+    this.lyricSlideAlignment = 'left',
     this.nowPlayingBarFill = true,
     this.sleepTimerFinishCurrentTrack = false,
     this.showTrackChangeNotification = true,
@@ -96,6 +132,14 @@ class AppSettings {
     'volume': volume,
     'lyricTextSize': lyricTextSize,
     'showTranslation': showTranslation,
+    'lyricWordHighlight': lyricWordHighlight,
+    'lyricWordLift': lyricWordLift,
+    'lyricLineWave': lyricLineWave,
+    'lyricDistanceBlur': lyricDistanceBlur,
+    'lyricCountdown': lyricCountdown,
+    'lyricEffectStrength': lyricEffectStrength,
+    'lyricLineTransition': lyricLineTransition,
+    'lyricSlideAlignment': lyricSlideAlignment,
     'nowPlayingBarFill': nowPlayingBarFill,
     'sleepTimerFinishCurrentTrack': sleepTimerFinishCurrentTrack,
     'showTrackChangeNotification': showTrackChangeNotification,
@@ -126,6 +170,14 @@ class AppSettings {
       volume: (json['volume'] as num?)?.toDouble() ?? 1.0,
       lyricTextSize: json['lyricTextSize'] as String? ?? 'medium',
       showTranslation: json['showTranslation'] as bool? ?? true,
+      lyricWordHighlight: json['lyricWordHighlight'] as bool? ?? true,
+      lyricWordLift: json['lyricWordLift'] as bool? ?? false,
+      lyricLineWave: json['lyricLineWave'] as bool? ?? false,
+      lyricDistanceBlur: json['lyricDistanceBlur'] as String? ?? 'off',
+      lyricCountdown: json['lyricCountdown'] as bool? ?? true,
+      lyricEffectStrength: json['lyricEffectStrength'] as String? ?? 'standard',
+      lyricLineTransition: json['lyricLineTransition'] as String? ?? 'classic',
+      lyricSlideAlignment: json['lyricSlideAlignment'] as String? ?? 'left',
       nowPlayingBarFill: json['nowPlayingBarFill'] as bool? ?? true,
       sleepTimerFinishCurrentTrack:
           json['sleepTimerFinishCurrentTrack'] as bool? ?? false,
@@ -143,6 +195,14 @@ class AppSettings {
     double? volume,
     String? lyricTextSize,
     bool? showTranslation,
+    bool? lyricWordHighlight,
+    bool? lyricWordLift,
+    bool? lyricLineWave,
+    String? lyricDistanceBlur,
+    bool? lyricCountdown,
+    String? lyricEffectStrength,
+    String? lyricLineTransition,
+    String? lyricSlideAlignment,
     bool? nowPlayingBarFill,
     bool? sleepTimerFinishCurrentTrack,
     bool? showTrackChangeNotification,
@@ -157,6 +217,14 @@ class AppSettings {
       volume: volume ?? this.volume,
       lyricTextSize: lyricTextSize ?? this.lyricTextSize,
       showTranslation: showTranslation ?? this.showTranslation,
+      lyricWordHighlight: lyricWordHighlight ?? this.lyricWordHighlight,
+      lyricWordLift: lyricWordLift ?? this.lyricWordLift,
+      lyricLineWave: lyricLineWave ?? this.lyricLineWave,
+      lyricDistanceBlur: lyricDistanceBlur ?? this.lyricDistanceBlur,
+      lyricCountdown: lyricCountdown ?? this.lyricCountdown,
+      lyricEffectStrength: lyricEffectStrength ?? this.lyricEffectStrength,
+      lyricLineTransition: lyricLineTransition ?? this.lyricLineTransition,
+      lyricSlideAlignment: lyricSlideAlignment ?? this.lyricSlideAlignment,
       nowPlayingBarFill: nowPlayingBarFill ?? this.nowPlayingBarFill,
       sleepTimerFinishCurrentTrack:
           sleepTimerFinishCurrentTrack ?? this.sleepTimerFinishCurrentTrack,
@@ -263,6 +331,74 @@ class SettingsService {
   /// 持久化歌词翻译显示开关（播放页歌词菜单修改时写盘）。
   Future<void> setShowTranslation(bool value) async {
     _settings = _settings.copyWith(showTranslation: value);
+    await _save();
+  }
+
+  /// 歌词逐字填充（高亮遮罩）。
+  bool get lyricWordHighlight => _settings.lyricWordHighlight;
+
+  Future<void> setLyricWordHighlight(bool value) async {
+    _settings = _settings.copyWith(lyricWordHighlight: value);
+    await _save();
+  }
+
+  /// 歌词逐字上弹（Word Pop）。
+  bool get lyricWordLift => _settings.lyricWordLift;
+
+  Future<void> setLyricWordLift(bool value) async {
+    _settings = _settings.copyWith(lyricWordLift: value);
+    await _save();
+  }
+
+  /// 行间波浪（整行依次错位 + 起伏）。
+  bool get lyricLineWave => _settings.lyricLineWave;
+
+  Future<void> setLyricLineWave(bool value) async {
+    _settings = _settings.copyWith(lyricLineWave: value);
+    await _save();
+  }
+
+  /// 距离模糊档位（关/轻/标准）。
+  LyricDistanceBlurLevel get lyricDistanceBlur =>
+      LyricDistanceBlurLevel.fromName(_settings.lyricDistanceBlur);
+
+  Future<void> setLyricDistanceBlur(LyricDistanceBlurLevel level) async {
+    _settings = _settings.copyWith(lyricDistanceBlur: level.name);
+    await _save();
+  }
+
+  /// 是否显示前奏/间奏倒计时圆点。
+  bool get lyricCountdown => _settings.lyricCountdown;
+
+  Future<void> setLyricCountdown(bool value) async {
+    _settings = _settings.copyWith(lyricCountdown: value);
+    await _save();
+  }
+
+  /// 文本效果强度（默认/强）。
+  LyricEffectStrength get lyricEffectStrength =>
+      LyricEffectStrength.fromName(_settings.lyricEffectStrength);
+
+  Future<void> setLyricEffectStrength(LyricEffectStrength strength) async {
+    _settings = _settings.copyWith(lyricEffectStrength: strength.name);
+    await _save();
+  }
+
+  /// 切句动画风格。
+  LyricLineTransitionStyle get lyricLineTransition =>
+      LyricLineTransitionStyle.fromName(_settings.lyricLineTransition);
+
+  Future<void> setLyricLineTransition(LyricLineTransitionStyle style) async {
+    _settings = _settings.copyWith(lyricLineTransition: style.name);
+    await _save();
+  }
+
+  /// 「滑入」的对齐方向。
+  LyricSlideAlignment get lyricSlideAlignment =>
+      LyricSlideAlignment.fromName(_settings.lyricSlideAlignment);
+
+  Future<void> setLyricSlideAlignment(LyricSlideAlignment alignment) async {
+    _settings = _settings.copyWith(lyricSlideAlignment: alignment.name);
     await _save();
   }
 

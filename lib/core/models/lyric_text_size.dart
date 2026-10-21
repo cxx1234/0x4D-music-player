@@ -4,9 +4,9 @@
 /// core 层的 [SettingsService] 需要存取该类型（歌词字号写盘持久化），
 /// 因此不放在 features/player（避免 core → features 反向依赖）。
 enum LyricTextSize {
-  small('小', 0.85),
-  medium('中', 1.0),
-  large('大', 1.25);
+  small('小', 1.0),
+  medium('中', 1.25),
+  large('大', 1.5);
 
   const LyricTextSize(this.label, this.scale);
 

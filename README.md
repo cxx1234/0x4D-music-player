@@ -6,6 +6,10 @@ A local music player built with **Flutter**.
   <img src="assets/icon/0x4D_logo_rounded.png" alt="App Icon" width="120">
   <br/>
   <img src="screenshots/0x4D_V0_2.png" alt="0x4D Music Player" width="720">
+  <br/><br/>
+  <img src="screenshots/0x4D_V0_2_Now_Playing.png" alt="Now Playing with synced lyrics" width="720">
+  <br/>
+  <sub>Now Playing — synced lyrics with per-character fill and line transitions</sub>
 </p>
 
 ## Features
@@ -16,7 +20,8 @@ A local music player built with **Flutter**.
 - **In-page search** — live filtering with match counts across Library, Albums, Artists and Playlists.
 - **Playback queue** — play next, reorder, repeat modes and shuffle, with the queue, repeat/shuffle state and playback position persisted across restarts.
 - **Hi-Res audio** — playback via `audioplayers`, including lossless formats like FLAC.
-- **Lyrics** — synced `.lrc` lyrics on the Now Playing page, auto-detected next to the audio file, with bilingual (e.g. Chinese-Japanese) line splitting and adjustable text size.
+- **Lyrics** — synced LRC/QRC/YRC lyrics on the Now Playing page, auto-detected next to the audio file or read from embedded tags. Bilingual lines (e.g. Chinese-Japanese) are split into two timelines, and playback drives the highlight on every display frame.
+- **Lyrics display** — a dedicated **Settings › Appearance › Lyrics display** page, also reachable from the player toolbar. On wide windows a live looped preview sits beside the controls, which cover text size and translation, per-character fill and Word Pop, line transitions, row-wave motion, distance blur and intro/interlude countdown dots. The preview and the player build the same preset, so what you see is what plays.
 - **System media controls** (macOS) — lock-screen / media-key controls (play, pause, next, previous, seek) with Now Playing metadata and cover art; dock menu and window restore after close.
 - **Smart sorting** — pinyin and Japanese kana based sort keys for natural ordering in the library.
 - **Cover art caching** — album art is extracted once and cached for fast browsing.
@@ -81,7 +86,7 @@ See [docs/Architecture.md](docs/Architecture.md) for the full architecture and [
 - **drift** — SQLite ORM for the local library database
 - **audioplayers** — audio playback (single-track; queue logic lives in the app)
 - **audio_metadata_reader** — metadata & embedded cover art parsing (pure Dart; uses the [cxx1234 fork](https://github.com/cxx1234/audio_metadata_reader) pinned to commit `4a6f245` for `albumArtist` + embedded lyrics support)
-- **flutter_lyric** — `.lrc` lyric rendering
+- **flutter_lyric** — LRC/QRC/YRC lyric rendering with word-level effects, line transitions and countdown dots
 - **file_picker / watcher** — folder selection & library change watching
 - **lpinyin** — pinyin sort keys
 

@@ -367,3 +367,18 @@
   返回 null、行菜单是标准弹出菜单、卡片菜单是容器变换，两者都回传值）、
   `test/song_tile_context_menu_test.dart`（3 例：有菜单→打开同一个、无菜单→回调
   给行 context、都没有→无事发生）。
+
+## 13. 歌词显示设置页预览（2026-10-22）
+
+- 入口：设置 › 外观 › 歌词显示（`lib/features/settings/lyrics_settings_page.dart`），
+  以及播放页歌词工具栏的 `tune_rounded` 按钮；从播放页进入后返回，播放页必须重新同步设置并立即应用。
+- 设置 › 外观的卡片顺序固定为：主题模式 → 主题色 → 歌词显示 → 底栏播放进度填充。
+- **宽屏（≥ 780）**：左侧实时循环预览，右侧独立滚动的设置列表；
+  **窄屏不显示预览**，只保留设置项（`LayoutBuilder` 断点见页面内 `_kPreviewBreakpoint`）。
+- 预览用独立 `LyricController` + 页面 `Ticker` 驱动的假进度源，循环内置示例歌词，
+  不碰真实播放器；设置变化只重建 preset 或 `loadDocument`（保留播放位置）。
+- 播放页与预览共用 `lib/core/utils/lyric_preset.dart` 的 `buildLyricPreset`，
+  新增歌词样式/动效参数只改这一处，避免两边观感走样。
+- ⚠️ 预览会持续排帧，**相关 widget 测试不能用 `pumpAndSettle()`**，改用固定
+  `pump(Duration)`；`LyricView` 是 Canvas 渲染，断言走 `controller.document` / `preset`，
+  不要用 `find.text` 找歌词内容。
