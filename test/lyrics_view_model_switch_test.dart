@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:txvziwm/core/database/database.dart';
 import 'package:txvziwm/core/models/lyric_load_state.dart';
@@ -23,6 +24,14 @@ Song _song(int id) => Song(
   isFavorite: 0,
   isAvailable: 1,
 );
+
+class _SilentQueue extends PlayQueue {
+  @override
+  void notifyListeners() {
+    // Keep PlayerService.currentSongNotifier quiet so the test can simulate a
+    // track change whose notification was missed while the app was backgrounded.
+  }
+}
 
 class _ControlledMetadata extends MetadataService {
   final Map<String, String?> immediate = {};
@@ -51,6 +60,8 @@ Future<void> _waitForState(
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late FakeAudioEngine engine;
   late PlayerService player;
   late LyricsViewModel viewModel;
@@ -160,6 +171,44 @@ void main() {
 
     expect(viewModel.controller.document, isNull);
     expect(viewModel.hasTranslationNotifier.value, isFalse);
+  });
+
+  test('回到前台对账：漏掉 currentSongNotifier 也会换成当前曲', () async {
+    final engine = FakeAudioEngine();
+    final queue = _SilentQueue()..replace([_song(1), _song(2)], 0);
+    final fakePlayer = PlayerService(
+      engine,
+      playQueue: queue,
+      random: Random(1),
+    );
+    final first = queue.songs[0];
+    final second = queue.songs[1];
+    final fakeMetadata = _ControlledMetadata()
+      ..immediate[first.filePath] = '[00:00.00]First'
+      ..immediate[second.filePath] = '[00:00.00]Second';
+    fakePlayer.loadedSongNotifier.value = first;
+
+    final fakeViewModel = LyricsViewModel(
+      fakePlayer,
+      isChineseUi: () => true,
+      metadataService: fakeMetadata,
+    );
+    addTearDown(() {
+      fakeViewModel.dispose();
+      fakePlayer.dispose();
+    });
+
+    await _waitForState(fakeViewModel, LyricLoadState.ready);
+    expect(fakeViewModel.controller.document?.lines.single.text, 'First');
+
+    // Simulate a track change that happened while the app was backgrounded and
+    // whose currentSongNotifier notification was missed.
+    queue.setCurrentIndex(1);
+    fakePlayer.loadedSongNotifier.value = second;
+    fakeViewModel.didChangeAppLifecycleState(AppLifecycleState.resumed);
+
+    await _waitForState(fakeViewModel, LyricLoadState.ready);
+    expect(fakeViewModel.controller.document?.lines.single.text, 'Second');
   });
 
   test('翻译开关只重解析文档，不重置播放位置', () async {

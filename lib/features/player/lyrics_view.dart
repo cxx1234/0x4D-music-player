@@ -66,7 +66,7 @@ class LyricsView extends StatefulWidget {
   State<LyricsView> createState() => _LyricsViewState();
 }
 
-class _LyricsViewState extends State<LyricsView> {
+class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
   // 缓存 LyricPreset：仅字号档位/文本效果/主题变化时重建（避免播放页高频
   // rebuild 反复 relayout/repaint）。
   LyricPreset? _preset;
@@ -87,13 +87,24 @@ class _LyricsViewState extends State<LyricsView> {
   /// 「当前是否有歌词」：只在有/无切换时通知，避免 setPosition 每帧重建歌词树。
   final ValueNotifier<bool> _hasLyrics = ValueNotifier(false);
 
+  LyricDocument? _lastDocument;
+  bool _hasBuilt = false;
+
   ThemeData get theme => widget.theme;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.controller.addListener(_syncHasLyrics);
+    _lastDocument = widget.controller.document;
     _syncHasLyrics();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _hasBuilt = true;
   }
 
   @override
@@ -102,20 +113,40 @@ class _LyricsViewState extends State<LyricsView> {
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_syncHasLyrics);
       widget.controller.addListener(_syncHasLyrics);
+      _lastDocument = widget.controller.document;
       _syncHasLyrics();
     }
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      // 后台期间 controller 可能已经换了文档，但画面没有机会重建；回前台
+      // 主动同步一次，并让带 document key 的 LyricView 重新建立会话。
+      _syncHasLyrics();
+      setState(() {});
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.controller.removeListener(_syncHasLyrics);
     _hasLyrics.dispose();
     super.dispose();
   }
 
   void _syncHasLyrics() {
-    final has = widget.controller.document?.lines.isNotEmpty ?? false;
+    final document = widget.controller.document;
+    final documentChanged = !identical(document, _lastDocument);
+    _lastDocument = document;
+    final has = document?.lines.isNotEmpty ?? false;
     if (_hasLyrics.value != has) _hasLyrics.value = has;
+    if (documentChanged && has && _hasBuilt && mounted) {
+      // hasLyrics 真→真时 ValueListenableBuilder 不会重建；文档换了要主动
+      // 触发一次，让下面的 document key 生效。
+      setState(() {});
+    }
   }
 
   LyricPreset _buildPreset() {
@@ -296,6 +327,7 @@ class _LyricsViewState extends State<LyricsView> {
         if (loadState == LyricLoadState.loading) return _buildLoading();
         if (!hasLyrics) return _buildEmpty();
         return LyricView(
+          key: ObjectKey(widget.controller.document),
           controller: widget.controller,
           preset: _buildPreset(),
           onLineTap: widget.onLineTap,

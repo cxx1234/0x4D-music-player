@@ -377,6 +377,9 @@
   指向当前曲后，再重新挂上 progress source 并 `loadDocument`。不能把
   `currentSongNotifier` 当成“新曲已加载”信号，否则旧歌词会挂在新歌下面，且
   `loadDocument` 可能沿用上一首的最后位置。
+- App 从后台恢复时 `LyricsViewModel` 必须对账当前曲与 document 所属曲目；`LyricsView`
+  用 document 作为 `LyricView` 的 key，并在 resume 时重建一次，避免后台漏帧后
+  沿用旧的 view session。
 - **宽屏（≥ 780）**：左侧实时循环预览，右侧独立滚动的设置列表；
   **窄屏不显示预览**，只保留设置项（`LayoutBuilder` 断点见页面内 `_kPreviewBreakpoint`）。
 - 预览用独立 `LyricController` + 页面 `Ticker` 驱动的假进度源，循环内置示例歌词，

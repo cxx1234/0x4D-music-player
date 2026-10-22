@@ -78,6 +78,28 @@ void main() {
     expect(find.text('暂无歌词'), findsNothing);
   });
 
+  testWidgets('文档切换：重建 LyricView，避免沿用旧会话', (tester) async {
+    final controller = LyricController()..load('[00:01.00]第一行');
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _wrap(
+        LyricsView(
+          controller: controller,
+          theme: ThemeData(),
+          uiState: PlayerUiState(),
+        ),
+      ),
+    );
+
+    final before = tester.state(find.byType(LyricView));
+    controller.load('[00:01.00]第二首');
+    await tester.pump();
+    final after = tester.state(find.byType(LyricView));
+
+    expect(identical(before, after), isFalse);
+  });
+
   testWidgets('点文本大小 → 弹三档菜单 → 选择"大"写入 uiState', (tester) async {
     final controller = LyricController();
     addTearDown(controller.dispose);

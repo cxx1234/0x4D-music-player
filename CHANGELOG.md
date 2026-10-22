@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.7+2] - 2026-10-22
+
+### Fixed
+- Returning from the background no longer leaves the previous song's lyrics
+  visible under the new track. `LyricsViewModel` now reconciles the document
+  owner against `PlayerService.currentSong` on resume, reloads when the
+  background missed a track change or left a load half-finished, and
+  reattaches the progress source when needed
+- `LyricsView` rebuilds on resume and keys `LyricView` by the current document,
+  so a view session created before backgrounding cannot be reused for the new
+  song
+
 ## [0.2.7+1] - 2026-10-22
 
 ### Fixed

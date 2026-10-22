@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_lyric/flutter_lyric.dart';
 import 'package:path/path.dart' as p;
 
@@ -42,14 +42,15 @@ String? resolveLrcPath(Song song) {
 /// 自 2026-09-03 起为 [ServiceLocator] 注册的**常驻服务**，与 [PlayerService]
 /// 同生命周期（不再随播放页 pop 销毁）——播放页关闭再打开不会重新读盘/解析歌词；
 /// 播放页之外切歌也能持续跟踪。播放页只消费 [controller]/[hasTranslationNotifier]。
-class LyricsViewModel {
+class LyricsViewModel with WidgetsBindingObserver {
   /// 高亮/滚动切换到下一行的提前量（毫秒）：正值让歌词高亮比实际时间戳
   /// 早一点切换，跟唱更顺；不影响点击歌词 seek（其回调用原始时间戳）。
   static const int _kLyricOffsetMs = 300;
 
   /// 默认判定：平台 locale 是否为中文。
   static bool _defaultIsChineseUi() {
-    final lang = PlatformDispatcher.instance.locale.languageCode.toLowerCase();
+    final lang = WidgetsBinding.instance.platformDispatcher.locale.languageCode
+        .toLowerCase();
     return lang == 'zh';
   }
 
@@ -73,6 +74,7 @@ class LyricsViewModel {
     // 初始加载当前歌曲（若打开播放页前已有歌在播）。绑定 source 时会立即
     // 采样一次当前位置，续播/暂停状态无需额外同步。
     _onSongChanged();
+    WidgetsBinding.instance.addObserver(this);
   }
 
   final PlayerService _player;
@@ -98,6 +100,11 @@ class LyricsViewModel {
 
   /// 当前歌曲已经读到的原始歌词；翻译开关直接重解析，避免再次读盘。
   String? _currentContent;
+
+  /// 当前 controller 中的文档属于哪首歌。用于 resume 时对账：后台期间若
+  /// 漏掉了 currentSongNotifier（或加载被挂起），回到前台要强制重新加载。
+  int? _documentSongId;
+  String? _documentFilePath;
 
   /// 是否显示翻译副行（由歌词菜单栏开关控制）。
   bool _showTranslation = true;
@@ -137,6 +144,8 @@ class LyricsViewModel {
 
     if (trackChanged) {
       _currentContent = null;
+      _documentSongId = null;
+      _documentFilePath = null;
       // 切歌瞬间摘掉旧文档和进度源：旧歌词不能继续挂在新歌标题下，
       // 也不能在加载窗口里被旧位置重新定位。
       controller.progressSource = null;
@@ -148,6 +157,8 @@ class LyricsViewModel {
     }
 
     if (song == null) {
+      _documentSongId = null;
+      _documentFilePath = null;
       if (!trackChanged) loadStateNotifier.value = LyricLoadState.empty;
       return;
     }
@@ -175,6 +186,8 @@ class LyricsViewModel {
     if (generation != _loadGeneration || !_isCurrent(song)) return;
 
     _currentContent = content;
+    _documentSongId = song.id;
+    _documentFilePath = song.filePath;
 
     if (content == null || content.trim().isEmpty) {
       hasTranslationNotifier.value = false;
@@ -205,6 +218,47 @@ class LyricsViewModel {
 
     _loadLyricText(content);
     loadStateNotifier.value = LyricLoadState.ready;
+  }
+
+  /// App 回到前台时对账：后台期间可能漏掉切歌通知，或加载停在半路。
+  ///
+  /// 正常情况下 currentSongNotifier 已经处理过；这里是兜底，不改变前台行为。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _reconcileWithPlayer();
+  }
+
+  void _reconcileWithPlayer() {
+    final song = _player.currentSong;
+    if (song == null) {
+      if (controller.document != null || _documentSongId != null) {
+        _loadForSong(null);
+      }
+      return;
+    }
+
+    final sameSong =
+        _documentSongId == song.id && _documentFilePath == song.filePath;
+    if (!sameSong ||
+        (loadStateNotifier.value == LyricLoadState.loading &&
+            controller.document == null)) {
+      AppLogger.info(
+        'Lyric',
+        'Resume reconcile: reloading song ${song.id} '
+            '(document was ${_documentSongId ?? 'none'})',
+      );
+      _loadForSong(song);
+      return;
+    }
+
+    if (controller.document != null && controller.progressSource == null) {
+      AppLogger.info(
+        'Lyric',
+        'Resume reconcile: reattached progress source for song ${song.id}',
+      );
+      controller.progressSource = _progressSource;
+      loadStateNotifier.value = LyricLoadState.ready;
+    }
   }
 
   bool _isCurrent(Song song) {
@@ -279,6 +333,7 @@ class LyricsViewModel {
   }
 
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _player.currentSongNotifier.removeListener(_onSongChanged);
     _progressSource.dispose();
     controller.dispose();
