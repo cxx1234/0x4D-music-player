@@ -275,6 +275,26 @@
   禁用裸空格键等价。新增「全局无修饰键快捷键」时必须一并考虑这条归属规则。
 - 回归测试：`test/keyboard_focus_test.dart`（4 例）。
 
+### 10.1 「返回」的输入（2026-10-22）
+
+- **入口**：鼠标「后退」侧键（`PointerDownEvent.buttons` 的 `kBackMouseButton`，
+  0x08）/ 硬件浏览器后退键 / ⌘`[` —— 统一走
+  `lib/core/navigation/back_navigation.dart` 的 `BackNavigationHandler`
+  （根 `Listener` + `addLateKeyEventHandler`，和 Esc 同一个理由：不抢输入控件）。
+- **行为**：`popTopRoute` —— 弹掉最上层路由。对话框 / 右键菜单 / BottomSheet 也在
+  同一条 Navigator 上，所以它们同样算“一层”，会先被关掉。回到 Shell 时**什么都不做**
+  （不切 tab、不退出应用）。
+- **不做「前进」**：Navigator 没有前进历史（pop 掉的 route 实例不能复用），要做得
+  自己维护页面工厂 + 状态快照。前进键直接忽略，不弹提示。
+- **remap 工具的合成手势：不支持**。`SensibleSideButtons` 这类工具把侧键换成
+  **合成的 swipe 手势**（不是按键、也不是滚轮），Flutter 引擎不会把它转成 Dart
+  事件。要支持得在 Runner 里加原生 `NSEvent` 监听，成本与收益不成比例，**本轮
+  不做**。需要侧键时：关掉这类工具（原始按钮那条路可用），或让工具改发 ⌘`[`。
+  机制与探针见 `Pitfalls.md` B9。
+- ⚠️ **不认 ⌘← / ⌘→**：macOS 菜单里它们是上一首 / 下一首。
+- 回归测试：`test/back_navigation_test.dart`（5 例：三种按键判定、侧键弹一层、
+  ⌘`[` 弹一层、主键点击不算、在主界面时无动作）。
+
 ## 11. 容器变换菜单（2026-10-01）
 
 「浮层菜单从触发它的控件里长出来」这一套现在有两处用：播放条左侧的**睡眠定时**

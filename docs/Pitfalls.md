@@ -136,6 +136,26 @@
 - ⚠️ **判定不能写成「`primaryFocus` 非空」**：路由自身的 `FocusScope`（`ModalRoute` 的 autofocus）在启动后就是 `primaryFocus`，那样写会让空格**永远**不再播放 / 暂停。必须要求「非 `FocusScopeNode` 的真实聚焦节点」，见 `lib/core/utils/keyboard_focus.dart` 的 `hasKeyboardFocus`。
 - **护栏**：`test/keyboard_focus_test.dart`；`docs/UI-Rules.md` §10；`docs/Performance-Optimization.md` §9.2。
 
+### B9. 2026-10-22 侧键 remap 工具发的是**合成滑动手势**，Dart 一条都收不到
+
+- **现象**：装了 `SensibleSideButtons` 后按鼠标侧键，Flutter 侧**完全静音** ——
+  `Listener` 没有 pointer 事件，`HardwareKeyboard` 也没有 key 事件；把该 app
+  退出/禁用后，才收到 `PointerDownEvent.buttons = 0x08 / 0x10`。
+- **根因**（读它源码确认）：它在 `CGEventTap` 上截 `otherMouseDown/Up`，**返回 NULL
+  把原始按钮吞掉**，然后自己发一个**合成手势事件**（`CGEventType.gesture` + IOHID
+  子类型 swipe `0x10`，方向写在 `ended` 帧的字段里）。那既不是按键也不是滚轮 ——
+  Flutter 的 macOS embedder 只转发 key / mouse / scroll，手势事件进不了 Dart。
+- **本项目结论：不支持，也不再验证**。要接住只能在 Runner 里加原生
+  `NSEvent` 本地监听（`[.swipe, .gesture]`），为一个小众 remap 工具改原生层 +
+  依赖“AppKit 会不会把它转成 `.swipe`”的未证实行为，不划算。工具开着时侧键在
+  本 app 里就是没反应 —— 关掉它（原始按钮那条路可用）或让工具改发 ⌘`[`。
+- **探查工具**：`test/demo/input_probe.dart`（`flutter run -d macos -t
+  test/demo/input_probe.dart`）把 pointer / scroll / pan-zoom / key 全打出来 ——
+  先看事件形状，再决定接哪一层。
+- **通用教训**：某个输入在别的 app 里能用，**不代表框架收得到**。这类 remap 工具的
+  输出至少有三种（原样透传按钮 / 合成快捷键 / 合成手势），而且**没有一个统一入口**；
+  遇到“按了没反应”先用探针，别猜。
+
 ## C. Flutter 框架层
 
 ### C1. 2026-08-19 → 08-24 Flutter 3.47 macOS 全窗口闪烁（Intel 专属）

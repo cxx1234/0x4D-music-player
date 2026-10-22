@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.8] - 2026-10-22
+
+### Added
+- Desktop back navigation from the mouse's back button, the hardware browser-back
+  key, and ⌘`[`. All three land in one handler that pops the top route, so
+  dialogs, popup menus and bottom sheets count as one step too; at the shell
+  nothing happens (no tab switch, no quit). Forward is deliberately not
+  implemented — a popped route cannot be re-pushed, so "forward" would need a
+  page-factory history the navigator does not keep. ⌘←/⌘→ are left alone because
+  the macOS menu uses them for previous/next track. Remapping tools that post a
+  synthetic swipe gesture instead of a button or a shortcut
+  (`SensibleSideButtons`) are out of scope: Flutter's embedder never turns that
+  gesture into a Dart event, and reaching it would mean a native monitor in the
+  runner (see `Pitfalls.md` B9) — turn such a tool off, or make it send ⌘`[`
+
 ## [0.2.7+2] - 2026-10-22
 
 ### Fixed
