@@ -6,6 +6,8 @@ import '../../core/models/lyric_line_transition_style.dart';
 import '../../core/models/lyric_slide_alignment.dart';
 import '../../core/models/lyric_text_size.dart';
 import '../../core/services/service_locator.dart';
+import '../../l10n/enum_labels.dart';
+import '../../l10n/l10n.dart';
 import '../../widgets/detail_top_bar.dart';
 import 'lyrics_preview.dart';
 
@@ -219,9 +221,12 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('字号', style: theme.textTheme.titleMedium),
                         Text(
-                          '调整歌词与翻译的文字大小',
+                          context.l10n.lyricsTextSizeTitle,
+                          style: theme.textTheme.titleMedium,
+                        ),
+                        Text(
+                          context.l10n.lyricsTextSizeSubtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: _subtitleStyle(theme),
@@ -230,15 +235,20 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SegmentedButton<LyricTextSize>(
-                    showSelectedIcon: false,
-                    segments: [
-                      for (final size in LyricTextSize.values)
-                        ButtonSegment(value: size, label: Text(size.label)),
-                    ],
-                    selected: {_textSize},
-                    onSelectionChanged: (selection) =>
-                        _setTextSize(selection.first),
+                  _shrinkableSegmented(
+                    SegmentedButton<LyricTextSize>(
+                      showSelectedIcon: false,
+                      segments: [
+                        for (final size in LyricTextSize.values)
+                          ButtonSegment(
+                            value: size,
+                            label: Text(size.label(context.l10n)),
+                          ),
+                      ],
+                      selected: {_textSize},
+                      onSelectionChanged: (selection) =>
+                          _setTextSize(selection.first),
+                    ),
                   ),
                 ],
               ),
@@ -247,7 +257,11 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
           ListTile(
             minVerticalPadding: 16,
             leading: const Icon(Icons.translate_rounded),
-            title: _buildOptionText(theme, '翻译副行', '有翻译时在原文下方显示'),
+            title: _buildOptionText(
+              theme,
+              context.l10n.lyricsTranslationTitle,
+              context.l10n.lyricsTranslationSubtitle,
+            ),
             subtitle: null,
             trailing: _buildCompactSwitch(
               value: _showTranslation,
@@ -256,6 +270,20 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
             onTap: () => _setShowTranslation(!_showTranslation),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 可收缩的分段按钮：英文标签比中文长，窄行里允许等比缩小而不是溢出。
+  Widget _shrinkableSegmented<T>(SegmentedButton<T> child) {
+    return Flexible(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: child,
+        ),
       ),
     );
   }
@@ -283,7 +311,11 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
               ListTile(
                 minVerticalPadding: 16,
                 leading: const Icon(Icons.format_color_fill_rounded),
-                title: _buildOptionText(theme, '逐字填充', '唱到的字逐渐填充主题色'),
+                title: _buildOptionText(
+                  theme,
+                  context.l10n.lyricsWordFillTitle,
+                  context.l10n.lyricsWordFillSubtitle,
+                ),
                 subtitle: null,
                 trailing: _buildCompactSwitch(
                   value: _wordHighlight,
@@ -294,7 +326,11 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
               ListTile(
                 minVerticalPadding: 16,
                 leading: const Icon(Icons.arrow_upward_rounded),
-                title: _buildOptionText(theme, '逐字跳动', '唱到的字向上跳一下（本句内保持）'),
+                title: _buildOptionText(
+                  theme,
+                  context.l10n.lyricsWordLiftTitle,
+                  context.l10n.lyricsWordLiftSubtitle,
+                ),
                 subtitle: null,
                 trailing: _buildCompactSwitch(
                   value: _wordLift,
@@ -320,9 +356,12 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('效果强度', style: theme.textTheme.titleMedium),
                               Text(
-                                '逐字跳起的高度',
+                                context.l10n.lyricsEffectStrengthTitle,
+                                style: theme.textTheme.titleMedium,
+                              ),
+                              Text(
+                                context.l10n.lyricsEffectStrengthSubtitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: _subtitleStyle(theme),
@@ -331,18 +370,20 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        SegmentedButton<LyricEffectStrength>(
-                          showSelectedIcon: false,
-                          segments: [
-                            for (final strength in LyricEffectStrength.values)
-                              ButtonSegment(
-                                value: strength,
-                                label: Text(strength.label),
-                              ),
-                          ],
-                          selected: {_effectStrength},
-                          onSelectionChanged: (selection) =>
-                              _setEffectStrength(selection.first),
+                        _shrinkableSegmented(
+                          SegmentedButton<LyricEffectStrength>(
+                            showSelectedIcon: false,
+                            segments: [
+                              for (final strength in LyricEffectStrength.values)
+                                ButtonSegment(
+                                  value: strength,
+                                  label: Text(strength.label(context.l10n)),
+                                ),
+                            ],
+                            selected: {_effectStrength},
+                            onSelectionChanged: (selection) =>
+                                _setEffectStrength(selection.first),
+                          ),
                         ),
                       ],
                     ),
@@ -351,7 +392,7 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
             ],
           ),
         ),
-        _buildHint(theme, '普通 LRC 会自动模拟逐字时间；QRC / YRC 使用歌词自带的词级时间。'),
+        _buildHint(theme, context.l10n.lyricsWordTimingHint),
       ],
     );
   }
@@ -370,14 +411,14 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
         children: [
           PopupMenuButton<LyricLineTransitionStyle>(
             initialValue: _lineTransition,
-            tooltip: '切句动画',
+            tooltip: context.l10n.lyricsTransitionTitle,
             onSelected: _setLineTransition,
             itemBuilder: (context) => [
               for (final style in LyricLineTransitionStyle.values)
                 CheckedPopupMenuItem(
                   value: style,
                   checked: style == _lineTransition,
-                  child: Text(style.label),
+                  child: Text(style.label(context.l10n)),
                 ),
             ],
             child: ListTile(
@@ -385,15 +426,15 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
               leading: const Icon(Icons.animation_rounded),
               title: _buildOptionText(
                 theme,
-                '切句动画',
-                _lineTransition.description,
+                context.l10n.lyricsTransitionTitle,
+                _lineTransition.description(context.l10n),
               ),
               subtitle: null,
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    _lineTransition.label,
+                    _lineTransition.label(context.l10n),
                     style: theme.textTheme.bodySmall?.copyWith(color: muted),
                   ),
                   const SizedBox(width: 2),
@@ -422,9 +463,12 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('对齐', style: theme.textTheme.titleMedium),
                           Text(
-                            '滑动方向跟随对齐边',
+                            context.l10n.lyricsAlignmentTitle,
+                            style: theme.textTheme.titleMedium,
+                          ),
+                          Text(
+                            context.l10n.lyricsAlignmentSubtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: _subtitleStyle(theme),
@@ -433,18 +477,20 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    SegmentedButton<LyricSlideAlignment>(
-                      showSelectedIcon: false,
-                      segments: [
-                        for (final alignment in LyricSlideAlignment.values)
-                          ButtonSegment(
-                            value: alignment,
-                            label: Text(alignment.label),
-                          ),
-                      ],
-                      selected: {_slideAlignment},
-                      onSelectionChanged: (selection) =>
-                          _setSlideAlignment(selection.first),
+                    _shrinkableSegmented(
+                      SegmentedButton<LyricSlideAlignment>(
+                        showSelectedIcon: false,
+                        segments: [
+                          for (final alignment in LyricSlideAlignment.values)
+                            ButtonSegment(
+                              value: alignment,
+                              label: Text(alignment.label(context.l10n)),
+                            ),
+                        ],
+                        selected: {_slideAlignment},
+                        onSelectionChanged: (selection) =>
+                            _setSlideAlignment(selection.first),
+                      ),
                     ),
                   ],
                 ),
@@ -469,7 +515,11 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
           child: ListTile(
             minVerticalPadding: 16,
             leading: const Icon(Icons.waves_rounded),
-            title: _buildOptionText(theme, '行间波浪', '整行依次错位并轻微起伏'),
+            title: _buildOptionText(
+              theme,
+              context.l10n.lyricsLineWaveTitle,
+              context.l10n.lyricsLineWaveSubtitle,
+            ),
             subtitle: null,
             trailing: _buildCompactSwitch(
               value: _lineWave,
@@ -478,7 +528,7 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
             onTap: () => _setLineWave(!_lineWave),
           ),
         ),
-        _buildHint(theme, '作用在整行上，和逐字跳动可以叠加；同时开启可能偏花。'),
+        _buildHint(theme, context.l10n.lyricsLineWaveHint),
       ],
     );
   }
@@ -508,9 +558,12 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('距离模糊', style: theme.textTheme.titleMedium),
                         Text(
-                          '离当前句越远越模糊；浏览时保持清晰',
+                          context.l10n.lyricsBlurTitle,
+                          style: theme.textTheme.titleMedium,
+                        ),
+                        Text(
+                          context.l10n.lyricsBlurSubtitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: _subtitleStyle(theme),
@@ -519,22 +572,27 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  SegmentedButton<LyricDistanceBlurLevel>(
-                    showSelectedIcon: false,
-                    segments: [
-                      for (final level in LyricDistanceBlurLevel.values)
-                        ButtonSegment(value: level, label: Text(level.label)),
-                    ],
-                    selected: {_distanceBlur},
-                    onSelectionChanged: (selection) =>
-                        _setDistanceBlur(selection.first),
+                  _shrinkableSegmented(
+                    SegmentedButton<LyricDistanceBlurLevel>(
+                      showSelectedIcon: false,
+                      segments: [
+                        for (final level in LyricDistanceBlurLevel.values)
+                          ButtonSegment(
+                            value: level,
+                            label: Text(level.label(context.l10n)),
+                          ),
+                      ],
+                      selected: {_distanceBlur},
+                      onSelectionChanged: (selection) =>
+                          _setDistanceBlur(selection.first),
+                    ),
                   ),
                 ],
               ),
             ),
           ),
         ),
-        _buildHint(theme, '每行会多一个离屏模糊层；低配设备或叠加大量动效时建议关闭。'),
+        _buildHint(theme, context.l10n.lyricsBlurHint),
       ],
     );
   }
@@ -553,7 +611,11 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
           child: ListTile(
             minVerticalPadding: 16,
             leading: const Icon(Icons.more_horiz_rounded),
-            title: _buildOptionText(theme, '倒计时圆点', '前奏/间奏显示三个渐隐圆点'),
+            title: _buildOptionText(
+              theme,
+              context.l10n.lyricsCountdownTitle,
+              context.l10n.lyricsCountdownSubtitle,
+            ),
             subtitle: null,
             trailing: _buildCompactSwitch(
               value: _countdown,
@@ -562,7 +624,7 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
             onTap: () => _setCountdown(!_countdown),
           ),
         ),
-        _buildHint(theme, '普通 LRC 需要在间奏处留空白时间戳（如 [00:12.00]）才会显示。'),
+        _buildHint(theme, context.l10n.lyricsCountdownHint),
       ],
     );
   }
@@ -578,17 +640,17 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
       child: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
-          _buildSectionHeader(theme, '文字'),
+          _buildSectionHeader(theme, context.l10n.lyricsSectionText),
           _buildTextCard(theme),
-          _buildSectionHeader(theme, '文本效果'),
+          _buildSectionHeader(theme, context.l10n.lyricsSectionEffects),
           _buildEffectsCard(theme),
-          _buildSectionHeader(theme, '切句动画'),
+          _buildSectionHeader(theme, context.l10n.lyricsTransitionTitle),
           _buildTransitionCard(theme),
-          _buildSectionHeader(theme, '行间动效'),
+          _buildSectionHeader(theme, context.l10n.lyricsSectionLineMotion),
           _buildLineMotionCard(theme),
-          _buildSectionHeader(theme, '距离模糊'),
+          _buildSectionHeader(theme, context.l10n.lyricsBlurTitle),
           _buildBlurCard(theme),
-          _buildSectionHeader(theme, '倒计时'),
+          _buildSectionHeader(theme, context.l10n.lyricsSectionCountdown),
           _buildCountdownCard(theme),
         ],
       ),
@@ -599,7 +661,7 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: const DetailTopBar(title: '歌词显示'),
+      appBar: DetailTopBar(title: context.l10n.lyricsSettingsTitle),
       body: LayoutBuilder(
         builder: (context, constraints) {
           if (constraints.maxWidth < _kPreviewBreakpoint) {

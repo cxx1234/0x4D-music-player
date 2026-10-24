@@ -102,4 +102,336 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get searchEmptyHint => '换个关键词试试';
+
+  @override
+  String get commonFollowSystem => '跟随系统';
+
+  @override
+  String get commonCancel => '取消';
+
+  @override
+  String get accentGraphite => '石墨灰';
+
+  @override
+  String get accentDeepPurple => '深紫';
+
+  @override
+  String get accentIndigo => '靛蓝';
+
+  @override
+  String get accentBlue => '蓝';
+
+  @override
+  String get accentCyan => '青';
+
+  @override
+  String get accentGreen => '绿';
+
+  @override
+  String get accentOrange => '橙';
+
+  @override
+  String get accentRed => '红';
+
+  @override
+  String get accentPink => '粉';
+
+  @override
+  String get accentBlueGrey => '蓝灰';
+
+  @override
+  String get lyricTextSizeSmall => '小';
+
+  @override
+  String get lyricTextSizeMedium => '中';
+
+  @override
+  String get lyricTextSizeLarge => '大';
+
+  @override
+  String get lyricEffectStandard => '默认';
+
+  @override
+  String get lyricEffectStrong => '强';
+
+  @override
+  String get lyricTransitionClassic => '经典';
+
+  @override
+  String get lyricTransitionClassicDescription => '默认的尺寸过渡';
+
+  @override
+  String get lyricTransitionScale => '缩放';
+
+  @override
+  String get lyricTransitionScaleDescription => '放大后微微收束';
+
+  @override
+  String get lyricTransitionSlide => '滑入';
+
+  @override
+  String get lyricTransitionSlideDescription => '从下方滑入并淡入';
+
+  @override
+  String get lyricTransitionNone => '无';
+
+  @override
+  String get lyricTransitionNoneDescription => '立即切换，不做动画';
+
+  @override
+  String get lyricAlignmentLeft => '左';
+
+  @override
+  String get lyricAlignmentRight => '右';
+
+  @override
+  String get lyricBlurOff => '关';
+
+  @override
+  String get lyricBlurLight => '轻';
+
+  @override
+  String get lyricBlurStandard => '标准';
+
+  @override
+  String get themeModeLight => '浅色';
+
+  @override
+  String get themeModeDark => '深色';
+
+  @override
+  String get settingsTitle => '设置';
+
+  @override
+  String get settingsSectionLibrary => '音乐库';
+
+  @override
+  String get settingsSectionPlayback => '播放设置';
+
+  @override
+  String get settingsSectionAppearance => '外观';
+
+  @override
+  String get settingsSectionGeneral => '通用';
+
+  @override
+  String get settingsClearCoverCacheTitle => '清理封面缓存';
+
+  @override
+  String get settingsClearCoverCacheBody =>
+      '将删除不再被任何歌曲或专辑引用的封面文件。\n正在使用的封面不受影响。';
+
+  @override
+  String get settingsClearCoverCacheAction => '清理';
+
+  @override
+  String get settingsNotificationsDenied => '通知权限未开启，切歌通知不会显示';
+
+  @override
+  String get settingsOpenSystemSettings => '打开系统设置';
+
+  @override
+  String get settingsForceRescanTitle => '强制刷新';
+
+  @override
+  String get settingsForceRescanSubtitle => '重新解析全部歌曲，修复异常元数据/封面';
+
+  @override
+  String get settingsForceRescanNoFolders => '请先在音乐库添加文件夹';
+
+  @override
+  String get settingsResumeTitle => '续播上次播放位置';
+
+  @override
+  String get settingsResumeSubtitle => '启动后恢复上次播放进度';
+
+  @override
+  String get settingsTrackNotificationTitle => '切歌时显示系统通知';
+
+  @override
+  String get settingsTrackNotificationSubtitle => '只应用在后台/关窗时弹出，前台不打扰';
+
+  @override
+  String get settingsSleepFinishTrackTitle => '睡眠定时先播完当前曲';
+
+  @override
+  String get settingsSleepFinishTrackSubtitle => '关闭则到点立即淡出暂停';
+
+  @override
+  String get settingsAccentTitle => '主题色';
+
+  @override
+  String get settingsAccentSubtitle => '选择界面强调色或跟随系统';
+
+  @override
+  String get settingsThemeTitle => '主题模式';
+
+  @override
+  String get settingsThemeSubtitle => '选择应用的明暗外观';
+
+  @override
+  String get settingsLyricsTitle => '歌词显示';
+
+  @override
+  String get settingsLyricsSubtitle => '字号、翻译与歌词动效';
+
+  @override
+  String get settingsNowPlayingFillTitle => '底栏播放进度填充';
+
+  @override
+  String get settingsNowPlayingFillSubtitle => '播放时底栏背景从左向右显示进度';
+
+  @override
+  String get settingsLogsTitle => '日志';
+
+  @override
+  String get settingsLogsSubtitle => '查看应用运行日志';
+
+  @override
+  String get settingsCacheTitle => '缓存';
+
+  @override
+  String get settingsCacheSubtitle => '封面图片缓存（可安全清理）';
+
+  @override
+  String get settingsAboutTitle => '关于';
+
+  @override
+  String get lyricsSettingsTitle => '歌词显示';
+
+  @override
+  String get lyricsTextSizeTitle => '字号';
+
+  @override
+  String get lyricsTextSizeSubtitle => '调整歌词与翻译的文字大小';
+
+  @override
+  String get lyricsTranslationTitle => '翻译副行';
+
+  @override
+  String get lyricsTranslationSubtitle => '有翻译时在原文下方显示';
+
+  @override
+  String get lyricsWordFillTitle => '逐字填充';
+
+  @override
+  String get lyricsWordFillSubtitle => '唱到的字逐渐填充主题色';
+
+  @override
+  String get lyricsWordLiftTitle => '逐字跳动';
+
+  @override
+  String get lyricsWordLiftSubtitle => '唱到的字向上跳一下（本句内保持）';
+
+  @override
+  String get lyricsEffectStrengthTitle => '效果强度';
+
+  @override
+  String get lyricsEffectStrengthSubtitle => '逐字跳起的高度';
+
+  @override
+  String get lyricsWordTimingHint => '普通 LRC 会自动模拟逐字时间；QRC / YRC 使用歌词自带的词级时间。';
+
+  @override
+  String get lyricsTransitionTitle => '切句动画';
+
+  @override
+  String get lyricsAlignmentTitle => '对齐';
+
+  @override
+  String get lyricsAlignmentSubtitle => '滑动方向跟随对齐边';
+
+  @override
+  String get lyricsLineWaveTitle => '行间波浪';
+
+  @override
+  String get lyricsLineWaveSubtitle => '整行依次错位并轻微起伏';
+
+  @override
+  String get lyricsLineWaveHint => '作用在整行上，和逐字跳动可以叠加；同时开启可能偏花。';
+
+  @override
+  String get lyricsBlurTitle => '距离模糊';
+
+  @override
+  String get lyricsBlurSubtitle => '离当前句越远越模糊；浏览时保持清晰';
+
+  @override
+  String get lyricsBlurHint => '每行会多一个离屏模糊层；低配设备或叠加大量动效时建议关闭。';
+
+  @override
+  String get lyricsCountdownTitle => '倒计时圆点';
+
+  @override
+  String get lyricsCountdownSubtitle => '前奏/间奏显示三个渐隐圆点';
+
+  @override
+  String get lyricsCountdownHint => '普通 LRC 需要在间奏处留空白时间戳（如 [00:12.00]）才会显示。';
+
+  @override
+  String get lyricsSectionText => '文字';
+
+  @override
+  String get lyricsSectionEffects => '文本效果';
+
+  @override
+  String get lyricsSectionLineMotion => '行间动效';
+
+  @override
+  String get lyricsPreviewLoop => '循环预览';
+
+  @override
+  String get aboutTitle => '关于';
+
+  @override
+  String get aboutTagline => '本地音乐播放器';
+
+  @override
+  String get aboutLicenses => '开源许可';
+
+  @override
+  String get aboutProjectHome => '项目主页';
+
+  @override
+  String get aboutLinkCopied => '已复制项目链接';
+
+  @override
+  String get logsTitle => '日志';
+
+  @override
+  String get logsSelectDate => '选择日期';
+
+  @override
+  String get logsEmpty => '暂无日志';
+
+  @override
+  String get logsDebugHint =>
+      '当前为 Debug 构建,日志仅输出到控制台,不会写入本页。Release/Profile 构建才会生成日志文件。';
+
+  @override
+  String get logDetailTitle => '日志详情';
+
+  @override
+  String settingsCoverCacheCleared(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '已清理 $count 个未使用的封面',
+      zero: '没有可清理的封面缓存',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String settingsAboutSubtitle(String version) {
+    return '版本 $version · 开源许可';
+  }
+
+  @override
+  String aboutVersion(String version) {
+    return '版本 $version';
+  }
+
+  @override
+  String get lyricsSectionCountdown => '倒计时';
 }

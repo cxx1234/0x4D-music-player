@@ -128,5 +128,444 @@
   "searchEmptyHint": "Try another keyword",
   "@searchEmptyHint": {
     "description": "Hint shown below the empty search state."
+  },
+  "commonFollowSystem": "Follow system",
+  "@commonFollowSystem": {
+    "description": "Option that follows the operating system setting."
+  },
+  "commonCancel": "Cancel",
+  "@commonCancel": {
+    "description": "Generic cancel action."
+  },
+  "accentGraphite": "Graphite",
+  "@accentGraphite": {
+    "description": "Accent color preset: graphite."
+  },
+  "accentDeepPurple": "Deep purple",
+  "@accentDeepPurple": {
+    "description": "Accent color preset: deep purple."
+  },
+  "accentIndigo": "Indigo",
+  "@accentIndigo": {
+    "description": "Accent color preset: indigo."
+  },
+  "accentBlue": "Blue",
+  "@accentBlue": {
+    "description": "Accent color preset: blue."
+  },
+  "accentCyan": "Cyan",
+  "@accentCyan": {
+    "description": "Accent color preset: cyan."
+  },
+  "accentGreen": "Green",
+  "@accentGreen": {
+    "description": "Accent color preset: green."
+  },
+  "accentOrange": "Orange",
+  "@accentOrange": {
+    "description": "Accent color preset: orange."
+  },
+  "accentRed": "Red",
+  "@accentRed": {
+    "description": "Accent color preset: red."
+  },
+  "accentPink": "Pink",
+  "@accentPink": {
+    "description": "Accent color preset: pink."
+  },
+  "accentBlueGrey": "Blue grey",
+  "@accentBlueGrey": {
+    "description": "Accent color preset: blue grey."
+  },
+  "lyricTextSizeSmall": "Small",
+  "@lyricTextSizeSmall": {
+    "description": "Lyric text size: small."
+  },
+  "lyricTextSizeMedium": "Medium",
+  "@lyricTextSizeMedium": {
+    "description": "Lyric text size: medium."
+  },
+  "lyricTextSizeLarge": "Large",
+  "@lyricTextSizeLarge": {
+    "description": "Lyric text size: large."
+  },
+  "lyricEffectStandard": "Default",
+  "@lyricEffectStandard": {
+    "description": "Word-pop strength: default."
+  },
+  "lyricEffectStrong": "Strong",
+  "@lyricEffectStrong": {
+    "description": "Word-pop strength: strong."
+  },
+  "lyricTransitionClassic": "Classic",
+  "@lyricTransitionClassic": {
+    "description": "Line transition: classic."
+  },
+  "lyricTransitionClassicDescription": "Default size transition",
+  "@lyricTransitionClassicDescription": {
+    "description": "Description of the classic line transition."
+  },
+  "lyricTransitionScale": "Scale",
+  "@lyricTransitionScale": {
+    "description": "Line transition: scale."
+  },
+  "lyricTransitionScaleDescription": "Zooms in, then settles",
+  "@lyricTransitionScaleDescription": {
+    "description": "Description of the scale line transition."
+  },
+  "lyricTransitionSlide": "Slide",
+  "@lyricTransitionSlide": {
+    "description": "Line transition: slide."
+  },
+  "lyricTransitionSlideDescription": "Slides up and fades in",
+  "@lyricTransitionSlideDescription": {
+    "description": "Description of the slide line transition."
+  },
+  "lyricTransitionNone": "None",
+  "@lyricTransitionNone": {
+    "description": "Line transition: none."
+  },
+  "lyricTransitionNoneDescription": "Switches instantly",
+  "@lyricTransitionNoneDescription": {
+    "description": "Description of the none line transition."
+  },
+  "lyricAlignmentLeft": "Left",
+  "@lyricAlignmentLeft": {
+    "description": "Slide alignment: left."
+  },
+  "lyricAlignmentRight": "Right",
+  "@lyricAlignmentRight": {
+    "description": "Slide alignment: right."
+  },
+  "lyricBlurOff": "Off",
+  "@lyricBlurOff": {
+    "description": "Distance blur: off."
+  },
+  "lyricBlurLight": "Light",
+  "@lyricBlurLight": {
+    "description": "Distance blur: light."
+  },
+  "lyricBlurStandard": "Standard",
+  "@lyricBlurStandard": {
+    "description": "Distance blur: standard."
+  },
+  "themeModeLight": "Light",
+  "@themeModeLight": {
+    "description": "Theme mode: light."
+  },
+  "themeModeDark": "Dark",
+  "@themeModeDark": {
+    "description": "Theme mode: dark."
+  },
+  "settingsTitle": "Settings",
+  "@settingsTitle": {
+    "description": "Settings page title."
+  },
+  "settingsSectionLibrary": "Library",
+  "@settingsSectionLibrary": {
+    "description": "Settings section: library."
+  },
+  "settingsSectionPlayback": "Playback",
+  "@settingsSectionPlayback": {
+    "description": "Settings section: playback."
+  },
+  "settingsSectionAppearance": "Appearance",
+  "@settingsSectionAppearance": {
+    "description": "Settings section: appearance."
+  },
+  "settingsSectionGeneral": "General",
+  "@settingsSectionGeneral": {
+    "description": "Settings section: general."
+  },
+  "settingsClearCoverCacheTitle": "Clear cover cache",
+  "@settingsClearCoverCacheTitle": {
+    "description": "Title of the dialog that clears the cover cache."
+  },
+  "settingsClearCoverCacheBody": "Deletes cover files that are no longer used by any song or album.\nCovers in use are unaffected.",
+  "@settingsClearCoverCacheBody": {
+    "description": "Body of the clear-cover-cache dialog."
+  },
+  "settingsClearCoverCacheAction": "Clear",
+  "@settingsClearCoverCacheAction": {
+    "description": "Confirm button for clearing the cover cache."
+  },
+  "settingsNotificationsDenied": "Notifications are turned off, so track-change banners won't appear",
+  "@settingsNotificationsDenied": {
+    "description": "SnackBar shown when notification permission was denied."
+  },
+  "settingsOpenSystemSettings": "Open system settings",
+  "@settingsOpenSystemSettings": {
+    "description": "SnackBar action that opens the system notification settings."
+  },
+  "settingsForceRescanTitle": "Force rescan",
+  "@settingsForceRescanTitle": {
+    "description": "Settings row that re-parses the whole library."
+  },
+  "settingsForceRescanSubtitle": "Re-parses every song to fix broken metadata or covers",
+  "@settingsForceRescanSubtitle": {
+    "description": "Subtitle when music folders exist."
+  },
+  "settingsForceRescanNoFolders": "Add a music folder first",
+  "@settingsForceRescanNoFolders": {
+    "description": "Subtitle when no music folder has been added."
+  },
+  "settingsResumeTitle": "Resume last position",
+  "@settingsResumeTitle": {
+    "description": "Settings row title."
+  },
+  "settingsResumeSubtitle": "Restores your previous playback position on launch",
+  "@settingsResumeSubtitle": {
+    "description": "Settings row subtitle."
+  },
+  "settingsTrackNotificationTitle": "Show a system notification on track change",
+  "@settingsTrackNotificationTitle": {
+    "description": "Settings row title."
+  },
+  "settingsTrackNotificationSubtitle": "Only appears in the background or when the window is closed",
+  "@settingsTrackNotificationSubtitle": {
+    "description": "Settings row subtitle."
+  },
+  "settingsSleepFinishTrackTitle": "Finish the current track before sleeping",
+  "@settingsSleepFinishTrackTitle": {
+    "description": "Settings row title."
+  },
+  "settingsSleepFinishTrackSubtitle": "When off, playback fades out and pauses when the timer ends",
+  "@settingsSleepFinishTrackSubtitle": {
+    "description": "Settings row subtitle."
+  },
+  "settingsAccentTitle": "Accent color",
+  "@settingsAccentTitle": {
+    "description": "Settings row title."
+  },
+  "settingsAccentSubtitle": "Pick an accent color or follow the system",
+  "@settingsAccentSubtitle": {
+    "description": "Settings row subtitle."
+  },
+  "settingsThemeTitle": "Theme",
+  "@settingsThemeTitle": {
+    "description": "Settings row title."
+  },
+  "settingsThemeSubtitle": "Choose the app's light or dark appearance",
+  "@settingsThemeSubtitle": {
+    "description": "Settings row subtitle."
+  },
+  "settingsLyricsTitle": "Lyrics display",
+  "@settingsLyricsTitle": {
+    "description": "Settings row that opens the lyrics settings page."
+  },
+  "settingsLyricsSubtitle": "Text size, translation and lyric effects",
+  "@settingsLyricsSubtitle": {
+    "description": "Settings row subtitle."
+  },
+  "settingsNowPlayingFillTitle": "Progress fill in the player bar",
+  "@settingsNowPlayingFillTitle": {
+    "description": "Settings row title."
+  },
+  "settingsNowPlayingFillSubtitle": "The bar background fills left to right while playing",
+  "@settingsNowPlayingFillSubtitle": {
+    "description": "Settings row subtitle."
+  },
+  "settingsLogsTitle": "Logs",
+  "@settingsLogsTitle": {
+    "description": "Settings row that opens the log viewer."
+  },
+  "settingsLogsSubtitle": "View app runtime logs",
+  "@settingsLogsSubtitle": {
+    "description": "Settings row subtitle."
+  },
+  "settingsCacheTitle": "Cache",
+  "@settingsCacheTitle": {
+    "description": "Settings row title."
+  },
+  "settingsCacheSubtitle": "Cover image cache (safe to clear)",
+  "@settingsCacheSubtitle": {
+    "description": "Settings row subtitle."
+  },
+  "settingsAboutTitle": "About",
+  "@settingsAboutTitle": {
+    "description": "Settings row that opens the about page."
+  },
+  "lyricsSettingsTitle": "Lyrics display",
+  "@lyricsSettingsTitle": {
+    "description": "Title of the lyrics settings page."
+  },
+  "lyricsTextSizeTitle": "Text size",
+  "@lyricsTextSizeTitle": {
+    "description": "Lyrics settings row title."
+  },
+  "lyricsTextSizeSubtitle": "Adjust lyric and translation text size",
+  "@lyricsTextSizeSubtitle": {
+    "description": "Lyrics settings row subtitle."
+  },
+  "lyricsTranslationTitle": "Translation line",
+  "@lyricsTranslationTitle": {
+    "description": "Lyrics settings row title."
+  },
+  "lyricsTranslationSubtitle": "Shows a translation under the original when available",
+  "@lyricsTranslationSubtitle": {
+    "description": "Lyrics settings row subtitle."
+  },
+  "lyricsWordFillTitle": "Per-character fill",
+  "@lyricsWordFillTitle": {
+    "description": "Lyrics settings row title."
+  },
+  "lyricsWordFillSubtitle": "Fills each sung character with the accent color",
+  "@lyricsWordFillSubtitle": {
+    "description": "Lyrics settings row subtitle."
+  },
+  "lyricsWordLiftTitle": "Word pop",
+  "@lyricsWordLiftTitle": {
+    "description": "Lyrics settings row title."
+  },
+  "lyricsWordLiftSubtitle": "Each sung character jumps up and stays raised for the line",
+  "@lyricsWordLiftSubtitle": {
+    "description": "Lyrics settings row subtitle."
+  },
+  "lyricsEffectStrengthTitle": "Effect strength",
+  "@lyricsEffectStrengthTitle": {
+    "description": "Lyrics settings row title."
+  },
+  "lyricsEffectStrengthSubtitle": "How high each character jumps",
+  "@lyricsEffectStrengthSubtitle": {
+    "description": "Lyrics settings row subtitle."
+  },
+  "lyricsWordTimingHint": "Plain LRC simulates per-character timing. QRC / YRC use the word timings stored in the file.",
+  "@lyricsWordTimingHint": {
+    "description": "Hint below the word-pop settings."
+  },
+  "lyricsTransitionTitle": "Line transition",
+  "@lyricsTransitionTitle": {
+    "description": "Lyrics settings row title."
+  },
+  "lyricsAlignmentTitle": "Alignment",
+  "@lyricsAlignmentTitle": {
+    "description": "Lyrics settings row title."
+  },
+  "lyricsAlignmentSubtitle": "Slide direction follows the aligned edge",
+  "@lyricsAlignmentSubtitle": {
+    "description": "Lyrics settings row subtitle."
+  },
+  "lyricsLineWaveTitle": "Line wave",
+  "@lyricsLineWaveTitle": {
+    "description": "Lyrics settings row title."
+  },
+  "lyricsLineWaveSubtitle": "Lines shift and rise in sequence",
+  "@lyricsLineWaveSubtitle": {
+    "description": "Lyrics settings row subtitle."
+  },
+  "lyricsLineWaveHint": "Applies to whole lines and stacks with word pop; turning on both can look busy.",
+  "@lyricsLineWaveHint": {
+    "description": "Hint below the line-wave setting."
+  },
+  "lyricsBlurTitle": "Distance blur",
+  "@lyricsBlurTitle": {
+    "description": "Lyrics settings row title."
+  },
+  "lyricsBlurSubtitle": "Lines blur more the farther they are from the current one; stays sharp while browsing",
+  "@lyricsBlurSubtitle": {
+    "description": "Lyrics settings row subtitle."
+  },
+  "lyricsBlurHint": "Adds one off-screen blur layer per line. Turn it off on slower machines or when stacking many effects.",
+  "@lyricsBlurHint": {
+    "description": "Hint below the distance-blur setting."
+  },
+  "lyricsCountdownTitle": "Countdown dots",
+  "@lyricsCountdownTitle": {
+    "description": "Lyrics settings row title."
+  },
+  "lyricsCountdownSubtitle": "Shows three fading dots for intros and interludes",
+  "@lyricsCountdownSubtitle": {
+    "description": "Lyrics settings row subtitle."
+  },
+  "lyricsCountdownHint": "Plain LRC needs a blank timestamp at the interlude (for example [00:12.00]) to show them.",
+  "@lyricsCountdownHint": {
+    "description": "Hint below the countdown setting."
+  },
+  "lyricsSectionText": "Text",
+  "@lyricsSectionText": {
+    "description": "Lyrics settings section: text."
+  },
+  "lyricsSectionEffects": "Text effects",
+  "@lyricsSectionEffects": {
+    "description": "Lyrics settings section: text effects."
+  },
+  "lyricsSectionLineMotion": "Line motion",
+  "@lyricsSectionLineMotion": {
+    "description": "Lyrics settings section: line motion."
+  },
+  "lyricsPreviewLoop": "Loop preview",
+  "@lyricsPreviewLoop": {
+    "description": "Label above the looped lyrics preview."
+  },
+  "aboutTitle": "About",
+  "@aboutTitle": {
+    "description": "About page title."
+  },
+  "aboutTagline": "Local music player",
+  "@aboutTagline": {
+    "description": "About page tagline."
+  },
+  "aboutLicenses": "Open-source licenses",
+  "@aboutLicenses": {
+    "description": "About page row title."
+  },
+  "aboutProjectHome": "Project home",
+  "@aboutProjectHome": {
+    "description": "About page row title."
+  },
+  "aboutLinkCopied": "Project link copied",
+  "@aboutLinkCopied": {
+    "description": "SnackBar shown after copying the project URL."
+  },
+  "logsTitle": "Logs",
+  "@logsTitle": {
+    "description": "Log viewer page title."
+  },
+  "logsSelectDate": "Select date",
+  "@logsSelectDate": {
+    "description": "Tooltip for the log date picker."
+  },
+  "logsEmpty": "No logs yet",
+  "@logsEmpty": {
+    "description": "Empty state in the log viewer."
+  },
+  "logsDebugHint": "This is a debug build, so logs only go to the console and don't appear here. Release and profile builds write log files.",
+  "@logsDebugHint": {
+    "description": "Explains why the log viewer is empty in debug builds."
+  },
+  "logDetailTitle": "Log details",
+  "@logDetailTitle": {
+    "description": "Log detail page title."
+  },
+  "settingsCoverCacheCleared": "{count, plural, =0{No unused covers to clear} =1{Removed 1 unused cover} other{Removed {count} unused covers}}",
+  "@settingsCoverCacheCleared": {
+    "description": "SnackBar after clearing the cover cache.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsAboutSubtitle": "Version {version} · Open-source licenses",
+  "@settingsAboutSubtitle": {
+    "description": "Settings row subtitle showing the app version.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutVersion": "Version {version}",
+  "@aboutVersion": {
+    "description": "Version line on the about page.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "lyricsSectionCountdown": "Countdown",
+  "@lyricsSectionCountdown": {
+    "description": "Lyrics settings section: countdown."
   }
 }

@@ -1,12 +1,10 @@
 /// 歌词距离模糊档位（离当前句越远，模糊越强）。
 enum LyricDistanceBlurLevel {
-  off('关', 0),
-  light('轻', 2),
-  standard('标准', 4);
+  off(0),
+  light(2),
+  standard(4);
 
-  const LyricDistanceBlurLevel(this.label, this.maxSigma);
-
-  final String label;
+  const LyricDistanceBlurLevel(this.maxSigma);
 
   /// 最大模糊强度（逻辑像素 sigma）。
   final double maxSigma;

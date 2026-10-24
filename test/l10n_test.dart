@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:txvziwm/core/models/accent_color.dart';
+import 'package:txvziwm/core/models/lyric_line_transition_style.dart';
 import 'package:txvziwm/core/utils/app_locale.dart';
+import 'package:txvziwm/features/settings/lyrics_settings_page.dart';
 import 'package:txvziwm/features/settings/settings_page.dart';
 import 'package:txvziwm/features/shell/shell_controller.dart';
 import 'package:txvziwm/features/shell/shell_l10n.dart';
+import 'package:txvziwm/l10n/enum_labels.dart';
 import 'package:txvziwm/widgets/search_empty_state.dart';
 
 import 'helpers/l10n.dart';
@@ -96,7 +100,15 @@ void main() {
       // 「通用」分组在列表底部，测试视口内先滚到语言行。
       await tester.scrollUntilVisible(find.text('Language'), 300);
       expect(find.text('Language'), findsOneWidget);
-      expect(find.text('Follow system'), findsOneWidget);
+      // 「Follow system」在主题模式里也有，限定在语言这一行内断言。
+      final languageTile = find.ancestor(
+        of: find.text('Language'),
+        matching: find.byType(ListTile),
+      );
+      expect(
+        find.descendant(of: languageTile, matching: find.text('Follow system')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('中文 locale 展示原有中文文案', (tester) async {
@@ -115,6 +127,78 @@ void main() {
         find.descendant(of: languageTile, matching: find.text('跟随系统')),
         findsOneWidget,
       );
+    });
+  });
+
+  group('设置域', () {
+    test('枚举标签跟随 locale', () async {
+      final en = await loadL10n(const Locale('en'));
+      final zh = await loadL10n(const Locale('zh'));
+
+      expect(AccentColor.graphite.label(en), 'Graphite');
+      expect(AccentColor.graphite.label(zh), '石墨灰');
+      expect(LyricLineTransitionStyle.slide.description(zh), '从下方滑入并淡入');
+      expect(
+        LyricLineTransitionStyle.slide.description(en),
+        'Slides up and fades in',
+      );
+    });
+
+    test('设置页文案中英对应', () async {
+      final en = await loadL10n(const Locale('en'));
+      final zh = await loadL10n(const Locale('zh'));
+
+      expect(en.settingsTitle, 'Settings');
+      expect(zh.settingsTitle, '设置');
+      expect(en.settingsSectionPlayback, 'Playback');
+      expect(zh.settingsSectionPlayback, '播放设置');
+      expect(en.lyricsTextSizeTitle, 'Text size');
+      expect(zh.lyricsTextSizeTitle, '字号');
+      expect(en.aboutTagline, 'Local music player');
+      expect(zh.aboutTagline, '本地音乐播放器');
+    });
+
+    test('清理缓存结果按数量走复数', () async {
+      final en = await loadL10n(const Locale('en'));
+      final zh = await loadL10n(const Locale('zh'));
+
+      expect(en.settingsCoverCacheCleared(0), 'No unused covers to clear');
+      expect(en.settingsCoverCacheCleared(1), 'Removed 1 unused cover');
+      expect(en.settingsCoverCacheCleared(3), 'Removed 3 unused covers');
+      expect(zh.settingsCoverCacheCleared(3), '已清理 3 个未使用的封面');
+    });
+
+    testWidgets('英文设置页在宽布局下不溢出', (tester) async {
+      tester.view.physicalSize = const Size(1000, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        localizedApp(
+          locale: const Locale('en'),
+          home: const Scaffold(body: SettingsPage()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Settings'), findsOneWidget);
+    });
+
+    testWidgets('英文歌词设置页在宽布局下不溢出', (tester) async {
+      tester.view.physicalSize = const Size(1000, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        localizedApp(
+          locale: const Locale('en'),
+          home: const LyricsSettingsPage(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('Text size'), findsOneWidget);
     });
   });
 }

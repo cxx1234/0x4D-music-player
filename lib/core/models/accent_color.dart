@@ -7,50 +7,44 @@ const Color kGraphiteSeed = Color(0xFF616161);
 
 /// 界面强调色（主题 seed 色板 + 跟随系统）。
 ///
-/// 与 [LyricTextSize] / [SongSortOrder] 同为「枚举自带 UI 文案放 core 层」的
-/// 既有模式：core 层的 [SettingsService] 需要存取该类型（主题色写盘持久化），
-/// 因此不放在 features/settings（避免 core → features 反向依赖）。
-///
 /// 持久化存 [name]：`'system'` / `'graphite'` / `'deepPurple'` …；
 /// 未知/缺省一律回退 [AccentColor.graphite]（默认石墨灰）。
+/// 展示文案见 `lib/l10n/enum_labels.dart`，core 层不再持有 UI 文案。
 enum AccentColor {
   /// 跟随系统强调色（无固定 seed，见 [seedColor]）。
-  system('跟随系统', null),
+  system(null),
 
   /// 石墨灰（默认，纯中性）。
-  graphite('石墨灰', kGraphiteSeed),
+  graphite(kGraphiteSeed),
 
   /// 深紫。
-  deepPurple('深紫', Colors.deepPurple),
+  deepPurple(Colors.deepPurple),
 
   /// 靛蓝。
-  indigo('靛蓝', Colors.indigo),
+  indigo(Colors.indigo),
 
   /// 蓝。
-  blue('蓝', Colors.blue),
+  blue(Colors.blue),
 
   /// 青。
-  cyan('青', Colors.cyan),
+  cyan(Colors.cyan),
 
   /// 绿。
-  green('绿', Colors.green),
+  green(Colors.green),
 
   /// 橙。
-  orange('橙', Colors.orange),
+  orange(Colors.orange),
 
   /// 红。
-  red('红', Colors.red),
+  red(Colors.red),
 
   /// 粉。
-  pink('粉', Colors.pink),
+  pink(Colors.pink),
 
   /// 蓝灰。
-  blueGrey('蓝灰', Colors.blueGrey);
+  blueGrey(Colors.blueGrey);
 
-  const AccentColor(this.label, this.seed);
-
-  /// 色板圆点 / tooltip 用的中文标签。
-  final String label;
+  const AccentColor(this.seed);
 
   /// 该预设项的 seed 色；仅 [AccentColor.system] 为 null（无固定色）。
   final Color? seed;

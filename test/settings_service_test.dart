@@ -3,6 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:txvziwm/core/models/lyric_text_size.dart';
 import 'package:txvziwm/core/services/album_art_cache_service.dart';
 import 'package:txvziwm/core/services/settings_service.dart';
+import 'package:txvziwm/l10n/enum_labels.dart';
+
+import 'helpers/l10n.dart';
 
 void main() {
   // path_provider 的 MethodChannel 依赖 binding；不初始化会在普通 test 里
@@ -84,13 +87,14 @@ void main() {
       expect(LyricTextSize.fromName(null), LyricTextSize.medium);
     });
 
-    test('scale/label 与既有值一致（迁移后回归护栏）', () {
+    test('scale/label 与既有值一致（迁移后回归护栏）', () async {
+      final l10n = await loadL10n();
       expect(LyricTextSize.small.scale, 1.0);
       expect(LyricTextSize.medium.scale, 1.25);
       expect(LyricTextSize.large.scale, 1.5);
-      expect(LyricTextSize.small.label, '小');
-      expect(LyricTextSize.medium.label, '中');
-      expect(LyricTextSize.large.label, '大');
+      expect(LyricTextSize.small.label(l10n), '小');
+      expect(LyricTextSize.medium.label(l10n), '中');
+      expect(LyricTextSize.large.label(l10n), '大');
     });
   });
 

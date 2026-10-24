@@ -10,6 +10,8 @@ import '../../core/models/lyric_load_state.dart';
 import '../../core/models/lyric_slide_alignment.dart';
 import '../../core/models/lyric_text_size.dart';
 import '../../core/utils/lyric_preset.dart';
+import '../../l10n/enum_labels.dart';
+import '../../l10n/l10n.dart';
 import 'player_ui_state.dart';
 
 /// 歌词视图：上方菜单栏（文本大小）+ 歌词内容区。
@@ -197,7 +199,7 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
           CheckedPopupMenuItem(
             value: size,
             checked: size == widget.uiState.lyricTextSize,
-            child: Text(size.label),
+            child: Text(size.label(context.l10n)),
           ),
       ],
     );

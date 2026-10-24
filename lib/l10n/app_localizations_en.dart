@@ -103,4 +103,358 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get searchEmptyHint => 'Try another keyword';
+
+  @override
+  String get commonFollowSystem => 'Follow system';
+
+  @override
+  String get commonCancel => 'Cancel';
+
+  @override
+  String get accentGraphite => 'Graphite';
+
+  @override
+  String get accentDeepPurple => 'Deep purple';
+
+  @override
+  String get accentIndigo => 'Indigo';
+
+  @override
+  String get accentBlue => 'Blue';
+
+  @override
+  String get accentCyan => 'Cyan';
+
+  @override
+  String get accentGreen => 'Green';
+
+  @override
+  String get accentOrange => 'Orange';
+
+  @override
+  String get accentRed => 'Red';
+
+  @override
+  String get accentPink => 'Pink';
+
+  @override
+  String get accentBlueGrey => 'Blue grey';
+
+  @override
+  String get lyricTextSizeSmall => 'Small';
+
+  @override
+  String get lyricTextSizeMedium => 'Medium';
+
+  @override
+  String get lyricTextSizeLarge => 'Large';
+
+  @override
+  String get lyricEffectStandard => 'Default';
+
+  @override
+  String get lyricEffectStrong => 'Strong';
+
+  @override
+  String get lyricTransitionClassic => 'Classic';
+
+  @override
+  String get lyricTransitionClassicDescription => 'Default size transition';
+
+  @override
+  String get lyricTransitionScale => 'Scale';
+
+  @override
+  String get lyricTransitionScaleDescription => 'Zooms in, then settles';
+
+  @override
+  String get lyricTransitionSlide => 'Slide';
+
+  @override
+  String get lyricTransitionSlideDescription => 'Slides up and fades in';
+
+  @override
+  String get lyricTransitionNone => 'None';
+
+  @override
+  String get lyricTransitionNoneDescription => 'Switches instantly';
+
+  @override
+  String get lyricAlignmentLeft => 'Left';
+
+  @override
+  String get lyricAlignmentRight => 'Right';
+
+  @override
+  String get lyricBlurOff => 'Off';
+
+  @override
+  String get lyricBlurLight => 'Light';
+
+  @override
+  String get lyricBlurStandard => 'Standard';
+
+  @override
+  String get themeModeLight => 'Light';
+
+  @override
+  String get themeModeDark => 'Dark';
+
+  @override
+  String get settingsTitle => 'Settings';
+
+  @override
+  String get settingsSectionLibrary => 'Library';
+
+  @override
+  String get settingsSectionPlayback => 'Playback';
+
+  @override
+  String get settingsSectionAppearance => 'Appearance';
+
+  @override
+  String get settingsSectionGeneral => 'General';
+
+  @override
+  String get settingsClearCoverCacheTitle => 'Clear cover cache';
+
+  @override
+  String get settingsClearCoverCacheBody =>
+      'Deletes cover files that are no longer used by any song or album.\nCovers in use are unaffected.';
+
+  @override
+  String get settingsClearCoverCacheAction => 'Clear';
+
+  @override
+  String get settingsNotificationsDenied =>
+      'Notifications are turned off, so track-change banners won\'t appear';
+
+  @override
+  String get settingsOpenSystemSettings => 'Open system settings';
+
+  @override
+  String get settingsForceRescanTitle => 'Force rescan';
+
+  @override
+  String get settingsForceRescanSubtitle =>
+      'Re-parses every song to fix broken metadata or covers';
+
+  @override
+  String get settingsForceRescanNoFolders => 'Add a music folder first';
+
+  @override
+  String get settingsResumeTitle => 'Resume last position';
+
+  @override
+  String get settingsResumeSubtitle =>
+      'Restores your previous playback position on launch';
+
+  @override
+  String get settingsTrackNotificationTitle =>
+      'Show a system notification on track change';
+
+  @override
+  String get settingsTrackNotificationSubtitle =>
+      'Only appears in the background or when the window is closed';
+
+  @override
+  String get settingsSleepFinishTrackTitle =>
+      'Finish the current track before sleeping';
+
+  @override
+  String get settingsSleepFinishTrackSubtitle =>
+      'When off, playback fades out and pauses when the timer ends';
+
+  @override
+  String get settingsAccentTitle => 'Accent color';
+
+  @override
+  String get settingsAccentSubtitle =>
+      'Pick an accent color or follow the system';
+
+  @override
+  String get settingsThemeTitle => 'Theme';
+
+  @override
+  String get settingsThemeSubtitle =>
+      'Choose the app\'s light or dark appearance';
+
+  @override
+  String get settingsLyricsTitle => 'Lyrics display';
+
+  @override
+  String get settingsLyricsSubtitle =>
+      'Text size, translation and lyric effects';
+
+  @override
+  String get settingsNowPlayingFillTitle => 'Progress fill in the player bar';
+
+  @override
+  String get settingsNowPlayingFillSubtitle =>
+      'The bar background fills left to right while playing';
+
+  @override
+  String get settingsLogsTitle => 'Logs';
+
+  @override
+  String get settingsLogsSubtitle => 'View app runtime logs';
+
+  @override
+  String get settingsCacheTitle => 'Cache';
+
+  @override
+  String get settingsCacheSubtitle => 'Cover image cache (safe to clear)';
+
+  @override
+  String get settingsAboutTitle => 'About';
+
+  @override
+  String get lyricsSettingsTitle => 'Lyrics display';
+
+  @override
+  String get lyricsTextSizeTitle => 'Text size';
+
+  @override
+  String get lyricsTextSizeSubtitle => 'Adjust lyric and translation text size';
+
+  @override
+  String get lyricsTranslationTitle => 'Translation line';
+
+  @override
+  String get lyricsTranslationSubtitle =>
+      'Shows a translation under the original when available';
+
+  @override
+  String get lyricsWordFillTitle => 'Per-character fill';
+
+  @override
+  String get lyricsWordFillSubtitle =>
+      'Fills each sung character with the accent color';
+
+  @override
+  String get lyricsWordLiftTitle => 'Word pop';
+
+  @override
+  String get lyricsWordLiftSubtitle =>
+      'Each sung character jumps up and stays raised for the line';
+
+  @override
+  String get lyricsEffectStrengthTitle => 'Effect strength';
+
+  @override
+  String get lyricsEffectStrengthSubtitle => 'How high each character jumps';
+
+  @override
+  String get lyricsWordTimingHint =>
+      'Plain LRC simulates per-character timing. QRC / YRC use the word timings stored in the file.';
+
+  @override
+  String get lyricsTransitionTitle => 'Line transition';
+
+  @override
+  String get lyricsAlignmentTitle => 'Alignment';
+
+  @override
+  String get lyricsAlignmentSubtitle =>
+      'Slide direction follows the aligned edge';
+
+  @override
+  String get lyricsLineWaveTitle => 'Line wave';
+
+  @override
+  String get lyricsLineWaveSubtitle => 'Lines shift and rise in sequence';
+
+  @override
+  String get lyricsLineWaveHint =>
+      'Applies to whole lines and stacks with word pop; turning on both can look busy.';
+
+  @override
+  String get lyricsBlurTitle => 'Distance blur';
+
+  @override
+  String get lyricsBlurSubtitle =>
+      'Lines blur more the farther they are from the current one; stays sharp while browsing';
+
+  @override
+  String get lyricsBlurHint =>
+      'Adds one off-screen blur layer per line. Turn it off on slower machines or when stacking many effects.';
+
+  @override
+  String get lyricsCountdownTitle => 'Countdown dots';
+
+  @override
+  String get lyricsCountdownSubtitle =>
+      'Shows three fading dots for intros and interludes';
+
+  @override
+  String get lyricsCountdownHint =>
+      'Plain LRC needs a blank timestamp at the interlude (for example [00:12.00]) to show them.';
+
+  @override
+  String get lyricsSectionText => 'Text';
+
+  @override
+  String get lyricsSectionEffects => 'Text effects';
+
+  @override
+  String get lyricsSectionLineMotion => 'Line motion';
+
+  @override
+  String get lyricsPreviewLoop => 'Loop preview';
+
+  @override
+  String get aboutTitle => 'About';
+
+  @override
+  String get aboutTagline => 'Local music player';
+
+  @override
+  String get aboutLicenses => 'Open-source licenses';
+
+  @override
+  String get aboutProjectHome => 'Project home';
+
+  @override
+  String get aboutLinkCopied => 'Project link copied';
+
+  @override
+  String get logsTitle => 'Logs';
+
+  @override
+  String get logsSelectDate => 'Select date';
+
+  @override
+  String get logsEmpty => 'No logs yet';
+
+  @override
+  String get logsDebugHint =>
+      'This is a debug build, so logs only go to the console and don\'t appear here. Release and profile builds write log files.';
+
+  @override
+  String get logDetailTitle => 'Log details';
+
+  @override
+  String settingsCoverCacheCleared(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Removed $count unused covers',
+      one: 'Removed 1 unused cover',
+      zero: 'No unused covers to clear',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String settingsAboutSubtitle(String version) {
+    return 'Version $version · Open-source licenses';
+  }
+
+  @override
+  String aboutVersion(String version) {
+    return 'Version $version';
+  }
+
+  @override
+  String get lyricsSectionCountdown => 'Countdown';
 }

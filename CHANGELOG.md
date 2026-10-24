@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   search/empty states, song rows and the song info card now follow the app
   language. The remaining pages are still Chinese-only and will move in later
   batches
+- The settings, lyrics settings, about and log pages now follow the app language,
+  including theme-mode and accent-color labels. Core enums no longer carry
+  hardcoded labels; display text lives in `lib/l10n/enum_labels.dart`. English
+  segmented buttons shrink instead of overflowing fixed-height rows
 
 ## [0.2.8] - 2026-10-22
 

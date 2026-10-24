@@ -2,16 +2,13 @@
 ///
 /// 两档只改跳起的高度，到位时间固定为 [liftDuration]。
 enum LyricEffectStrength {
-  standard('默认', 3.5),
-  strong('强', 5);
+  standard(3.5),
+  strong(5);
 
-  const LyricEffectStrength(this.label, this.lift);
+  const LyricEffectStrength(this.lift);
 
   /// 逐字跳动到位的时间。
   static const Duration liftDuration = Duration(milliseconds: 900);
-
-  /// 菜单/分段按钮展示用的中文标签。
-  final String label;
 
   /// 逐字跳起的保持高度（逻辑像素）。
   final double lift;

@@ -7,7 +7,9 @@ import 'package:txvziwm/core/models/lyric_text_size.dart';
 import 'package:txvziwm/features/player/lyrics_view.dart';
 import 'package:txvziwm/features/player/player_ui_state.dart';
 
-Widget _wrap(Widget child) => MaterialApp(
+import 'helpers/l10n.dart';
+
+Widget _wrap(Widget child) => localizedApp(
   home: Scaffold(body: SizedBox(width: 400, height: 400, child: child)),
 );
 

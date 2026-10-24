@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:txvziwm/core/models/accent_color.dart';
+import 'package:txvziwm/l10n/enum_labels.dart';
+
+import 'helpers/l10n.dart';
 
 void main() {
   group('AccentColor 模型', () {
-    test('色板 = 跟随系统 + 10 预设，system 无固定 seed，默认 graphite', () {
+    test('色板 = 跟随系统 + 10 预设，system 无固定 seed，默认 graphite', () async {
+      final l10n = await loadL10n();
       expect(AccentColor.values.length, 11);
       expect(AccentColor.values.first, AccentColor.system);
       for (final c in AccentColor.values) {
-        expect(c.label, isNotEmpty);
+        expect(c.label(l10n), isNotEmpty);
       }
       expect(AccentColor.system.seed, isNull);
       final presets = AccentColor.values.where((c) => !c.followsSystem);
