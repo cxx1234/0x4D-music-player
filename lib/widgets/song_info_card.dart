@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../core/constants/motion.dart';
 import '../core/database/database.dart';
+import '../l10n/l10n.dart';
 import 'cached_album_art.dart';
 import 'text_link.dart';
 
@@ -110,7 +111,7 @@ class SongInfoCard extends StatelessWidget {
   }
 
   /// like / more 动作区。
-  Widget _buildActions() {
+  Widget _buildActions(BuildContext context) {
     final liked = song.isFavorite == 1;
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -123,7 +124,7 @@ class SongInfoCard extends StatelessWidget {
                 : theme.colorScheme.onSurfaceVariant,
           ),
           iconSize: 22,
-          tooltip: liked ? '取消喜欢' : '喜欢',
+          tooltip: liked ? context.l10n.playerUnlike : context.l10n.playerLike,
           onPressed: onLike,
         ),
         PopupMenuButton<String>(
@@ -133,7 +134,7 @@ class SongInfoCard extends StatelessWidget {
             size: 20,
             color: theme.colorScheme.onSurfaceVariant,
           ),
-          tooltip: '更多',
+          tooltip: context.l10n.commonMore,
           itemBuilder: (_) => menuBuilder(song),
           onSelected: (v) => onMenuSelected(song, v),
         ),
@@ -145,7 +146,7 @@ class SongInfoCard extends StatelessWidget {
   ///
   /// 窄版（非 compact）封面 = 卡片宽 × [_kNarrowCoverFactor]（40%），
   /// 信息占剩余；迷你条封面固定 48。
-  Widget _buildHorizontal() {
+  Widget _buildHorizontal(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final coverSize = compact
@@ -155,14 +156,14 @@ class SongInfoCard extends StatelessWidget {
           children: [
             _buildCover(size: coverSize),
             SizedBox(width: compact ? 12 : 20),
-            Expanded(child: _buildInfoColumn()),
+            Expanded(child: _buildInfoColumn(context)),
           ],
         );
       },
     );
   }
 
-  Widget _buildInfoColumn() {
+  Widget _buildInfoColumn(BuildContext context) {
     final artist = song.artist?.trim() ?? '';
     final album = song.album?.trim() ?? '';
     // 迷你条（compact）用更小字号；隐藏文件信息。
@@ -199,7 +200,7 @@ class SongInfoCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
-          _buildActions(),
+          _buildActions(context),
         ],
       ],
     );
@@ -213,12 +214,12 @@ class SongInfoCard extends StatelessWidget {
         color: theme.colorScheme.surfaceContainerLow,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: _buildHorizontal(),
+          child: _buildHorizontal(context),
         ),
       );
     }
     if (isNarrow) {
-      return _buildHorizontal();
+      return _buildHorizontal(context);
     }
 
     // 宽版纵排：封面与下方文本同宽（coverSize），整体居中；
@@ -251,7 +252,7 @@ class SongInfoCard extends StatelessWidget {
                   children: [
                     Expanded(child: _buildArtistAlbum()),
                     const SizedBox(width: 8),
-                    _buildActions(),
+                    _buildActions(context),
                   ],
                 ),
                 if (_metaText.isNotEmpty) ...[

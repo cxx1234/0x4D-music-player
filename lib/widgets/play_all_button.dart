@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
+
 /// 统一的「播放全部」椭圆形文本按钮（▶ 播放全部）。
 ///
 /// 放在详情块的信息文本下方（专辑/播放列表/我的收藏），或区块标题右侧（歌手歌曲区块）。
@@ -22,7 +24,7 @@ class PlayAllButton extends StatelessWidget {
       onPressed: enabled ? onPlayAll : null,
       style: FilledButton.styleFrom(shape: const StadiumBorder()),
       icon: const Icon(Icons.play_arrow, size: 18),
-      label: const Text('播放全部'),
+      label: Text(context.l10n.playerPlayAll),
     );
   }
 }

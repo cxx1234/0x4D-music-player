@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The macOS native menu still follows the system language; syncing it with the
   in-app choice is tracked in `docs/TODO.md`
 
+### Changed
+- Shell navigation, the startup error page, the mini player, playback controls,
+  search/empty states, song rows and the song info card now follow the app
+  language. The remaining pages are still Chinese-only and will move in later
+  batches
+
 ## [0.2.8] - 2026-10-22
 
 ### Added

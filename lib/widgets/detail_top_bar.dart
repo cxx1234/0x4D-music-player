@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../core/constants/layout.dart';
 import '../core/navigation/route_observer.dart';
+import '../l10n/l10n.dart';
 
 /// 详情页顶部栏：返回键 + 左对齐标题 + 可选操作，替代二级页的 M3 AppBar。
 /// 作为 Scaffold 的 `appBar:` 槽位使用（实现 [PreferredSizeWidget]，body 无需改动）。
@@ -108,7 +109,7 @@ class _DetailTopBarState extends State<DetailTopBar> with RouteAware {
             children: [
               IconButton(
                 icon: const Icon(Icons.arrow_back),
-                tooltip: '返回',
+                tooltip: context.l10n.commonBack,
                 onPressed: () => Navigator.of(context).maybePop(),
               ),
               // 文本离左侧按钮约一个按钮（hover 区域）宽度。

@@ -9,6 +9,7 @@ import 'package:txvziwm/widgets/player_bar.dart';
 import 'package:txvziwm/widgets/sleep_timer_button.dart';
 
 import 'helpers/fake_audio_engine.dart';
+import 'helpers/l10n.dart';
 
 /// 睡眠定时：三种触发方式（倒计时 / 播完当前曲 / 播完当前列表）+ 淡出收尾。
 ///
@@ -295,7 +296,7 @@ void main() {
   testWidgets('播放条左侧有睡眠定时入口，菜单可选时长', (tester) async {
     final timer = makeTimer(tick: const Duration(seconds: 1));
     await tester.pumpWidget(
-      MaterialApp(
+      localizedApp(
         home: Scaffold(
           body: PlayerBar(
             player: player,
@@ -335,7 +336,7 @@ void main() {
     timer.startForDuration(const Duration(minutes: 90));
 
     await tester.pumpWidget(
-      MaterialApp(
+      localizedApp(
         home: Scaffold(
           body: PlayerBar(
             player: player,

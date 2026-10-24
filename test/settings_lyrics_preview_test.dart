@@ -8,6 +8,8 @@ import 'package:txvziwm/core/models/lyric_line_transition_style.dart';
 import 'package:txvziwm/features/settings/lyrics_preview.dart';
 import 'package:txvziwm/features/settings/lyrics_settings_page.dart';
 
+import 'helpers/l10n.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -18,7 +20,7 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
-    await tester.pumpWidget(const MaterialApp(home: LyricsSettingsPage()));
+    await tester.pumpWidget(localizedApp(home: const LyricsSettingsPage()));
     await tester.pump();
   }
 

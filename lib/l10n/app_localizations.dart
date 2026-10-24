@@ -127,6 +127,162 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'简体中文'**
   String get settingsLanguageSimplifiedChinese;
+
+  /// Tooltip for the back button on detail pages.
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get commonBack;
+
+  /// Tooltip for the button that clears the search field.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get commonClear;
+
+  /// Tooltip for the button that exits search mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Close search'**
+  String get commonCloseSearch;
+
+  /// Tooltip for the overflow menu button.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get commonMore;
+
+  /// Placeholder text in the search field when no specific hint is provided.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get commonSearch;
+
+  /// Sidebar navigation label for the music library.
+  ///
+  /// In en, this message translates to:
+  /// **'Library'**
+  String get navLibrary;
+
+  /// Sidebar navigation label for albums.
+  ///
+  /// In en, this message translates to:
+  /// **'Albums'**
+  String get navAlbums;
+
+  /// Sidebar navigation label for artists.
+  ///
+  /// In en, this message translates to:
+  /// **'Artists'**
+  String get navArtists;
+
+  /// Sidebar navigation label for playlists.
+  ///
+  /// In en, this message translates to:
+  /// **'Playlists'**
+  String get navPlaylists;
+
+  /// Sidebar navigation label for settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get navSettings;
+
+  /// Title of the full-screen page shown when app services fail to initialize.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t start the app'**
+  String get startupFailedTitle;
+
+  /// Body text on the startup error page.
+  ///
+  /// In en, this message translates to:
+  /// **'App services couldn\'t be initialized. Try again. If this keeps happening, copy the error details and report them.'**
+  String get startupFailedMessage;
+
+  /// Button that retries app initialization.
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get startupRetry;
+
+  /// Button that copies the startup error to the clipboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy error details'**
+  String get startupCopyDetails;
+
+  /// Playback control tooltip for the previous track.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get playerPrevious;
+
+  /// Playback control tooltip for starting playback.
+  ///
+  /// In en, this message translates to:
+  /// **'Play'**
+  String get playerPlay;
+
+  /// Playback control tooltip for pausing playback.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get playerPause;
+
+  /// Playback control tooltip for the next track.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get playerNext;
+
+  /// Button that plays every song in the current collection.
+  ///
+  /// In en, this message translates to:
+  /// **'Play all'**
+  String get playerPlayAll;
+
+  /// Button that adds the current song to favorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Like'**
+  String get playerLike;
+
+  /// Button that removes the current song from favorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Unlike'**
+  String get playerUnlike;
+
+  /// Song title placeholder in the mini player when the queue is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing playing'**
+  String get nowPlayingNotPlaying;
+
+  /// Artist placeholder in the mini player when the queue is empty.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a song'**
+  String get nowPlayingPickSong;
+
+  /// Empty state title when a search has no results and no query is available.
+  ///
+  /// In en, this message translates to:
+  /// **'No results'**
+  String get searchEmptyTitle;
+
+  /// Empty state title that includes the search query.
+  ///
+  /// In en, this message translates to:
+  /// **'No results for \"{query}\"'**
+  String searchEmptyQuery(String query);
+
+  /// Hint shown below the empty search state.
+  ///
+  /// In en, this message translates to:
+  /// **'Try another keyword'**
+  String get searchEmptyHint;
 }
 
 class _AppLocalizationsDelegate

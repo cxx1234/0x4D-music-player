@@ -29,7 +29,7 @@ void main() {
   });
 
   testWidgets('ServiceLocator 未就绪时歌词页仍可独立构建', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: LyricsSettingsPage()));
+    await tester.pumpWidget(localizedApp(home: const LyricsSettingsPage()));
 
     expect(find.text('字号'), findsOneWidget);
     expect(find.text('翻译副行'), findsOneWidget);

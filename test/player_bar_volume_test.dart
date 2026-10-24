@@ -5,6 +5,7 @@ import 'package:txvziwm/core/services/play_queue.dart';
 import 'package:txvziwm/core/services/player_service.dart';
 import 'package:txvziwm/widgets/player_bar.dart';
 
+import 'helpers/l10n.dart';
 import 'helpers/silent_audio_engine.dart';
 
 /// 音量条的百分比提示：拖动与「快捷键/菜单调音量」两种入口都必须看得见数值。
@@ -26,7 +27,7 @@ void main() {
 
   Future<void> pumpBar(WidgetTester tester) async {
     await tester.pumpWidget(
-      MaterialApp(
+      localizedApp(
         home: Scaffold(
           body: PlayerBar(player: player, theme: ThemeData(), onSeek: (_) {}),
         ),

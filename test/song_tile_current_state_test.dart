@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:txvziwm/core/database/database.dart';
 import 'package:txvziwm/widgets/song_tile.dart';
 
+import 'helpers/l10n.dart';
+
 /// 当前播放高亮在各列表中的表现必须一致：
 /// 底色/文字高亮由 [SongTile.isCurrentSong] 决定，
 /// 封面播放中动画与行尾音量图标由「isCurrentSong && isPlaying」决定。
@@ -34,7 +36,7 @@ Future<void> _pump(
   bool showCurrentIndicator = true,
 }) async {
   await tester.pumpWidget(
-    MaterialApp(
+    localizedApp(
       home: Scaffold(
         body: SongTile(
           song: _song(),

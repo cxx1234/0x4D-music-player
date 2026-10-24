@@ -1,12 +1,13 @@
-import 'package:flutter/material.dart';
 import 'package:txvziwm/app/startup_error_page.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'helpers/l10n.dart';
 
 void main() {
   testWidgets('启动错误页显示错误摘要并可触发重试', (tester) async {
     var retried = false;
     await tester.pumpWidget(
-      MaterialApp(
+      localizedApp(
         home: StartupErrorPage(
           error: StateError('boom'),
           onRetry: () => retried = true,

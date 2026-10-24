@@ -4,16 +4,15 @@ import 'package:flutter/material.dart';
 
 /// Shell 侧边栏导航项。
 enum NavigationItem {
-  library('音乐库', Icons.library_music),
-  albums('专辑', Icons.album),
-  artists('歌手', Icons.person),
-  playlists('播放列表', Icons.playlist_play),
-  settings('设置', Icons.settings);
+  library(Icons.library_music),
+  albums(Icons.album),
+  artists(Icons.person),
+  playlists(Icons.playlist_play),
+  settings(Icons.settings);
 
-  final String label;
   final IconData icon;
 
-  const NavigationItem(this.label, this.icon);
+  const NavigationItem(this.icon);
 }
 
 /// 外部（App/菜单）可触发的页面动作。

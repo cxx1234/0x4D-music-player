@@ -19,5 +19,114 @@
   "settingsLanguageSimplifiedChinese": "简体中文",
   "@settingsLanguageSimplifiedChinese": {
     "description": "Language option: Simplified Chinese."
+  },
+  "commonBack": "Back",
+  "@commonBack": {
+    "description": "Tooltip for the back button on detail pages."
+  },
+  "commonClear": "Clear",
+  "@commonClear": {
+    "description": "Tooltip for the button that clears the search field."
+  },
+  "commonCloseSearch": "Close search",
+  "@commonCloseSearch": {
+    "description": "Tooltip for the button that exits search mode."
+  },
+  "commonMore": "More",
+  "@commonMore": {
+    "description": "Tooltip for the overflow menu button."
+  },
+  "commonSearch": "Search",
+  "@commonSearch": {
+    "description": "Placeholder text in the search field when no specific hint is provided."
+  },
+  "navLibrary": "Library",
+  "@navLibrary": {
+    "description": "Sidebar navigation label for the music library."
+  },
+  "navAlbums": "Albums",
+  "@navAlbums": {
+    "description": "Sidebar navigation label for albums."
+  },
+  "navArtists": "Artists",
+  "@navArtists": {
+    "description": "Sidebar navigation label for artists."
+  },
+  "navPlaylists": "Playlists",
+  "@navPlaylists": {
+    "description": "Sidebar navigation label for playlists."
+  },
+  "navSettings": "Settings",
+  "@navSettings": {
+    "description": "Sidebar navigation label for settings."
+  },
+  "startupFailedTitle": "Couldn't start the app",
+  "@startupFailedTitle": {
+    "description": "Title of the full-screen page shown when app services fail to initialize."
+  },
+  "startupFailedMessage": "App services couldn't be initialized. Try again. If this keeps happening, copy the error details and report them.",
+  "@startupFailedMessage": {
+    "description": "Body text on the startup error page."
+  },
+  "startupRetry": "Retry",
+  "@startupRetry": {
+    "description": "Button that retries app initialization."
+  },
+  "startupCopyDetails": "Copy error details",
+  "@startupCopyDetails": {
+    "description": "Button that copies the startup error to the clipboard."
+  },
+  "playerPrevious": "Previous",
+  "@playerPrevious": {
+    "description": "Playback control tooltip for the previous track."
+  },
+  "playerPlay": "Play",
+  "@playerPlay": {
+    "description": "Playback control tooltip for starting playback."
+  },
+  "playerPause": "Pause",
+  "@playerPause": {
+    "description": "Playback control tooltip for pausing playback."
+  },
+  "playerNext": "Next",
+  "@playerNext": {
+    "description": "Playback control tooltip for the next track."
+  },
+  "playerPlayAll": "Play all",
+  "@playerPlayAll": {
+    "description": "Button that plays every song in the current collection."
+  },
+  "playerLike": "Like",
+  "@playerLike": {
+    "description": "Button that adds the current song to favorites."
+  },
+  "playerUnlike": "Unlike",
+  "@playerUnlike": {
+    "description": "Button that removes the current song from favorites."
+  },
+  "nowPlayingNotPlaying": "Nothing playing",
+  "@nowPlayingNotPlaying": {
+    "description": "Song title placeholder in the mini player when the queue is empty."
+  },
+  "nowPlayingPickSong": "Pick a song",
+  "@nowPlayingPickSong": {
+    "description": "Artist placeholder in the mini player when the queue is empty."
+  },
+  "searchEmptyTitle": "No results",
+  "@searchEmptyTitle": {
+    "description": "Empty state title when a search has no results and no query is available."
+  },
+  "searchEmptyQuery": "No results for \"{query}\"",
+  "@searchEmptyQuery": {
+    "description": "Empty state title that includes the search query.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "searchEmptyHint": "Try another keyword",
+  "@searchEmptyHint": {
+    "description": "Hint shown below the empty search state."
   }
 }
