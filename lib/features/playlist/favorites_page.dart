@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
+import '../../l10n/l10n.dart';
 import '../../widgets/detail_header.dart';
 import '../../widgets/detail_top_bar.dart';
 import '../../widgets/play_all_button.dart';
@@ -51,7 +52,7 @@ class _FavoritesPageState extends State<FavoritesPage> {
     final player = ServiceLocator.player;
 
     return Scaffold(
-      appBar: const DetailTopBar(title: '我的收藏'),
+      appBar: DetailTopBar(title: context.l10n.playlistFavorites),
       body: ListenableBuilder(
         // uiListenable：切歌/播放态/队列变化均会重建列表高亮。
         listenable: player.uiListenable,
@@ -71,8 +72,8 @@ class _FavoritesPageState extends State<FavoritesPage> {
                     color: theme.colorScheme.onPrimaryContainer,
                   ),
                 ),
-                title: '我的收藏',
-                info: '${_songs.length} 首歌曲',
+                title: context.l10n.playlistFavorites,
+                info: context.l10n.albumSongCount(_songs.length),
                 action: PlayAllButton(
                   onPlayAll: _playAll,
                   enabled: _songs.isNotEmpty,
@@ -99,11 +100,14 @@ class _FavoritesPageState extends State<FavoritesPage> {
                             _songs,
                             startIndex: index,
                           ),
-                          menuBuilder: (song) => const [
-                            PopupMenuItem(value: 'play', child: Text('播放')),
+                          menuBuilder: (song) => [
+                            PopupMenuItem(
+                              value: 'play',
+                              child: Text(context.l10n.playerPlay),
+                            ),
                             PopupMenuItem(
                               value: 'unfavorite',
-                              child: Text('取消喜欢'),
+                              child: Text(context.l10n.playerUnlike),
                             ),
                           ],
                           onMenuSelected: (song, value) {
@@ -140,10 +144,13 @@ class _FavoritesPageState extends State<FavoritesPage> {
               color: theme.colorScheme.primary,
             ),
             const SizedBox(height: 16),
-            Text('还没有收藏的歌曲', style: theme.textTheme.headlineSmall),
+            Text(
+              context.l10n.playlistFavoritesEmpty,
+              style: theme.textTheme.headlineSmall,
+            ),
             const SizedBox(height: 8),
             Text(
-              '在歌曲的"更多"菜单里点"喜欢"即可收藏',
+              context.l10n.playlistFavoritesEmptyHint,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),

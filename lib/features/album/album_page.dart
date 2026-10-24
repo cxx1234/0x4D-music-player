@@ -385,7 +385,7 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
                         startIndex: row.songIndex,
                       ),
                       leadingText: song.trackNumber?.toString() ?? '',
-                      menuBuilder: (song) => songMenuItems(song),
+                      menuBuilder: (song) => songMenuItems(context.l10n, song),
                       onMenuSelected: (song, value) async {
                         await handleSongMenuAction(context, song, value);
                         // 菜单动作不改变本页列表内容，无需重查。

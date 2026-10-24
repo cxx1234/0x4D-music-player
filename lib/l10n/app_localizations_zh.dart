@@ -692,4 +692,230 @@ class AppLocalizationsZh extends AppLocalizations {
   String libraryScanFailed(String error) {
     return '扫描失败：$error';
   }
+
+  @override
+  String get commonSave => '保存';
+
+  @override
+  String get commonDelete => '删除';
+
+  @override
+  String get commonCreate => '创建';
+
+  @override
+  String get commonName => '名称';
+
+  @override
+  String get playlistTitle => '播放列表';
+
+  @override
+  String get playlistSearchHint => '搜索播放列表';
+
+  @override
+  String get playlistNew => '新建播放列表';
+
+  @override
+  String get playlistCreateHint => '例如：我的最爱';
+
+  @override
+  String get playlistImport => '导入播放列表';
+
+  @override
+  String get playlistImportReadFailed => '导入失败：无法读取文件';
+
+  @override
+  String get playlistImportNoMatches => '未匹配到任何歌曲，请确认歌单中的文件已在音乐库中';
+
+  @override
+  String get playlistExportEmpty => '没有可导出的播放列表';
+
+  @override
+  String get playlistChooseExport => '选择要导出的播放列表';
+
+  @override
+  String get playlistExportFailed => '导出失败：无法生成播放列表内容';
+
+  @override
+  String get playlistExport => '导出播放列表';
+
+  @override
+  String get playlistRename => '重命名播放列表';
+
+  @override
+  String get playlistDelete => '删除播放列表';
+
+  @override
+  String get playlistEmpty => '播放列表为空';
+
+  @override
+  String get playlistEmptyHint => '点击右上角\"添加歌曲\"按钮加入歌曲';
+
+  @override
+  String get playlistMyPlaylists => '我的播放列表';
+
+  @override
+  String get playlistFavorites => '我的收藏';
+
+  @override
+  String get playlistListEmpty => '暂无播放列表';
+
+  @override
+  String get playlistListEmptyHint => '点击右上角 + 新建播放列表';
+
+  @override
+  String get playlistImportIntoExisting => '加入已有播放列表';
+
+  @override
+  String get playlistFavoritesEmpty => '还没有收藏的歌曲';
+
+  @override
+  String get playlistFavoritesEmptyHint => '在歌曲的\"更多\"菜单里点\"喜欢\"即可收藏';
+
+  @override
+  String get playlistAddSongs => '添加歌曲';
+
+  @override
+  String get playlistManualSort => '手动排序';
+
+  @override
+  String get playlistDoneSorting => '完成排序';
+
+  @override
+  String get playlistExportM3u => '导出为 M3U…';
+
+  @override
+  String get playlistSortByName => '按名称排序';
+
+  @override
+  String get playlistMenuExport => '导出';
+
+  @override
+  String get playlistMenuRename => '重命名';
+
+  @override
+  String get playlistRemoveFrom => '从播放列表移除';
+
+  @override
+  String get playlistAddTo => '添加到播放列表';
+
+  @override
+  String get playlistPickerEmpty => '还没有播放列表，先新建一个吧';
+
+  @override
+  String get playlistNewEllipsis => '新建播放列表…';
+
+  @override
+  String get playlistNoMatchingSongs => '没有匹配的歌曲';
+
+  @override
+  String get playlistSelectSongs => '选择歌曲';
+
+  @override
+  String get songAddToQueue => '添加到播放队列';
+
+  @override
+  String get songPlayNext => '下一首播放';
+
+  @override
+  String get songStartedPlaying => '已开始播放';
+
+  @override
+  String get songAddedNext => '已加入下一首播放';
+
+  @override
+  String get songAddedQueue => '已添加到播放队列';
+
+  @override
+  String playlistCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 个',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String playlistMatch(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '匹配 $count 个',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String playlistImported(int count, String name) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '已导入 $count 首到\"$name\"',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String playlistImportUnmatched(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 首未匹配（不在音乐库中）',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String playlistImportSheetTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '导入 $count 首歌曲',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String playlistExported(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '已导出 $count 首歌曲',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String playlistAddSelected(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '添加 ($count)',
+      zero: '选择歌曲',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get playlistFallbackName => '播放列表';
+
+  @override
+  String playlistSkippedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 首未匹配',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String playlistCreateNamed(String name) {
+    return '新建播放列表\"$name\"';
+  }
+
+  @override
+  String playlistDeleteConfirm(String name) {
+    return '确定删除\"$name\"吗？此操作不可撤销。';
+  }
 }

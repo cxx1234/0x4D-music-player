@@ -865,5 +865,278 @@
         "type": "String"
       }
     }
+  },
+  "commonSave": "Save",
+  "@commonSave": {
+    "description": "Generic save action."
+  },
+  "commonDelete": "Delete",
+  "@commonDelete": {
+    "description": "Generic delete action."
+  },
+  "commonCreate": "Create",
+  "@commonCreate": {
+    "description": "Generic create action."
+  },
+  "commonName": "Name",
+  "@commonName": {
+    "description": "Label for a playlist name field."
+  },
+  "playlistTitle": "Playlists",
+  "@playlistTitle": {
+    "description": "Playlists page title and sidebar label."
+  },
+  "playlistSearchHint": "Search playlists",
+  "@playlistSearchHint": {
+    "description": "Placeholder in the playlist search field."
+  },
+  "playlistNew": "New playlist",
+  "@playlistNew": {
+    "description": "Dialog title and action for creating a playlist."
+  },
+  "playlistCreateHint": "For example: My favorites",
+  "@playlistCreateHint": {
+    "description": "Hint for the playlist name field."
+  },
+  "playlistImport": "Import playlist",
+  "@playlistImport": {
+    "description": "Menu item and file picker title for M3U import."
+  },
+  "playlistImportReadFailed": "Import failed: couldn't read the file",
+  "@playlistImportReadFailed": {
+    "description": "SnackBar when an M3U file cannot be read."
+  },
+  "playlistImportNoMatches": "No songs matched. Make sure the playlist's files are in your library.",
+  "@playlistImportNoMatches": {
+    "description": "SnackBar when an imported M3U matched no library songs."
+  },
+  "playlistExportEmpty": "No playlists to export",
+  "@playlistExportEmpty": {
+    "description": "SnackBar when the export menu runs without playlists."
+  },
+  "playlistChooseExport": "Choose a playlist to export",
+  "@playlistChooseExport": {
+    "description": "Bottom sheet title for choosing an export target."
+  },
+  "playlistExportFailed": "Export failed: couldn't build the playlist content",
+  "@playlistExportFailed": {
+    "description": "SnackBar when building an M3U failed."
+  },
+  "playlistExport": "Export playlist",
+  "@playlistExport": {
+    "description": "File picker title for M3U export."
+  },
+  "playlistRename": "Rename playlist",
+  "@playlistRename": {
+    "description": "Dialog title for renaming a playlist."
+  },
+  "playlistDelete": "Delete playlist",
+  "@playlistDelete": {
+    "description": "Dialog title for deleting a playlist."
+  },
+  "playlistEmpty": "This playlist is empty",
+  "@playlistEmpty": {
+    "description": "Playlist detail empty state title."
+  },
+  "playlistEmptyHint": "Use the \"Add songs\" button in the top-right corner to add songs",
+  "@playlistEmptyHint": {
+    "description": "Playlist detail empty state hint."
+  },
+  "playlistMyPlaylists": "My playlists",
+  "@playlistMyPlaylists": {
+    "description": "Section header above user-created playlists."
+  },
+  "playlistFavorites": "Favorites",
+  "@playlistFavorites": {
+    "description": "Favorites page title and card label."
+  },
+  "playlistListEmpty": "No playlists yet",
+  "@playlistListEmpty": {
+    "description": "Playlists page empty state title."
+  },
+  "playlistListEmptyHint": "Tap + in the top-right corner to create a playlist",
+  "@playlistListEmptyHint": {
+    "description": "Playlists page empty state hint."
+  },
+  "playlistImportIntoExisting": "Add to an existing playlist",
+  "@playlistImportIntoExisting": {
+    "description": "Import target sheet section header."
+  },
+  "playlistFavoritesEmpty": "No favorites yet",
+  "@playlistFavoritesEmpty": {
+    "description": "Favorites empty state title."
+  },
+  "playlistFavoritesEmptyHint": "Use \"Like\" in a song's \"More\" menu to add it",
+  "@playlistFavoritesEmptyHint": {
+    "description": "Favorites empty state hint."
+  },
+  "playlistAddSongs": "Add songs",
+  "@playlistAddSongs": {
+    "description": "Tooltip for adding songs to a playlist."
+  },
+  "playlistManualSort": "Manual sort",
+  "@playlistManualSort": {
+    "description": "Tooltip that enables drag-to-reorder."
+  },
+  "playlistDoneSorting": "Done sorting",
+  "@playlistDoneSorting": {
+    "description": "Tooltip that leaves drag-to-reorder mode."
+  },
+  "playlistExportM3u": "Export as M3U…",
+  "@playlistExportM3u": {
+    "description": "Playlist menu item that exports an M3U file."
+  },
+  "playlistSortByName": "Sort by name",
+  "@playlistSortByName": {
+    "description": "Playlist menu item that sorts by song title."
+  },
+  "playlistMenuExport": "Export",
+  "@playlistMenuExport": {
+    "description": "Playlist card menu item: export."
+  },
+  "playlistMenuRename": "Rename",
+  "@playlistMenuRename": {
+    "description": "Playlist card menu item: rename."
+  },
+  "playlistRemoveFrom": "Remove from playlist",
+  "@playlistRemoveFrom": {
+    "description": "Song menu item in a playlist detail page."
+  },
+  "playlistAddTo": "Add to playlist",
+  "@playlistAddTo": {
+    "description": "Song menu item that opens the playlist picker."
+  },
+  "playlistPickerEmpty": "No playlists yet. Create one first.",
+  "@playlistPickerEmpty": {
+    "description": "Playlist picker empty state."
+  },
+  "playlistNewEllipsis": "New playlist…",
+  "@playlistNewEllipsis": {
+    "description": "Playlist picker entry that creates a playlist."
+  },
+  "playlistNoMatchingSongs": "No matching songs",
+  "@playlistNoMatchingSongs": {
+    "description": "Add-songs sheet empty search result."
+  },
+  "playlistSelectSongs": "Select songs",
+  "@playlistSelectSongs": {
+    "description": "Add-songs sheet button when nothing is selected."
+  },
+  "songAddToQueue": "Add to queue",
+  "@songAddToQueue": {
+    "description": "Song menu item: append to the playback queue."
+  },
+  "songPlayNext": "Play next",
+  "@songPlayNext": {
+    "description": "Song menu item: play after the current track."
+  },
+  "songStartedPlaying": "Started playing",
+  "@songStartedPlaying": {
+    "description": "SnackBar when an empty queue starts playing."
+  },
+  "songAddedNext": "Added to play next",
+  "@songAddedNext": {
+    "description": "SnackBar after adding a song to play next."
+  },
+  "songAddedQueue": "Added to the queue",
+  "@songAddedQueue": {
+    "description": "SnackBar after appending a song to the queue."
+  },
+  "playlistCount": "{count, plural, =0{No playlists} =1{1 playlist} other{{count} playlists}}",
+  "@playlistCount": {
+    "description": "Playlists page subtitle count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "playlistMatch": "{count, plural, =0{No matches} =1{Matched 1 playlist} other{Matched {count} playlists}}",
+  "@playlistMatch": {
+    "description": "Playlists page subtitle while searching.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "playlistImported": "{count, plural, =1{Imported 1 song into \"{name}\"} other{Imported {count} songs into \"{name}\"}}",
+  "@playlistImported": {
+    "description": "SnackBar after importing songs into a playlist.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "playlistImportUnmatched": "{count, plural, =1{1 unmatched (not in your library)} other{{count} unmatched (not in your library)}}",
+  "@playlistImportUnmatched": {
+    "description": "Import target sheet: entries not found in the library.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "playlistImportSheetTitle": "{count, plural, =1{Import 1 song} other{Import {count} songs}}",
+  "@playlistImportSheetTitle": {
+    "description": "Import target sheet title.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "playlistExported": "{count, plural, =1{Exported 1 song} other{Exported {count} songs}}",
+  "@playlistExported": {
+    "description": "SnackBar after exporting a playlist.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "playlistAddSelected": "{count, plural, =0{Select songs} =1{Add (1)} other{Add ({count})}}",
+  "@playlistAddSelected": {
+    "description": "Add-songs sheet confirm button.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "playlistFallbackName": "Playlist",
+  "@playlistFallbackName": {
+    "description": "Fallback name when a playlist id cannot be resolved."
+  },
+  "playlistSkippedCount": "{count, plural, =1{1 unmatched} other{{count} unmatched}}",
+  "@playlistSkippedCount": {
+    "description": "Import SnackBar: entries that did not match a library song.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "playlistCreateNamed": "New playlist \"{name}\"",
+  "@playlistCreateNamed": {
+    "description": "Import target sheet: create a playlist named after the M3U file.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "playlistDeleteConfirm": "Delete \"{name}\"? This can't be undone.",
+  "@playlistDeleteConfirm": {
+    "description": "Confirmation body for deleting a playlist.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   }
 }

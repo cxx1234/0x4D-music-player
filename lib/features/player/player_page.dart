@@ -11,6 +11,7 @@ import '../../core/models/lyric_load_state.dart';
 import '../../core/models/lyric_text_size.dart';
 import '../../core/services/lyrics_view_model.dart';
 import '../../core/services/service_locator.dart';
+import '../../l10n/l10n.dart';
 import '../../widgets/player_bar.dart';
 import '../../widgets/song_info_card.dart';
 import '../album/album_page.dart';
@@ -503,7 +504,7 @@ class _PlayerPageState extends State<PlayerPage> {
         onOpenAlbum: () => _openAlbum(context, song),
         // 正在播放的信息卡显示的是当前曲（已在队列中）→ 用专用菜单，
         // 不含「播放下一首 / 添加到播放队列」等队列操作。
-        menuBuilder: currentSongMenuItems,
+        menuBuilder: (song) => currentSongMenuItems(context.l10n, song),
         onMenuSelected: (s, v) => handleSongMenuAction(context, s, v),
       ),
     );

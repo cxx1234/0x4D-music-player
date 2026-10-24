@@ -12,6 +12,7 @@ import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
 import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
+import '../../l10n/l10n.dart';
 import '../../widgets/card_surface.dart';
 import '../../widgets/context_menu.dart';
 import '../../widgets/cover_card.dart';
@@ -113,23 +114,23 @@ class _PlaylistPageState extends State<PlaylistPage> {
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('新建播放列表'),
+        title: Text(context.l10n.playlistNew),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(
-            labelText: '名称',
-            hintText: '例如：我的最爱',
+          decoration: InputDecoration(
+            labelText: context.l10n.commonName,
+            hintText: context.l10n.playlistCreateHint,
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('创建'),
+            child: Text(context.l10n.commonCreate),
           ),
         ],
       ),
@@ -154,7 +155,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
 
   Future<void> _importM3u() async {
     final files = await FilePicker.pickFiles(
-      dialogTitle: '导入播放列表',
+      dialogTitle: context.l10n.playlistImport,
       type: FileType.custom,
       allowedExtensions: const ['m3u', 'm3u8'],
     );
@@ -166,16 +167,16 @@ class _PlaylistPageState extends State<PlaylistPage> {
       imported = await importM3uFromFile(filePath);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('导入失败：无法读取文件')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.playlistImportReadFailed)),
+        );
       }
       return;
     }
     if (imported.songs.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('未匹配到任何歌曲，请确认歌单中的文件已在音乐库中')),
+          SnackBar(content: Text(context.l10n.playlistImportNoMatches)),
         );
       }
       return;
@@ -207,7 +208,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
       targetName = defaultName;
     } else {
       playlistId = targetId;
-      targetName = _nameOf(targetId) ?? '播放列表';
+      targetName = _nameOf(targetId) ?? context.l10n.playlistFallbackName;
     }
 
     final added = await ServiceLocator.songRepo.addSongsToPlaylist(
@@ -217,14 +218,14 @@ class _PlaylistPageState extends State<PlaylistPage> {
     await _viewModel.load();
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '已导入 $added 首到"$targetName"'
-          '${imported.skipped > 0 ? '，${imported.skipped} 首未匹配' : ''}',
-        ),
-      ),
-    );
+    final l10n = context.l10n;
+    final message = [
+      l10n.playlistImported(added, targetName),
+      if (imported.skipped > 0) l10n.playlistSkippedCount(imported.skipped),
+    ].join(l10n.commonListSeparator);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// macOS 菜单「导出播放列表」：先选要导出的播放列表，再存为 M3U8。
@@ -238,7 +239,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('没有可导出的播放列表')));
+      ).showSnackBar(SnackBar(content: Text(context.l10n.playlistExportEmpty)));
       return;
     }
 
@@ -253,7 +254,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 24, 12),
               child: Text(
-                '选择要导出的播放列表',
+                context.l10n.playlistChooseExport,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
@@ -276,6 +277,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
     );
     if (selected == null || !mounted) return;
 
+    final l10n = context.l10n;
     final ({Uint8List bytes, int count}) content;
     try {
       content = await buildPlaylistM3u8(selected.id);
@@ -283,12 +285,12 @@ class _PlaylistPageState extends State<PlaylistPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('导出失败：无法生成播放列表内容')));
+      ).showSnackBar(SnackBar(content: Text(l10n.playlistExportFailed)));
       return;
     }
 
     final uri = await FilePicker.saveFile(
-      dialogTitle: '导出播放列表',
+      dialogTitle: l10n.playlistExport,
       fileName: '${selected.name}.m3u8',
       bytes: content.bytes,
       type: FileType.custom,
@@ -296,9 +298,9 @@ class _PlaylistPageState extends State<PlaylistPage> {
     );
     if (uri == null || !mounted) return;
     // saveFile 已把 bytes 写入所选位置，uri 非空即成功。
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('已导出 ${content.count} 首歌曲')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.playlistExported(content.count))),
+    );
   }
 
   String? _nameOf(int id) {
@@ -313,20 +315,20 @@ class _PlaylistPageState extends State<PlaylistPage> {
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('重命名播放列表'),
+        title: Text(context.l10n.playlistRename),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: '名称'),
+          decoration: InputDecoration(labelText: context.l10n.commonName),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('保存'),
+            child: Text(context.l10n.commonSave),
           ),
         ],
       ),
@@ -339,19 +341,19 @@ class _PlaylistPageState extends State<PlaylistPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('删除播放列表'),
-        content: Text('确定删除"${playlist.name}"吗？此操作不可撤销。'),
+        title: Text(context.l10n.playlistDelete),
+        content: Text(context.l10n.playlistDeleteConfirm(playlist.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('删除'),
+            child: Text(context.l10n.commonDelete),
           ),
         ],
       ),
@@ -367,11 +369,11 @@ class _PlaylistPageState extends State<PlaylistPage> {
   ///
   /// 顺序按**误操作风险**排：面板从卡片长出来、光标往往压在最下面一行（三点在
   /// 卡片右下角），所以危险动作放最远的一行，最常用的「播放」压在光标下。
-  List<MorphMenuEntry<String>> _playlistEntries() => const [
-    MorphMenuEntry('删除', 'delete'),
-    MorphMenuEntry('重命名', 'rename'),
-    MorphMenuEntry('导出', 'export'),
-    MorphMenuEntry('播放', 'play'),
+  List<MorphMenuEntry<String>> _playlistEntries() => [
+    MorphMenuEntry(context.l10n.commonDelete, 'delete'),
+    MorphMenuEntry(context.l10n.playlistMenuRename, 'rename'),
+    MorphMenuEntry(context.l10n.playlistMenuExport, 'export'),
+    MorphMenuEntry(context.l10n.playerPlay, 'play'),
   ];
 
   /// 菜单项分发：播放 / 重命名 / 导出 / 删除。
@@ -385,7 +387,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
         if (songs.isEmpty) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(const SnackBar(content: Text('播放列表为空')));
+          ).showSnackBar(SnackBar(content: Text(context.l10n.playlistEmpty)));
         } else {
           ServiceLocator.player.playFromList(songs, startIndex: 0);
         }
@@ -404,6 +406,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
 
   /// 导出播放列表为 M3U 文件。
   Future<void> _export(Playlist playlist) async {
+    final l10n = context.l10n;
     final ({Uint8List bytes, int count}) content;
     try {
       content = await buildPlaylistM3u8(playlist.id);
@@ -411,12 +414,12 @@ class _PlaylistPageState extends State<PlaylistPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('导出失败：无法生成播放列表内容')));
+      ).showSnackBar(SnackBar(content: Text(l10n.playlistExportFailed)));
       return;
     }
 
     final uri = await FilePicker.saveFile(
-      dialogTitle: '导出播放列表',
+      dialogTitle: l10n.playlistExport,
       fileName: '${playlist.name}.m3u8',
       bytes: content.bytes,
       type: FileType.custom,
@@ -424,9 +427,9 @@ class _PlaylistPageState extends State<PlaylistPage> {
     );
     if (uri == null || !mounted) return;
     // saveFile 已把 bytes 写入所选位置，uri 非空即成功。
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('已导出 ${content.count} 首歌曲')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.playlistExported(content.count))),
+    );
   }
 
   /// 卡片菜单：右下角三点、长按与鼠标右键**三处共用**，锚定整张卡片。
@@ -479,16 +482,18 @@ class _PlaylistPageState extends State<PlaylistPage> {
     final value = await showRowMenu<String>(
       context: cardContext,
       rowRect: cardRect,
-      entries: const [PopupMenuItem(value: 'play', child: Text('播放'))],
+      entries: [
+        PopupMenuItem(value: 'play', child: Text(context.l10n.playerPlay)),
+      ],
     );
     if (value != 'play' || !mounted) return;
 
     final songs = await ServiceLocator.songRepo.getFavoriteSongs();
     if (!mounted) return;
     if (songs.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('还没有收藏的歌曲')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.playlistFavoritesEmpty)),
+      );
       return;
     }
     ServiceLocator.player.playFromList(songs, startIndex: 0);
@@ -540,12 +545,14 @@ class _PlaylistPageState extends State<PlaylistPage> {
 
   Widget _buildAppBar(int count) {
     return PageToolbar(
-      title: '播放列表',
-      subtitle: _searchActive ? '匹配 $count 个' : '$count 个',
+      title: context.l10n.playlistTitle,
+      subtitle: _searchActive
+          ? context.l10n.playlistMatch(count)
+          : context.l10n.playlistCount(count),
       actions: _searchActive
           ? [
               ToolbarSearchField(
-                hintText: '搜索播放列表',
+                hintText: context.l10n.playlistSearchHint,
                 onChanged: (v) => setState(() => _query = v),
                 onClose: _exitSearch,
               ),
@@ -553,24 +560,27 @@ class _PlaylistPageState extends State<PlaylistPage> {
           : [
               IconButton(
                 icon: const Icon(Icons.add),
-                tooltip: '新建播放列表',
+                tooltip: context.l10n.playlistNew,
                 onPressed: _createPlaylist,
               ),
               IconButton(
                 icon: const Icon(Icons.search),
-                tooltip: '搜索',
+                tooltip: context.l10n.commonSearch,
                 onPressed: _enterSearch,
               ),
               PopupMenuButton<String>(
                 popUpAnimationStyle: kPopupMenuAnimationStyle,
-                tooltip: '更多',
+                tooltip: context.l10n.commonMore,
                 // 默认 iconTheme.color 是固定纯黑/纯白（M2 遗留），显式指定跟随主题。
                 iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
                 onSelected: (value) {
                   if (value == 'import') _importM3u();
                 },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(value: 'import', child: Text('导入播放列表')),
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'import',
+                    child: Text(context.l10n.playlistImport),
+                  ),
                 ],
               ),
             ],
@@ -587,10 +597,13 @@ class _PlaylistPageState extends State<PlaylistPage> {
         children: [
           Icon(Icons.playlist_play, size: 56, color: theme.colorScheme.primary),
           const SizedBox(height: 12),
-          Text('暂无播放列表', style: theme.textTheme.titleMedium),
+          Text(
+            context.l10n.playlistListEmpty,
+            style: theme.textTheme.titleMedium,
+          ),
           const SizedBox(height: 8),
           Text(
-            '点击右上角 + 新建播放列表',
+            context.l10n.playlistListEmptyHint,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
@@ -600,7 +613,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
           FilledButton.icon(
             onPressed: _createPlaylist,
             icon: const Icon(Icons.add),
-            label: const Text('新建播放列表'),
+            label: Text(context.l10n.playlistNew),
           ),
         ],
       ),
@@ -628,7 +641,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
               child: Text(
-                '我的播放列表',
+                context.l10n.playlistMyPlaylists,
                 style: theme.textTheme.titleSmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -659,13 +672,15 @@ class _PlaylistPageState extends State<PlaylistPage> {
                       revision: _viewModel.songCountFor(playlist),
                     ),
                     title: playlist.name,
-                    subtitle: '${_viewModel.songCountFor(playlist)} 首歌曲',
+                    subtitle: context.l10n.albumSongCount(
+                      _viewModel.songCountFor(playlist),
+                    ),
                     onTap: () => _openDetail(playlist),
                     onLongPress: () => _showPlaylistMenu(playlist, cardContext),
                     // 右键走同一个菜单：三种入口共用，位置与动画完全一致。
                     onSecondaryTap: (ctx) => _showPlaylistMenu(playlist, ctx),
                     trailing: Tooltip(
-                      message: '更多',
+                      message: context.l10n.commonMore,
                       child: InkWell(
                         onTap: () => _showPlaylistMenu(playlist, cardContext),
                         // 命中区就是这 20×20 盒子（与原来 PopupMenuButton 的
@@ -717,10 +732,13 @@ class _PlaylistPageState extends State<PlaylistPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('我的收藏', style: theme.textTheme.titleMedium),
+                    Text(
+                      context.l10n.playlistFavorites,
+                      style: theme.textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 2),
                     Text(
-                      '${_viewModel.favoriteCount} 首歌曲',
+                      context.l10n.albumSongCount(_viewModel.favoriteCount),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -767,7 +785,7 @@ class _ImportTargetSheet extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Text(
-              '导入 ${songs.length} 首歌曲',
+              context.l10n.playlistImportSheetTitle(songs.length),
               style: theme.textTheme.titleMedium,
             ),
           ),
@@ -775,7 +793,7 @@ class _ImportTargetSheet extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text(
-                '${total - songs.length} 首未匹配（不在音乐库中）',
+                context.l10n.playlistImportUnmatched(total - songs.length),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -783,7 +801,7 @@ class _ImportTargetSheet extends StatelessWidget {
             ),
           ListTile(
             leading: const Icon(Icons.add),
-            title: Text('新建播放列表"$defaultName"'),
+            title: Text(context.l10n.playlistCreateNamed(defaultName)),
             onTap: () => Navigator.pop(context, createNew),
           ),
           if (playlists.isNotEmpty) ...[
@@ -791,7 +809,7 @@ class _ImportTargetSheet extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Text(
-                '加入已有播放列表',
+                context.l10n.playlistImportIntoExisting,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),

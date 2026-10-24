@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The library, album and artist pages now follow the app language, including
   sort-order labels and scan summaries. Counts use ICU plurals, and the scan
   summary joins fragments with the locale's list separator
+- Playlists, favorites, M3U import/export dialogs, the playlist picker, the
+  add-songs sheet and the shared song menu now follow the app language.
+  Import/export results and selected-song counts use ICU plurals
 
 ## [0.2.8] - 2026-10-22
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
+import '../../l10n/l10n.dart';
 import '../../widgets/cached_album_art.dart';
 
 /// 打开"添加歌曲到播放列表"的底部弹层，返回实际添加数量（可为 0）。
@@ -85,7 +86,7 @@ class _AddSongsSheetState extends State<AddSongsSheet> {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: TextField(
                 decoration: InputDecoration(
-                  hintText: '搜索歌曲',
+                  hintText: context.l10n.librarySearchSongsHint,
                   prefixIcon: const Icon(Icons.search),
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
@@ -115,7 +116,7 @@ class _AddSongsSheetState extends State<AddSongsSheet> {
                   : _filtered.isEmpty
                   ? Center(
                       child: Text(
-                        '没有匹配的歌曲',
+                        context.l10n.playlistNoMatchingSongs,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -180,7 +181,7 @@ class _AddSongsSheetState extends State<AddSongsSheet> {
                   child: FilledButton(
                     onPressed: _selected.isEmpty ? null : _confirm,
                     child: Text(
-                      _selected.isEmpty ? '选择歌曲' : '添加 (${_selected.length})',
+                      context.l10n.playlistAddSelected(_selected.length),
                     ),
                   ),
                 ),

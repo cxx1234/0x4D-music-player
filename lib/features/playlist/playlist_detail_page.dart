@@ -6,6 +6,7 @@ import '../../core/constants/motion.dart';
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../widgets/cached_album_art.dart';
+import '../../l10n/l10n.dart';
 import '../../widgets/detail_header.dart';
 import '../../widgets/detail_top_bar.dart';
 import '../../widgets/play_all_button.dart';
@@ -85,6 +86,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   }
 
   Future<void> _exportM3u() async {
+    final l10n = context.l10n;
     final ({Uint8List bytes, int count}) content;
     try {
       content = await buildPlaylistM3u8(widget.playlist.id);
@@ -92,12 +94,12 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('导出失败：无法生成播放列表内容')));
+      ).showSnackBar(SnackBar(content: Text(l10n.playlistExportFailed)));
       return;
     }
 
     final uri = await FilePicker.saveFile(
-      dialogTitle: '导出播放列表',
+      dialogTitle: l10n.playlistExport,
       fileName: '$_name.m3u8',
       bytes: content.bytes,
       type: FileType.custom,
@@ -105,9 +107,9 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     );
     if (uri == null || !mounted) return;
     // saveFile 已把 bytes 写入所选位置，uri 非空即成功。
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('已导出 ${content.count} 首歌曲')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.playlistExported(content.count))),
+    );
   }
 
   Future<void> _rename() async {
@@ -115,20 +117,20 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('重命名播放列表'),
+        title: Text(context.l10n.playlistRename),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: '名称'),
+          decoration: InputDecoration(labelText: context.l10n.commonName),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('保存'),
+            child: Text(context.l10n.commonSave),
           ),
         ],
       ),
@@ -150,19 +152,19 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('删除播放列表'),
-        content: Text('确定删除"$_name"吗？此操作不可撤销。'),
+        title: Text(context.l10n.playlistDelete),
+        content: Text(context.l10n.playlistDeleteConfirm(_name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('删除'),
+            child: Text(context.l10n.commonDelete),
           ),
         ],
       ),
@@ -205,17 +207,19 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
         actions: [
           IconButton(
             icon: Icon(_reorderMode ? Icons.check : Icons.reorder_rounded),
-            tooltip: _reorderMode ? '完成排序' : '手动排序',
+            tooltip: _reorderMode
+                ? context.l10n.playlistDoneSorting
+                : context.l10n.playlistManualSort,
             onPressed: _toggleReorderMode,
           ),
           IconButton(
             icon: const Icon(Icons.playlist_add),
-            tooltip: '添加歌曲',
+            tooltip: context.l10n.playlistAddSongs,
             onPressed: _addSongs,
           ),
           PopupMenuButton<String>(
             popUpAnimationStyle: kPopupMenuAnimationStyle,
-            tooltip: '更多',
+            tooltip: context.l10n.commonMore,
             // 默认 iconTheme.color 是固定纯黑/纯白（M2 遗留），显式指定跟随主题。
             iconColor: theme.colorScheme.onSurfaceVariant,
             onSelected: (value) {
@@ -224,11 +228,23 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
               if (value == 'export') _exportM3u();
               if (value == 'sortByName') _sortByName();
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'export', child: Text('导出为 M3U…')),
-              PopupMenuItem(value: 'sortByName', child: Text('按名称排序')),
-              PopupMenuItem(value: 'rename', child: Text('重命名')),
-              PopupMenuItem(value: 'delete', child: Text('删除')),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'export',
+                child: Text(context.l10n.playlistExportM3u),
+              ),
+              PopupMenuItem(
+                value: 'sortByName',
+                child: Text(context.l10n.playlistSortByName),
+              ),
+              PopupMenuItem(
+                value: 'rename',
+                child: Text(context.l10n.playlistMenuRename),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: Text(context.l10n.commonDelete),
+              ),
             ],
           ),
         ],
@@ -248,7 +264,7 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
                   revision: _songs.length,
                 ),
                 title: _name,
-                info: '${_songs.length} 首歌曲',
+                info: context.l10n.albumSongCount(_songs.length),
                 action: PlayAllButton(
                   onPlayAll: _playAll,
                   enabled: _songs.isNotEmpty,
@@ -281,10 +297,13 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
               color: theme.colorScheme.primary,
             ),
             const SizedBox(height: 16),
-            Text('播放列表为空', style: theme.textTheme.headlineSmall),
+            Text(
+              context.l10n.playlistEmpty,
+              style: theme.textTheme.headlineSmall,
+            ),
             const SizedBox(height: 8),
             Text(
-              '点击右上角"添加歌曲"按钮加入歌曲',
+              context.l10n.playlistEmptyHint,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -387,9 +406,12 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           ),
         ],
       ),
-      menuBuilder: (song) => const [
-        PopupMenuItem(value: 'play', child: Text('播放')),
-        PopupMenuItem(value: 'remove', child: Text('从播放列表移除')),
+      menuBuilder: (song) => [
+        PopupMenuItem(value: 'play', child: Text(context.l10n.playerPlay)),
+        PopupMenuItem(
+          value: 'remove',
+          child: Text(context.l10n.playlistRemoveFrom),
+        ),
       ],
       onMenuSelected: (song, value) {
         if (value == 'play') {

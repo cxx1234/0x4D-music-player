@@ -626,7 +626,7 @@ class _LibraryPageState extends State<LibraryPage> {
                 isCurrentSong: isCurrentSong,
                 isPlaying: isCurrentSong && _viewModel.isPlaying,
                 onTap: () => _viewModel.playSongsFromList(songs, index),
-                menuBuilder: (song) => songMenuItems(song),
+                menuBuilder: (song) => songMenuItems(context.l10n, song),
                 onMenuSelected: (song, value) async {
                   await handleSongMenuAction(context, song, value);
                   // 菜单动作（下一首播放/加入队列/加入播放列表/喜欢）都不改变本

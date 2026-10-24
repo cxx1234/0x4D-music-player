@@ -1219,6 +1219,336 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Scan failed: {error}'**
   String libraryScanFailed(String error);
+
+  /// Generic save action.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get commonSave;
+
+  /// Generic delete action.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get commonDelete;
+
+  /// Generic create action.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get commonCreate;
+
+  /// Label for a playlist name field.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get commonName;
+
+  /// Playlists page title and sidebar label.
+  ///
+  /// In en, this message translates to:
+  /// **'Playlists'**
+  String get playlistTitle;
+
+  /// Placeholder in the playlist search field.
+  ///
+  /// In en, this message translates to:
+  /// **'Search playlists'**
+  String get playlistSearchHint;
+
+  /// Dialog title and action for creating a playlist.
+  ///
+  /// In en, this message translates to:
+  /// **'New playlist'**
+  String get playlistNew;
+
+  /// Hint for the playlist name field.
+  ///
+  /// In en, this message translates to:
+  /// **'For example: My favorites'**
+  String get playlistCreateHint;
+
+  /// Menu item and file picker title for M3U import.
+  ///
+  /// In en, this message translates to:
+  /// **'Import playlist'**
+  String get playlistImport;
+
+  /// SnackBar when an M3U file cannot be read.
+  ///
+  /// In en, this message translates to:
+  /// **'Import failed: couldn\'t read the file'**
+  String get playlistImportReadFailed;
+
+  /// SnackBar when an imported M3U matched no library songs.
+  ///
+  /// In en, this message translates to:
+  /// **'No songs matched. Make sure the playlist\'s files are in your library.'**
+  String get playlistImportNoMatches;
+
+  /// SnackBar when the export menu runs without playlists.
+  ///
+  /// In en, this message translates to:
+  /// **'No playlists to export'**
+  String get playlistExportEmpty;
+
+  /// Bottom sheet title for choosing an export target.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a playlist to export'**
+  String get playlistChooseExport;
+
+  /// SnackBar when building an M3U failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Export failed: couldn\'t build the playlist content'**
+  String get playlistExportFailed;
+
+  /// File picker title for M3U export.
+  ///
+  /// In en, this message translates to:
+  /// **'Export playlist'**
+  String get playlistExport;
+
+  /// Dialog title for renaming a playlist.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename playlist'**
+  String get playlistRename;
+
+  /// Dialog title for deleting a playlist.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete playlist'**
+  String get playlistDelete;
+
+  /// Playlist detail empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'This playlist is empty'**
+  String get playlistEmpty;
+
+  /// Playlist detail empty state hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the \"Add songs\" button in the top-right corner to add songs'**
+  String get playlistEmptyHint;
+
+  /// Section header above user-created playlists.
+  ///
+  /// In en, this message translates to:
+  /// **'My playlists'**
+  String get playlistMyPlaylists;
+
+  /// Favorites page title and card label.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorites'**
+  String get playlistFavorites;
+
+  /// Playlists page empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No playlists yet'**
+  String get playlistListEmpty;
+
+  /// Playlists page empty state hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap + in the top-right corner to create a playlist'**
+  String get playlistListEmptyHint;
+
+  /// Import target sheet section header.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to an existing playlist'**
+  String get playlistImportIntoExisting;
+
+  /// Favorites empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No favorites yet'**
+  String get playlistFavoritesEmpty;
+
+  /// Favorites empty state hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Use \"Like\" in a song\'s \"More\" menu to add it'**
+  String get playlistFavoritesEmptyHint;
+
+  /// Tooltip for adding songs to a playlist.
+  ///
+  /// In en, this message translates to:
+  /// **'Add songs'**
+  String get playlistAddSongs;
+
+  /// Tooltip that enables drag-to-reorder.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual sort'**
+  String get playlistManualSort;
+
+  /// Tooltip that leaves drag-to-reorder mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Done sorting'**
+  String get playlistDoneSorting;
+
+  /// Playlist menu item that exports an M3U file.
+  ///
+  /// In en, this message translates to:
+  /// **'Export as M3U…'**
+  String get playlistExportM3u;
+
+  /// Playlist menu item that sorts by song title.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort by name'**
+  String get playlistSortByName;
+
+  /// Playlist card menu item: export.
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get playlistMenuExport;
+
+  /// Playlist card menu item: rename.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get playlistMenuRename;
+
+  /// Song menu item in a playlist detail page.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from playlist'**
+  String get playlistRemoveFrom;
+
+  /// Song menu item that opens the playlist picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to playlist'**
+  String get playlistAddTo;
+
+  /// Playlist picker empty state.
+  ///
+  /// In en, this message translates to:
+  /// **'No playlists yet. Create one first.'**
+  String get playlistPickerEmpty;
+
+  /// Playlist picker entry that creates a playlist.
+  ///
+  /// In en, this message translates to:
+  /// **'New playlist…'**
+  String get playlistNewEllipsis;
+
+  /// Add-songs sheet empty search result.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching songs'**
+  String get playlistNoMatchingSongs;
+
+  /// Add-songs sheet button when nothing is selected.
+  ///
+  /// In en, this message translates to:
+  /// **'Select songs'**
+  String get playlistSelectSongs;
+
+  /// Song menu item: append to the playback queue.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to queue'**
+  String get songAddToQueue;
+
+  /// Song menu item: play after the current track.
+  ///
+  /// In en, this message translates to:
+  /// **'Play next'**
+  String get songPlayNext;
+
+  /// SnackBar when an empty queue starts playing.
+  ///
+  /// In en, this message translates to:
+  /// **'Started playing'**
+  String get songStartedPlaying;
+
+  /// SnackBar after adding a song to play next.
+  ///
+  /// In en, this message translates to:
+  /// **'Added to play next'**
+  String get songAddedNext;
+
+  /// SnackBar after appending a song to the queue.
+  ///
+  /// In en, this message translates to:
+  /// **'Added to the queue'**
+  String get songAddedQueue;
+
+  /// Playlists page subtitle count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No playlists} =1{1 playlist} other{{count} playlists}}'**
+  String playlistCount(int count);
+
+  /// Playlists page subtitle while searching.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No matches} =1{Matched 1 playlist} other{Matched {count} playlists}}'**
+  String playlistMatch(int count);
+
+  /// SnackBar after importing songs into a playlist.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Imported 1 song into \"{name}\"} other{Imported {count} songs into \"{name}\"}}'**
+  String playlistImported(int count, String name);
+
+  /// Import target sheet: entries not found in the library.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 unmatched (not in your library)} other{{count} unmatched (not in your library)}}'**
+  String playlistImportUnmatched(int count);
+
+  /// Import target sheet title.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Import 1 song} other{Import {count} songs}}'**
+  String playlistImportSheetTitle(int count);
+
+  /// SnackBar after exporting a playlist.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Exported 1 song} other{Exported {count} songs}}'**
+  String playlistExported(int count);
+
+  /// Add-songs sheet confirm button.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Select songs} =1{Add (1)} other{Add ({count})}}'**
+  String playlistAddSelected(int count);
+
+  /// Fallback name when a playlist id cannot be resolved.
+  ///
+  /// In en, this message translates to:
+  /// **'Playlist'**
+  String get playlistFallbackName;
+
+  /// Import SnackBar: entries that did not match a library song.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 unmatched} other{{count} unmatched}}'**
+  String playlistSkippedCount(int count);
+
+  /// Import target sheet: create a playlist named after the M3U file.
+  ///
+  /// In en, this message translates to:
+  /// **'New playlist \"{name}\"'**
+  String playlistCreateNamed(String name);
+
+  /// Confirmation body for deleting a playlist.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete \"{name}\"? This can\'t be undone.'**
+  String playlistDeleteConfirm(String name);
 }
 
 class _AppLocalizationsDelegate

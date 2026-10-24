@@ -219,4 +219,23 @@ void main() {
       expect(en.albumMatch(0), 'No matches');
     });
   });
+
+  group('播放列表', () {
+    test('导入/导出与选择按钮的复数', () async {
+      final en = await loadL10n(const Locale('en'));
+      final zh = await loadL10n(const Locale('zh'));
+
+      expect(en.playlistImported(1, 'Mix'), 'Imported 1 song into "Mix"');
+      expect(en.playlistImported(3, 'Mix'), 'Imported 3 songs into "Mix"');
+      expect(zh.playlistImported(3, 'Mix'), '已导入 3 首到"Mix"');
+      expect(en.playlistExported(1), 'Exported 1 song');
+      expect(en.playlistAddSelected(0), 'Select songs');
+      expect(en.playlistAddSelected(1), 'Add (1)');
+      expect(zh.playlistAddSelected(3), '添加 (3)');
+      expect(
+        en.playlistDeleteConfirm('Mix'),
+        'Delete "Mix"? This can\'t be undone.',
+      );
+    });
+  });
 }
