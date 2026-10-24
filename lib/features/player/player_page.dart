@@ -165,7 +165,7 @@ class _PlayerPageState extends State<PlayerPage> {
             toolbarHeight: kToolbarHeight,
             leading: IconButton(
               icon: const Icon(Icons.keyboard_arrow_down),
-              tooltip: '收起',
+              tooltip: context.l10n.playerCollapse,
               onPressed: () => Navigator.of(context).pop(),
             ),
             title: Row(
@@ -174,7 +174,10 @@ class _PlayerPageState extends State<PlayerPage> {
                 const Icon(Icons.music_note_rounded),
                 const SizedBox(width: 8),
                 // 字号与 DetailTopBar 标题一致（titleMedium）。
-                Text('正在播放', style: theme.textTheme.titleMedium),
+                Text(
+                  context.l10n.playerNowPlaying,
+                  style: theme.textTheme.titleMedium,
+                ),
               ],
             ),
             centerTitle: false,
@@ -183,7 +186,7 @@ class _PlayerPageState extends State<PlayerPage> {
                 // 窄模式：切换歌词/播放队列（选中高亮 + 图标换关闭，再点退出）
                 _AppBarTab(
                   icon: Icons.lyrics_rounded,
-                  label: '歌词',
+                  label: context.l10n.playerLyricsTab,
                   selected: _narrowTab == NarrowTab.lyrics,
                   closeWhenSelected: true,
                   onTap: () => setState(() {
@@ -195,7 +198,7 @@ class _PlayerPageState extends State<PlayerPage> {
                 ),
                 _AppBarTab(
                   icon: Icons.queue_music_rounded,
-                  label: '播放列表',
+                  label: context.l10n.playerQueueTab,
                   iconSize: 24,
                   selected: _narrowTab == NarrowTab.queue,
                   closeWhenSelected: true,
@@ -214,13 +217,13 @@ class _PlayerPageState extends State<PlayerPage> {
                 // 宽模式：切换右栏内容（选中高亮 + 显示文字）
                 _AppBarTab(
                   icon: Icons.lyrics_rounded,
-                  label: '歌词',
+                  label: context.l10n.playerLyricsTab,
                   selected: !_showQueue,
                   onTap: () => setState(() => widget.uiState.showQueue = false),
                 ),
                 _AppBarTab(
                   icon: Icons.queue_music_rounded,
-                  label: '播放列表',
+                  label: context.l10n.playerQueueTab,
                   iconSize: 24,
                   selected: _showQueue,
                   onTap: () => setState(() {
@@ -267,10 +270,13 @@ class _PlayerPageState extends State<PlayerPage> {
                         color: theme.colorScheme.primary,
                       ),
                       const SizedBox(height: 24),
-                      Text('未在播放', style: theme.textTheme.headlineMedium),
+                      Text(
+                        context.l10n.nowPlayingNotPlaying,
+                        style: theme.textTheme.headlineMedium,
+                      ),
                       const SizedBox(height: 8),
                       Text(
-                        '选择一首歌曲开始播放',
+                        context.l10n.playerPickSongToStart,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -872,7 +878,9 @@ class _AppBarTab extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           onTap: onTap,
           child: Tooltip(
-            message: closeWhenSelected && selected ? '关闭' : label,
+            message: closeWhenSelected && selected
+                ? context.l10n.commonClose
+                : label,
             child: SizedBox(
               // 固定墨迹高度（不随图标尺寸变化）。
               height: 36,

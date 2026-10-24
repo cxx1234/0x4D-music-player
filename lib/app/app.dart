@@ -19,6 +19,7 @@ import '../features/player/player_ui_state.dart';
 import '../features/shell/now_playing_bar.dart';
 import '../features/shell/shell_page.dart';
 import '../l10n/app_localizations.dart';
+import '../l10n/l10n.dart';
 import '../widgets/hud_overlay.dart';
 
 class App extends StatefulWidget {
@@ -137,9 +138,10 @@ class _AppState extends State<App> with WidgetsBindingObserver {
 
   /// 界面语言切换：歌词翻译副行是否显示取决于界面语言，需要重新解析。
   void _onLocaleChanged() {
-    if (ServiceLocator.isReady) {
-      ServiceLocator.lyrics.refreshLocaleDependentContent();
-    }
+    if (!ServiceLocator.isReady) return;
+    ServiceLocator.lyrics.refreshLocaleDependentContent();
+    // 系统通知的「下一首」动作标签在插件初始化时注册，切换语言后重新注册。
+    unawaited(ServiceLocator.trackNotifications.refreshLocale());
   }
 
   @override
@@ -397,17 +399,33 @@ class _PlayerNoticeConsumerState extends State<_PlayerNoticeConsumer> {
   void _onPlayerChanged() {
     final err = _player!.takePlaybackError();
     if (err == null || !mounted) return;
+    final l10n = context.l10n;
+    final message = switch (err.kind) {
+      PlaybackFailureKind.loadFailed =>
+        err.title == null
+            ? l10n.playbackFailedNoTitle
+            : l10n.playbackFailedWithTitle(err.title!),
+      PlaybackFailureKind.repeatedFailures => l10n.playbackFailedRepeated(
+        err.consecutiveCount ?? 0,
+      ),
+    };
     // 连跳多首坏文件时会连续产生提示：**替换**当前提示而不是排队，否则会积起
     // 一串"无法播放"按顺序慢慢弹完（观感很差，且滞后于真实进度）。
     ScaffoldMessenger.of(context)
       ..removeCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(err)));
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// 睡眠定时到点：提示一次（到点时可能不在播放页，按钮状态的变化未必看得到）。
   void _onSleepTimerNotice() {
-    final message = _sleepTimer!.takeNotice();
-    if (message == null || !mounted) return;
+    final notice = _sleepTimer!.takeNotice();
+    if (notice == null || !mounted) return;
+    final l10n = context.l10n;
+    final message = switch (notice) {
+      SleepTimerNotice.expiredWaitingForTrack => l10n.sleepTimerExpiredWaiting,
+      SleepTimerNotice.finishedPaused => l10n.sleepTimerFinishedPaused,
+      SleepTimerNotice.finishedStopped => l10n.sleepTimerFinishedStopped,
+    };
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));

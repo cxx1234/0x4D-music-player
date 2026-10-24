@@ -21,6 +21,35 @@ enum PlayerRepeatMode {
   all,
 }
 
+/// 需要提示给用户的播放失败类型。
+enum PlaybackFailureKind {
+  /// 单个文件加载/播放失败，已自动跳过。
+  loadFailed,
+
+  /// 连续失败达到上限，自动跳转已停止。
+  repeatedFailures,
+}
+
+/// 一次播放失败（语义化，由 UI 按当前语言本地化）。
+@immutable
+class PlaybackFailure {
+  const PlaybackFailure.loadFailed(this.title)
+    : kind = PlaybackFailureKind.loadFailed,
+      consecutiveCount = null;
+
+  const PlaybackFailure.repeatedFailures(this.consecutiveCount)
+    : kind = PlaybackFailureKind.repeatedFailures,
+      title = null;
+
+  final PlaybackFailureKind kind;
+
+  /// [PlaybackFailureKind.loadFailed]：失败曲目的标题（未知时为 null）。
+  final String? title;
+
+  /// [PlaybackFailureKind.repeatedFailures]：连续失败次数。
+  final int? consecutiveCount;
+}
+
 /// Core audio playback service.
 ///
 /// ### 职责划分（2026-09 播放引擎抽象重构）
@@ -121,8 +150,8 @@ class PlayerService extends ChangeNotifier {
   /// 连续播放失败计数上限:达到后停止自动跳转(防坏文件死循环)。
   static const int _kMaxConsecutiveErrors = 3;
 
-  /// 最近一次播放错误的用户可读消息(消费即清,供 UI 提示一次)。
-  String? _lastPlaybackError;
+  /// 最近一次播放失败（消费即清，供 UI 按当前语言提示一次）。
+  PlaybackFailure? _lastPlaybackError;
 
   /// 连续播放失败计数。
   int _consecutiveErrors = 0;
@@ -592,8 +621,8 @@ class PlayerService extends ChangeNotifier {
     }
   }
 
-  /// 消费并清除最近的播放错误消息(返回 null 表示没有待提示的错误)。
-  String? takePlaybackError() {
+  /// 消费并清除最近的播放失败（null 表示没有待提示的错误）。
+  PlaybackFailure? takePlaybackError() {
     final err = _lastPlaybackError;
     _lastPlaybackError = null;
     return err;
@@ -998,8 +1027,9 @@ class PlayerService extends ChangeNotifier {
   /// [takePlaybackError] 消费并提示。
   void _reportPlaybackError(String where, Object e, StackTrace? s) {
     _consecutiveErrors++;
-    final title = _playQueue.currentSong?.title;
-    _lastPlaybackError = '无法播放${title != null ? '：$title' : '该文件'}，已自动跳过';
+    _lastPlaybackError = PlaybackFailure.loadFailed(
+      _playQueue.currentSong?.title,
+    );
     AppLogger.error('Player', 'Playback failed in $where', e, s);
     notifyListeners();
   }
@@ -1020,7 +1050,9 @@ class PlayerService extends ChangeNotifier {
   /// 则放弃这次自动跳转——否则迟到的跳过会把用户刚选的歌顶掉。
   Future<void> _skipOnFailure(String? failedPath) async {
     if (_consecutiveErrors >= _kMaxConsecutiveErrors) {
-      _lastPlaybackError = '连续 $_kMaxConsecutiveErrors 次无法播放，已停止自动跳转';
+      _lastPlaybackError = const PlaybackFailure.repeatedFailures(
+        _kMaxConsecutiveErrors,
+      );
       AppLogger.error(
         'Player',
         'Reached $_kMaxConsecutiveErrors consecutive playback failures; auto-skip stopped',

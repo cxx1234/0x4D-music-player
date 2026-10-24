@@ -1549,6 +1549,312 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete \"{name}\"? This can\'t be undone.'**
   String playlistDeleteConfirm(String name);
+
+  /// Generic close action or tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get commonClose;
+
+  /// Tooltip for collapsing the now-playing page.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse'**
+  String get playerCollapse;
+
+  /// Title of the now-playing page.
+  ///
+  /// In en, this message translates to:
+  /// **'Now playing'**
+  String get playerNowPlaying;
+
+  /// Now-playing tab: lyrics.
+  ///
+  /// In en, this message translates to:
+  /// **'Lyrics'**
+  String get playerLyricsTab;
+
+  /// Now-playing tab: playback queue.
+  ///
+  /// In en, this message translates to:
+  /// **'Queue'**
+  String get playerQueueTab;
+
+  /// Empty now-playing page hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a song to start playing'**
+  String get playerPickSongToStart;
+
+  /// Toolbar label above the lyrics view.
+  ///
+  /// In en, this message translates to:
+  /// **'Lyrics'**
+  String get lyricsTitle;
+
+  /// Tooltip for the lyric text-size menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Text size'**
+  String get lyricsTextSizeTooltip;
+
+  /// Tooltip that opens the lyrics settings page.
+  ///
+  /// In en, this message translates to:
+  /// **'Lyrics display settings'**
+  String get lyricsSettingsTooltip;
+
+  /// Tooltip when the translation subline is visible.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide translation'**
+  String get lyricsHideTranslation;
+
+  /// Tooltip when the translation subline is hidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Show translation'**
+  String get lyricsShowTranslation;
+
+  /// Empty lyrics placeholder.
+  ///
+  /// In en, this message translates to:
+  /// **'No lyrics'**
+  String get lyricsEmpty;
+
+  /// Queue footer: sequential playback.
+  ///
+  /// In en, this message translates to:
+  /// **'Sequential'**
+  String get queueSequential;
+
+  /// Queue footer: shuffled playback.
+  ///
+  /// In en, this message translates to:
+  /// **'Shuffle'**
+  String get queueShuffle;
+
+  /// Queue footer: repeat the whole list.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat all'**
+  String get queueRepeatAll;
+
+  /// Queue footer: repeat the current track.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat one'**
+  String get queueRepeatOne;
+
+  /// Suffix appended to the queue footer when scrolled to the bottom.
+  ///
+  /// In en, this message translates to:
+  /// **' · End of queue'**
+  String get queueAtBottomSuffix;
+
+  /// Dialog title that clears the queue.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear queue'**
+  String get queueClearTitle;
+
+  /// Confirmation body for clearing the queue.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear the current queue?'**
+  String get queueClearConfirm;
+
+  /// Tooltip for the clear-queue button.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear queue'**
+  String get queueClearTooltip;
+
+  /// Queue row context menu item.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from queue'**
+  String get queueRemove;
+
+  /// Empty queue placeholder.
+  ///
+  /// In en, this message translates to:
+  /// **'The queue is empty'**
+  String get queueEmpty;
+
+  /// Tooltip for scrolling the queue to the current track.
+  ///
+  /// In en, this message translates to:
+  /// **'Go to now playing'**
+  String get queueLocate;
+
+  /// Tooltip for deleting selected queue rows.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete selected ({count})'**
+  String queueDeleteSelected(int count);
+
+  /// Tooltip that enters multi-select delete mode.
+  ///
+  /// In en, this message translates to:
+  /// **'Select to delete'**
+  String get queueSelectDelete;
+
+  /// Tooltip for the single-repeat toggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat one'**
+  String get queueSingleRepeat;
+
+  /// Play-mode tooltip: repeat the list.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat all'**
+  String get queueModeRepeatAll;
+
+  /// Sleep timer button label and HUD prefix.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep timer'**
+  String get sleepTimerTitle;
+
+  /// Sleep timer button label while fading out.
+  ///
+  /// In en, this message translates to:
+  /// **'Fading out'**
+  String get sleepTimerFading;
+
+  /// Sleep timer mode: stop after the current track.
+  ///
+  /// In en, this message translates to:
+  /// **'End of track'**
+  String get sleepTimerEndOfTrack;
+
+  /// Sleep timer mode: stop at the end of the queue.
+  ///
+  /// In en, this message translates to:
+  /// **'End of playlist'**
+  String get sleepTimerEndOfQueue;
+
+  /// Sleep timer label while the fade-out is running.
+  ///
+  /// In en, this message translates to:
+  /// **'Fading out…'**
+  String get sleepTimerFadingLabel;
+
+  /// HUD text after playback starts.
+  ///
+  /// In en, this message translates to:
+  /// **'Playing'**
+  String get feedbackPlaying;
+
+  /// HUD text after playback pauses.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get feedbackPaused;
+
+  /// HUD text when Previous is pressed at the start of the queue.
+  ///
+  /// In en, this message translates to:
+  /// **'Already at the first track'**
+  String get feedbackFirstTrack;
+
+  /// HUD text when Next is pressed at the end of the queue.
+  ///
+  /// In en, this message translates to:
+  /// **'Already at the last track'**
+  String get feedbackLastTrack;
+
+  /// HUD text after stopping playback without clearing the queue.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped · queue kept'**
+  String get feedbackStopped;
+
+  /// HUD text after cancelling the sleep timer.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep timer cancelled'**
+  String get feedbackSleepTimerCancelled;
+
+  /// HUD text when a playback action has no current track.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is playing'**
+  String get feedbackNoTrack;
+
+  /// SnackBar when a file fails without a known title.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t play this file; skipped to the next track'**
+  String get playbackFailedNoTitle;
+
+  /// Notice when the timer expires and the app waits for the track to end.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep timer reached; waiting for the current track to finish'**
+  String get sleepTimerExpiredWaiting;
+
+  /// Notice after the sleep timer fades out and pauses.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep timer finished; playback paused'**
+  String get sleepTimerFinishedPaused;
+
+  /// Notice after the sleep timer stops at a track boundary.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep timer finished; playback stopped'**
+  String get sleepTimerFinishedStopped;
+
+  /// Queue toolbar count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No songs} =1{1 song} other{{count} songs}}'**
+  String queueTotalCount(int count);
+
+  /// Sleep timer preset label and HUD.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 minute} other{{count} minutes}}'**
+  String sleepTimerMinutes(int count);
+
+  /// SnackBar when consecutive playback failures stop auto-skip.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t play {count} tracks in a row; auto-skip stopped'**
+  String playbackFailedRepeated(int count);
+
+  /// Tooltip for the play-mode button.
+  ///
+  /// In en, this message translates to:
+  /// **'Play mode: {mode}'**
+  String queuePlayModeTooltip(String mode);
+
+  /// Sleep timer menu item that cancels an active timer.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel timer ({state})'**
+  String sleepTimerCancel(String state);
+
+  /// Tooltip for an active sleep timer.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep timer · {state}'**
+  String sleepTimerActiveTooltip(String state);
+
+  /// HUD message when starting a sleep timer.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep timer · {state}'**
+  String feedbackSleepTimerHud(String state);
+
+  /// SnackBar when a titled file fails and playback skips ahead.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t play {title}; skipped to the next track'**
+  String playbackFailedWithTitle(String title);
 }
 
 class _AppLocalizationsDelegate

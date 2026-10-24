@@ -31,7 +31,7 @@
 - **Windows 窗口最小尺寸（`WM_GETMINMAXINFO`）** → 见 §3 Phase 4，仍未做（需 Windows 环境验证，不阻塞 macOS 发布）。
 - **Windows SMTC（系统媒体控制）** → 见 §3 Phase 5，仍未做（不阻塞 macOS 发布）。
 - **字体资源**：`assets/fonts/BoutiqueBitmap9x9_Circle_Dot.ttf`（5.8MB）无任何引用且未在 `pubspec.yaml` 声明，建议删除（或在 `fonts:` 中正式声明后使用，否则会白占仓库体积；未打包进 app，不影响发布包大小）。
-- i18n 多语言支持 → 基建已完成（2026-10-24，见 §3 Phase 1）；现有页面字符串的迁移仍未做，见 `docs/I18n.md`。
+- ✅ **i18n 多语言支持**（2026-10-24 关闭）：基建与全部界面文案迁移已完成（English / 简体中文），约定见 `docs/I18n.md`；仅 macOS 原生菜单仍跟随系统语言，见 §3 第 4 项。
 
 ## 其他已登记待办
 
@@ -58,7 +58,7 @@
 - ✅ 现有页面硬编码中文**本轮不迁移**（后续分阶段，约定见 `docs/I18n.md`）
 - ✅ 验证：`flutter analyze` 除 `tool/` 历史 info 外无新增；`flutter test` 390 通过
 
-### i18n 后续迁移（进行中）
+### i18n 后续迁移
 1. 分批迁移 `features/` / `widgets/` 的硬编码中文（每批更新两份 ARB 与测试）
    - ✅ 公共层 + Shell（2026-10-24）：启动错误页、导航、迷你播放条、播放控制、
      搜索/空状态、歌曲行/信息卡
@@ -68,13 +68,14 @@
      复数与英文逗号分隔
    - ✅ 播放列表（2026-10-24）：页面 / 详情 / 收藏 / 导入导出 / 选择弹层 /
      歌曲菜单
-   - 剩余：播放页 / 队列 / 歌词 / 睡眠定时
+   - ✅ 播放页 / 队列 / 歌词 / 睡眠定时（2026-10-24）
 2. 去掉 core 枚举自带的 `label`/`description`，改 `lib/l10n` 映射
    - ✅ 主题色 / 歌词字号 / 效果强度 / 切句动画 / 对齐 / 距离模糊（2026-10-24）
    - ✅ `SongSortOrder`（随音乐库批次，2026-10-24）
-3. 服务层消息语义化（播放错误 / 睡眠定时提示 / HUD）
+3. ✅ 服务层消息语义化（2026-10-24）：播放错误 → `PlaybackFailure`、睡眠定时
+   提示 → `SleepTimerNotice`；HUD 注入 `AppLocalizations`
 4. macOS 原生菜单跟随应用内语言（Dart 推 `setLocale` + Swift 按语言 bundle 重建菜单）
-5. 硬编码文案护栏测试（`lib/` 除 `lib/l10n/` 外出现中文字面量即失败）
+5. ✅ 硬编码文案护栏测试（2026-10-24）：`lib/` 除 `lib/l10n/` 外出现中文字面量即失败
 
 ### Phase 4 — Windows 最小集
 - `windows/runner/win32_window.cpp` `MessageHandler` 处理 `WM_GETMINMAXINFO` → `ptMinTrackSize = (640,520)×DPI`（对齐 macOS `contentMinSize`）

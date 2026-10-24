@@ -190,7 +190,8 @@ void main() {
     engine.emitError('load');
     engine.emitError('load');
     await pumpEventQueue();
-    expect(player.takePlaybackError(), contains('已自动跳过'));
+    final failure = player.takePlaybackError();
+    expect(failure?.kind, PlaybackFailureKind.loadFailed);
 
     await Future<void>.delayed(const Duration(milliseconds: 700));
     expect(player.currentIndex, 1);
@@ -277,7 +278,9 @@ void main() {
     await player.next();
     await pumpEventQueue();
 
-    expect(player.takePlaybackError(), contains('已停止自动跳转'));
+    final failure = player.takePlaybackError();
+    expect(failure?.kind, PlaybackFailureKind.repeatedFailures);
+    expect(failure?.consecutiveCount, 3);
     expect(player.currentIndex, 2, reason: '应停在第 3 首，不再跳到第 4 首');
     expect(engine.loads.contains('/music/4.mp3'), isFalse);
 

@@ -9,6 +9,7 @@ import 'package:txvziwm/features/settings/lyrics_settings_page.dart';
 import 'package:txvziwm/features/settings/settings_page.dart';
 import 'package:txvziwm/features/shell/shell_controller.dart';
 import 'package:txvziwm/features/shell/shell_l10n.dart';
+import 'package:txvziwm/l10n/app_l10n.dart';
 import 'package:txvziwm/l10n/enum_labels.dart';
 import 'package:txvziwm/widgets/search_empty_state.dart';
 
@@ -217,6 +218,60 @@ void main() {
       expect(zh.artistSongs(2), '2 首歌曲');
       expect(en.artistAlbums(1), '1 album');
       expect(en.albumMatch(0), 'No matches');
+    });
+  });
+
+  group('服务层语言选择', () {
+    test('appLocalizationsFor 跟随持久化语言，system 跟随平台', () {
+      expect(
+        appLocalizationsFor(
+          'en',
+          platformLocale: const Locale('zh'),
+        ).settingsTitle,
+        'Settings',
+      );
+      expect(
+        appLocalizationsFor(
+          'zh',
+          platformLocale: const Locale('en'),
+        ).settingsTitle,
+        '设置',
+      );
+      expect(
+        appLocalizationsFor(
+          'system',
+          platformLocale: const Locale('zh'),
+        ).settingsTitle,
+        '设置',
+      );
+      expect(
+        appLocalizationsFor(
+          'system',
+          platformLocale: const Locale('en'),
+        ).settingsTitle,
+        'Settings',
+      );
+    });
+  });
+
+  group('播放页与播放反馈', () {
+    test('播放页 / 歌词 / HUD / 错误文案', () async {
+      final en = await loadL10n(const Locale('en'));
+      final zh = await loadL10n(const Locale('zh'));
+
+      expect(en.playerNowPlaying, 'Now playing');
+      expect(zh.playerQueueTab, '播放列表');
+      expect(en.lyricsEmpty, 'No lyrics');
+      expect(en.feedbackPlaying, 'Playing');
+      expect(zh.feedbackFirstTrack, '已是第一首');
+      expect(
+        en.playbackFailedWithTitle('X'),
+        "Couldn't play X; skipped to the next track",
+      );
+      expect(zh.playbackFailedRepeated(3), '连续 3 次无法播放，已停止自动跳转');
+      expect(en.sleepTimerMinutes(5), '5 minutes');
+      expect(zh.sleepTimerMinutes(5), '5 分钟');
+      expect(en.sleepTimerCancel('5 minutes'), 'Cancel timer (5 minutes)');
     });
   });
 

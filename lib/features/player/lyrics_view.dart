@@ -222,7 +222,7 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
             Padding(
               padding: EdgeInsets.only(left: widget.isNarrow ? 12 : 0),
               child: Text(
-                '歌词',
+                context.l10n.lyricsTitle,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -235,14 +235,14 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
             Builder(
               builder: (anchor) => IconButton(
                 icon: const Icon(Icons.text_fields_rounded, size: 20),
-                tooltip: '文本大小',
+                tooltip: context.l10n.lyricsTextSizeTooltip,
                 onPressed: () => _showTextSizeMenu(anchor),
               ),
             ),
             if (widget.onOpenSettings != null)
               IconButton(
                 icon: const Icon(Icons.tune_rounded, size: 20),
-                tooltip: '歌词显示设置',
+                tooltip: context.l10n.lyricsSettingsTooltip,
                 onPressed: widget.onOpenSettings,
               ),
           ],
@@ -274,7 +274,9 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
         : theme.colorScheme.onSurfaceVariant;
     return IconButton(
       icon: Icon(Icons.translate_rounded, size: 20, color: color),
-      tooltip: active ? '关闭翻译' : '显示翻译',
+      tooltip: active
+          ? context.l10n.lyricsHideTranslation
+          : context.l10n.lyricsShowTranslation,
       onPressed: enabled
           ? () {
               setState(() {
@@ -299,7 +301,7 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
           ),
           const SizedBox(height: 12),
           Text(
-            '暂无歌词',
+            context.l10n.lyricsEmpty,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
             ),

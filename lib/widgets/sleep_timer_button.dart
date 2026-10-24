@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../core/services/sleep_timer_service.dart';
+import '../l10n/app_localizations.dart';
+import '../l10n/l10n.dart';
 import 'menu_morph_route.dart';
 import 'morph_menu.dart';
 
@@ -68,7 +70,11 @@ class SleepTimerButton extends StatelessWidget {
             ? theme.colorScheme.primary
             : theme.colorScheme.onSurfaceVariant;
         return Tooltip(
-          message: state == null ? '睡眠定时' : '睡眠定时 · ${sleepTimerLabel(state)}',
+          message: state == null
+              ? context.l10n.sleepTimerTitle
+              : context.l10n.sleepTimerActiveTooltip(
+                  sleepTimerLabel(context.l10n, state),
+                ),
           child: InkWell(
             onTap: () => _openMenu(context, state),
             borderRadius: _kHoverShape,
@@ -76,7 +82,7 @@ class SleepTimerButton extends StatelessWidget {
               height: _kSize,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: _label(state, color),
+                child: _label(context, state, color),
               ),
             ),
           ),
@@ -86,10 +92,11 @@ class SleepTimerButton extends StatelessWidget {
   }
 
   /// 按钮显示区：图标 + 文案（图标态 36×36，带文案时是胶囊）。
-  Widget _label(SleepTimerState? state, Color color) {
+  Widget _label(BuildContext context, SleepTimerState? state, Color color) {
+    final l10n = context.l10n;
     final label = state == null
-        ? '睡眠定时'
-        : (state.fading ? '淡出中' : sleepTimerLabel(state));
+        ? l10n.sleepTimerTitle
+        : (state.fading ? l10n.sleepTimerFading : sleepTimerLabel(l10n, state));
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -128,7 +135,7 @@ class SleepTimerButton extends StatelessWidget {
 
     // 面板的宽高都必须**提前算准**（终点矩形是算出来的，不能像弹层菜单那样
     // 先布局再定位）；尺寸约定与行样式都在 `morph_menu.dart` 里共用。
-    final entries = _entries(state);
+    final entries = _entries(context.l10n, state);
     final dividerAfter = _dividerAfter(entries);
 
     Navigator.of(context)
@@ -174,16 +181,22 @@ class SleepTimerButton extends StatelessWidget {
   }
 
   /// 菜单条目（顺序固定：预设 → 两个模式 → 激活时的「取消定时」）。
-  List<MorphMenuEntry<String>> _entries(SleepTimerState? state) => [
+  List<MorphMenuEntry<String>> _entries(
+    AppLocalizations l10n,
+    SleepTimerState? state,
+  ) => [
     for (final preset in presets)
-      MorphMenuEntry('${preset.inMinutes} 分钟', '${preset.inMinutes}'),
+      MorphMenuEntry(
+        l10n.sleepTimerMinutes(preset.inMinutes),
+        '${preset.inMinutes}',
+      ),
     MorphMenuEntry.checkable(
-      '播完当前曲目',
+      l10n.sleepTimerEndOfTrack,
       _kEndOfTrack,
       checked: state?.mode == SleepTimerMode.endOfTrack,
     ),
     MorphMenuEntry.checkable(
-      '播完当前播放列表',
+      l10n.sleepTimerEndOfQueue,
       _kEndOfQueue,
       checked: state?.mode == SleepTimerMode.endOfQueue,
     ),
@@ -191,7 +204,10 @@ class SleepTimerButton extends StatelessWidget {
       // 倒计时模式下把剩余时间写在取消项里：菜单里的选项无法"勾选"一个正在
       // 递减的值，这是唯一能显示进度的位置（淡出期间显示「正在淡出…」，
       // 提示用户此刻取消还来得及）。
-      MorphMenuEntry('取消定时（${sleepTimerLabel(state)}）', _kCancel),
+      MorphMenuEntry(
+        l10n.sleepTimerCancel(sleepTimerLabel(l10n, state)),
+        _kCancel,
+      ),
   ];
 
   /// 分隔线位置：预设与模式之间一条，激活时模式与「取消定时」之间再来一条。
@@ -202,14 +218,15 @@ class SleepTimerButton extends StatelessWidget {
 }
 
 /// 睡眠定时状态的可读文案（菜单/tooltip 用）。
-String sleepTimerLabel(SleepTimerState state) => switch (state.mode) {
-  SleepTimerMode.duration =>
-    state.fading
-        ? '正在淡出…'
-        : formatSleepTimerRemaining(state.remaining ?? Duration.zero),
-  SleepTimerMode.endOfTrack => '播完当前曲目',
-  SleepTimerMode.endOfQueue => '播完当前播放列表',
-};
+String sleepTimerLabel(AppLocalizations l10n, SleepTimerState state) =>
+    switch (state.mode) {
+      SleepTimerMode.duration =>
+        state.fading
+            ? l10n.sleepTimerFadingLabel
+            : formatSleepTimerRemaining(state.remaining ?? Duration.zero),
+      SleepTimerMode.endOfTrack => l10n.sleepTimerEndOfTrack,
+      SleepTimerMode.endOfQueue => l10n.sleepTimerEndOfQueue,
+    };
 
 /// 把剩余时长格式化成 `M:SS`（满 1 小时为 `H:MM:SS`）。
 String formatSleepTimerRemaining(Duration remaining) {

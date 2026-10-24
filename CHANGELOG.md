@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-24
+
 ### Added
 - Localization infrastructure for English and Simplified Chinese. `flutter gen-l10n`
   generates `AppLocalizations` from `lib/l10n/app_en.arb` (template) and `app_zh.arb`;
@@ -15,9 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A new Settings › General › Language row persists the choice in `settings.json`
   (`system` / `en` / `zh`, unknown values fall back to `system`), and the lyrics
   translation subline now follows the in-app language instead of the platform locale.
-  Existing page copy is intentionally not migrated yet — see `docs/I18n.md`.
+  All existing UI copy is migrated to the ARB files — see `docs/I18n.md`.
   The macOS native menu still follows the system language; syncing it with the
   in-app choice is tracked in `docs/TODO.md`
+- A guard test fails when a CJK string literal appears under `lib/` outside
+  `lib/l10n/`, so new hardcoded UI copy cannot slip back in
 
 ### Changed
 - Shell navigation, the startup error page, the mini player, playback controls,
@@ -34,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Playlists, favorites, M3U import/export dialogs, the playlist picker, the
   add-songs sheet and the shared song menu now follow the app language.
   Import/export results and selected-song counts use ICU plurals
+- The player page, queue, lyrics view and sleep-timer control now follow the app
+  language. Service messages are semantic (`PlaybackFailure`, `SleepTimerNotice`)
+  and localized at the presentation layer, so HUD and notification text also
+  change as soon as the in-app language changes
 
 ## [0.2.8] - 2026-10-22
 
@@ -50,20 +58,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gesture into a Dart event, and reaching it would mean a native monitor in the
   runner (see `Pitfalls.md` B9) — turn such a tool off, or make it send ⌘`[`
 
-## [0.2.7+2] - 2026-10-22
-
-### Fixed
-- Returning from the background no longer leaves the previous song's lyrics
-  visible under the new track. `LyricsViewModel` now reconciles the document
-  owner against `PlayerService.currentSong` on resume, reloads when the
-  background missed a track change or left a load half-finished, and
-  reattaches the progress source when needed
-- `LyricsView` rebuilds on resume and keys `LyricView` by the current document,
-  so a view session created before backgrounding cannot be reused for the new
-  song
-
-## [0.2.7+1] - 2026-10-22
-
 ### Fixed
 - Track changes no longer leave the previous song's lyrics under the new title
   or replay the old line scroll. The lyric view clears immediately, shows a
@@ -73,6 +67,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   switch cannot overwrite the current song
 - Toggling translation now reparses the current document without resetting the
   playback position
+- Returning from the background no longer leaves the previous song's lyrics
+  visible under the new track. `LyricsViewModel` now reconciles the document
+  owner against `PlayerService.currentSong` on resume, reloads when the
+  background missed a track change or left a load half-finished, and
+  reattaches the progress source when needed
+- `LyricsView` rebuilds on resume and keys `LyricView` by the current document,
+  so a view session created before backgrounding cannot be reused for the new
+  song
 
 ## [0.2.7] - 2026-10-22
 

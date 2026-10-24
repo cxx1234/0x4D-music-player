@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
 import 'hud_service.dart';
 import 'player_service.dart';
 import 'sleep_timer_service.dart';
@@ -27,18 +28,27 @@ class PlaybackPulse {
 ///   只有它能给出反馈）；
 /// - [HudService]：底部浮动提示 —— 其他页面上只有它看得见。
 ///
-/// 文案集中在这里：本仓库没有 i18n，两个入口必须说同一句话，分开写迟早会跑偏。
+/// 文案集中在这里：两个入口必须说同一句话，分开写迟早会跑偏。具体语言在
+/// **事件发生时**经 [_l10n] 取当前应用语言（服务没有 BuildContext）。
 ///
 /// ⚠️ 范围刻意只有 音量 / 切歌 / 播放暂停 / 停止 / **睡眠定时**：循环模式、随机、列表
 /// 内的动作都已有可见的 UI 状态，再叠一层提示只是噪音。睡眠定时是例外——那个
 /// 按钮只在播放页有，而 HUD **恰好在播放页被禁用**，所以两条入口互不重叠：
 /// 播放页上靠按钮自身变样，其它页面上靠 HUD。
 class PlaybackFeedbackService {
-  PlaybackFeedbackService(this._player, this._hud, this._sleepTimer);
+  PlaybackFeedbackService(
+    this._player,
+    this._hud,
+    this._sleepTimer, {
+    required this.l10n,
+  });
 
   final PlayerService _player;
   final HudService _hud;
   final SleepTimerService _sleepTimer;
+
+  /// 当前应用语言（每次事件现取，语言切换后下一条 HUD 即为新语言）。
+  final AppLocalizations Function() l10n;
 
   int _seq = 0;
 
@@ -71,11 +81,12 @@ class PlaybackFeedbackService {
   /// 与"当前已暂停"两种读法混淆。
   void _afterPlayStateChange() {
     final playing = _player.isPlaying;
+    final strings = l10n();
     _emit(PlaybackAction.playPause);
     _hud.show(
       HudMessage(
         icon: playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-        text: playing ? '播放中' : '已暂停',
+        text: playing ? strings.feedbackPlaying : strings.feedbackPaused,
         kind: HudKind.playback,
       ),
     );
@@ -87,12 +98,13 @@ class PlaybackFeedbackService {
     final beforeId = _player.currentSong?.id;
     await _player.previous();
     _emit(PlaybackAction.previous);
+    final strings = l10n();
     _showTrackAfterMove(
-      label: '上一首',
+      label: strings.playerPrevious,
       icon: Icons.skip_previous_rounded,
       beforeIndex: beforeIndex,
       beforeId: beforeId,
-      emptyQueueText: '已是第一首',
+      emptyQueueText: strings.feedbackFirstTrack,
     );
   }
 
@@ -102,12 +114,13 @@ class PlaybackFeedbackService {
     final beforeId = _player.currentSong?.id;
     await _player.next();
     _emit(PlaybackAction.next);
+    final strings = l10n();
     _showTrackAfterMove(
-      label: '下一首',
+      label: strings.playerNext,
       icon: Icons.skip_next_rounded,
       beforeIndex: beforeIndex,
       beforeId: beforeId,
-      emptyQueueText: '已是最后一首',
+      emptyQueueText: strings.feedbackLastTrack,
     );
   }
 
@@ -122,9 +135,9 @@ class PlaybackFeedbackService {
   Future<void> stop() async {
     await _player.stopPlayback();
     _hud.show(
-      const HudMessage(
+      HudMessage(
         icon: Icons.stop_rounded,
-        text: '已停止 · 保留队列',
+        text: l10n().feedbackStopped,
         kind: HudKind.playback,
       ),
     );
@@ -155,7 +168,11 @@ class PlaybackFeedbackService {
   /// 页面上 HUD 是唯一反馈。
   void startSleepTimer(int minutes) {
     _sleepTimer.startForDuration(Duration(minutes: minutes));
-    _showSleepTimer('睡眠定时 · $minutes 分钟', Icons.timer_outlined);
+    final strings = l10n();
+    _showSleepTimer(
+      strings.feedbackSleepTimerHud(strings.sleepTimerMinutes(minutes)),
+      Icons.timer_outlined,
+    );
   }
 
   /// 睡眠定时：播完当前曲目 / 播完当前播放列表后停止。
@@ -165,8 +182,13 @@ class PlaybackFeedbackService {
     } else {
       _sleepTimer.startForEndOfTrack();
     }
+    final strings = l10n();
     _showSleepTimer(
-      atQueueEnd ? '睡眠定时 · 播完当前播放列表' : '睡眠定时 · 播完当前曲目',
+      strings.feedbackSleepTimerHud(
+        atQueueEnd
+            ? strings.sleepTimerEndOfQueue
+            : strings.sleepTimerEndOfTrack,
+      ),
       Icons.timer_outlined,
     );
   }
@@ -174,7 +196,10 @@ class PlaybackFeedbackService {
   /// 睡眠定时：取消。
   void cancelSleepTimer() {
     _sleepTimer.cancel();
-    _showSleepTimer('已取消睡眠定时', Icons.timer_off_outlined);
+    _showSleepTimer(
+      l10n().feedbackSleepTimerCancelled,
+      Icons.timer_off_outlined,
+    );
   }
 
   void _showSleepTimer(String text, IconData icon) {
@@ -197,9 +222,9 @@ class PlaybackFeedbackService {
     if (after == null && beforeId == null) {
       // 队列里根本没歌：⌘→ 这类按键不该被解释成"最后一首"。
       _hud.show(
-        const HudMessage(
+        HudMessage(
           icon: Icons.music_off_rounded,
-          text: '没有播放中的歌曲',
+          text: l10n().feedbackNoTrack,
           kind: HudKind.track,
         ),
       );

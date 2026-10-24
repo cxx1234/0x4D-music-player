@@ -918,4 +918,185 @@ class AppLocalizationsZh extends AppLocalizations {
   String playlistDeleteConfirm(String name) {
     return '确定删除\"$name\"吗？此操作不可撤销。';
   }
+
+  @override
+  String get commonClose => '关闭';
+
+  @override
+  String get playerCollapse => '收起';
+
+  @override
+  String get playerNowPlaying => '正在播放';
+
+  @override
+  String get playerLyricsTab => '歌词';
+
+  @override
+  String get playerQueueTab => '播放列表';
+
+  @override
+  String get playerPickSongToStart => '选择一首歌曲开始播放';
+
+  @override
+  String get lyricsTitle => '歌词';
+
+  @override
+  String get lyricsTextSizeTooltip => '文本大小';
+
+  @override
+  String get lyricsSettingsTooltip => '歌词显示设置';
+
+  @override
+  String get lyricsHideTranslation => '关闭翻译';
+
+  @override
+  String get lyricsShowTranslation => '显示翻译';
+
+  @override
+  String get lyricsEmpty => '暂无歌词';
+
+  @override
+  String get queueSequential => '顺序播放';
+
+  @override
+  String get queueShuffle => '随机播放';
+
+  @override
+  String get queueRepeatAll => '循环列表播放';
+
+  @override
+  String get queueRepeatOne => '单曲循环播放';
+
+  @override
+  String get queueAtBottomSuffix => ' · 到底了';
+
+  @override
+  String get queueClearTitle => '清空播放列表';
+
+  @override
+  String get queueClearConfirm => '确定要清空当前播放列表吗？';
+
+  @override
+  String get queueClearTooltip => '清空列表';
+
+  @override
+  String get queueRemove => '从队列移除';
+
+  @override
+  String get queueEmpty => '播放列表为空';
+
+  @override
+  String get queueLocate => '定位到当前播放';
+
+  @override
+  String queueDeleteSelected(int count) {
+    return '删除选中 ($count)';
+  }
+
+  @override
+  String get queueSelectDelete => '选择删除';
+
+  @override
+  String get queueSingleRepeat => '单曲循环';
+
+  @override
+  String get queueModeRepeatAll => '列表循环';
+
+  @override
+  String get sleepTimerTitle => '睡眠定时';
+
+  @override
+  String get sleepTimerFading => '淡出中';
+
+  @override
+  String get sleepTimerEndOfTrack => '播完当前曲目';
+
+  @override
+  String get sleepTimerEndOfQueue => '播完当前播放列表';
+
+  @override
+  String get sleepTimerFadingLabel => '正在淡出…';
+
+  @override
+  String get feedbackPlaying => '播放中';
+
+  @override
+  String get feedbackPaused => '已暂停';
+
+  @override
+  String get feedbackFirstTrack => '已是第一首';
+
+  @override
+  String get feedbackLastTrack => '已是最后一首';
+
+  @override
+  String get feedbackStopped => '已停止 · 保留队列';
+
+  @override
+  String get feedbackSleepTimerCancelled => '已取消睡眠定时';
+
+  @override
+  String get feedbackNoTrack => '没有播放中的歌曲';
+
+  @override
+  String get playbackFailedNoTitle => '无法播放该文件，已自动跳过';
+
+  @override
+  String get sleepTimerExpiredWaiting => '睡眠定时到点，播完当前曲目后停止';
+
+  @override
+  String get sleepTimerFinishedPaused => '睡眠定时结束，已暂停';
+
+  @override
+  String get sleepTimerFinishedStopped => '睡眠定时结束，已停止播放';
+
+  @override
+  String queueTotalCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '共 $count 首',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String sleepTimerMinutes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 分钟',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String playbackFailedRepeated(int count) {
+    return '连续 $count 次无法播放，已停止自动跳转';
+  }
+
+  @override
+  String queuePlayModeTooltip(String mode) {
+    return '播放模式：$mode';
+  }
+
+  @override
+  String sleepTimerCancel(String state) {
+    return '取消定时（$state）';
+  }
+
+  @override
+  String sleepTimerActiveTooltip(String state) {
+    return '睡眠定时 · $state';
+  }
+
+  @override
+  String feedbackSleepTimerHud(String state) {
+    return '睡眠定时 · $state';
+  }
+
+  @override
+  String playbackFailedWithTitle(String title) {
+    return '无法播放：$title，已自动跳过';
+  }
 }

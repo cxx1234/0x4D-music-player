@@ -1138,5 +1138,254 @@
         "type": "String"
       }
     }
+  },
+  "commonClose": "Close",
+  "@commonClose": {
+    "description": "Generic close action or tooltip."
+  },
+  "playerCollapse": "Collapse",
+  "@playerCollapse": {
+    "description": "Tooltip for collapsing the now-playing page."
+  },
+  "playerNowPlaying": "Now playing",
+  "@playerNowPlaying": {
+    "description": "Title of the now-playing page."
+  },
+  "playerLyricsTab": "Lyrics",
+  "@playerLyricsTab": {
+    "description": "Now-playing tab: lyrics."
+  },
+  "playerQueueTab": "Queue",
+  "@playerQueueTab": {
+    "description": "Now-playing tab: playback queue."
+  },
+  "playerPickSongToStart": "Pick a song to start playing",
+  "@playerPickSongToStart": {
+    "description": "Empty now-playing page hint."
+  },
+  "lyricsTitle": "Lyrics",
+  "@lyricsTitle": {
+    "description": "Toolbar label above the lyrics view."
+  },
+  "lyricsTextSizeTooltip": "Text size",
+  "@lyricsTextSizeTooltip": {
+    "description": "Tooltip for the lyric text-size menu."
+  },
+  "lyricsSettingsTooltip": "Lyrics display settings",
+  "@lyricsSettingsTooltip": {
+    "description": "Tooltip that opens the lyrics settings page."
+  },
+  "lyricsHideTranslation": "Hide translation",
+  "@lyricsHideTranslation": {
+    "description": "Tooltip when the translation subline is visible."
+  },
+  "lyricsShowTranslation": "Show translation",
+  "@lyricsShowTranslation": {
+    "description": "Tooltip when the translation subline is hidden."
+  },
+  "lyricsEmpty": "No lyrics",
+  "@lyricsEmpty": {
+    "description": "Empty lyrics placeholder."
+  },
+  "queueSequential": "Sequential",
+  "@queueSequential": {
+    "description": "Queue footer: sequential playback."
+  },
+  "queueShuffle": "Shuffle",
+  "@queueShuffle": {
+    "description": "Queue footer: shuffled playback."
+  },
+  "queueRepeatAll": "Repeat all",
+  "@queueRepeatAll": {
+    "description": "Queue footer: repeat the whole list."
+  },
+  "queueRepeatOne": "Repeat one",
+  "@queueRepeatOne": {
+    "description": "Queue footer: repeat the current track."
+  },
+  "queueAtBottomSuffix": " · End of queue",
+  "@queueAtBottomSuffix": {
+    "description": "Suffix appended to the queue footer when scrolled to the bottom."
+  },
+  "queueClearTitle": "Clear queue",
+  "@queueClearTitle": {
+    "description": "Dialog title that clears the queue."
+  },
+  "queueClearConfirm": "Clear the current queue?",
+  "@queueClearConfirm": {
+    "description": "Confirmation body for clearing the queue."
+  },
+  "queueClearTooltip": "Clear queue",
+  "@queueClearTooltip": {
+    "description": "Tooltip for the clear-queue button."
+  },
+  "queueRemove": "Remove from queue",
+  "@queueRemove": {
+    "description": "Queue row context menu item."
+  },
+  "queueEmpty": "The queue is empty",
+  "@queueEmpty": {
+    "description": "Empty queue placeholder."
+  },
+  "queueLocate": "Go to now playing",
+  "@queueLocate": {
+    "description": "Tooltip for scrolling the queue to the current track."
+  },
+  "queueDeleteSelected": "Delete selected ({count})",
+  "@queueDeleteSelected": {
+    "description": "Tooltip for deleting selected queue rows.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "queueSelectDelete": "Select to delete",
+  "@queueSelectDelete": {
+    "description": "Tooltip that enters multi-select delete mode."
+  },
+  "queueSingleRepeat": "Repeat one",
+  "@queueSingleRepeat": {
+    "description": "Tooltip for the single-repeat toggle."
+  },
+  "queueModeRepeatAll": "Repeat all",
+  "@queueModeRepeatAll": {
+    "description": "Play-mode tooltip: repeat the list."
+  },
+  "sleepTimerTitle": "Sleep timer",
+  "@sleepTimerTitle": {
+    "description": "Sleep timer button label and HUD prefix."
+  },
+  "sleepTimerFading": "Fading out",
+  "@sleepTimerFading": {
+    "description": "Sleep timer button label while fading out."
+  },
+  "sleepTimerEndOfTrack": "End of track",
+  "@sleepTimerEndOfTrack": {
+    "description": "Sleep timer mode: stop after the current track."
+  },
+  "sleepTimerEndOfQueue": "End of playlist",
+  "@sleepTimerEndOfQueue": {
+    "description": "Sleep timer mode: stop at the end of the queue."
+  },
+  "sleepTimerFadingLabel": "Fading out…",
+  "@sleepTimerFadingLabel": {
+    "description": "Sleep timer label while the fade-out is running."
+  },
+  "feedbackPlaying": "Playing",
+  "@feedbackPlaying": {
+    "description": "HUD text after playback starts."
+  },
+  "feedbackPaused": "Paused",
+  "@feedbackPaused": {
+    "description": "HUD text after playback pauses."
+  },
+  "feedbackFirstTrack": "Already at the first track",
+  "@feedbackFirstTrack": {
+    "description": "HUD text when Previous is pressed at the start of the queue."
+  },
+  "feedbackLastTrack": "Already at the last track",
+  "@feedbackLastTrack": {
+    "description": "HUD text when Next is pressed at the end of the queue."
+  },
+  "feedbackStopped": "Stopped · queue kept",
+  "@feedbackStopped": {
+    "description": "HUD text after stopping playback without clearing the queue."
+  },
+  "feedbackSleepTimerCancelled": "Sleep timer cancelled",
+  "@feedbackSleepTimerCancelled": {
+    "description": "HUD text after cancelling the sleep timer."
+  },
+  "feedbackNoTrack": "Nothing is playing",
+  "@feedbackNoTrack": {
+    "description": "HUD text when a playback action has no current track."
+  },
+  "playbackFailedNoTitle": "Couldn't play this file; skipped to the next track",
+  "@playbackFailedNoTitle": {
+    "description": "SnackBar when a file fails without a known title."
+  },
+  "sleepTimerExpiredWaiting": "Sleep timer reached; waiting for the current track to finish",
+  "@sleepTimerExpiredWaiting": {
+    "description": "Notice when the timer expires and the app waits for the track to end."
+  },
+  "sleepTimerFinishedPaused": "Sleep timer finished; playback paused",
+  "@sleepTimerFinishedPaused": {
+    "description": "Notice after the sleep timer fades out and pauses."
+  },
+  "sleepTimerFinishedStopped": "Sleep timer finished; playback stopped",
+  "@sleepTimerFinishedStopped": {
+    "description": "Notice after the sleep timer stops at a track boundary."
+  },
+  "queueTotalCount": "{count, plural, =0{No songs} =1{1 song} other{{count} songs}}",
+  "@queueTotalCount": {
+    "description": "Queue toolbar count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sleepTimerMinutes": "{count, plural, =1{1 minute} other{{count} minutes}}",
+  "@sleepTimerMinutes": {
+    "description": "Sleep timer preset label and HUD.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "playbackFailedRepeated": "Couldn't play {count} tracks in a row; auto-skip stopped",
+  "@playbackFailedRepeated": {
+    "description": "SnackBar when consecutive playback failures stop auto-skip.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "queuePlayModeTooltip": "Play mode: {mode}",
+  "@queuePlayModeTooltip": {
+    "description": "Tooltip for the play-mode button.",
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "sleepTimerCancel": "Cancel timer ({state})",
+  "@sleepTimerCancel": {
+    "description": "Sleep timer menu item that cancels an active timer.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "sleepTimerActiveTooltip": "Sleep timer · {state}",
+  "@sleepTimerActiveTooltip": {
+    "description": "Tooltip for an active sleep timer.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "feedbackSleepTimerHud": "Sleep timer · {state}",
+  "@feedbackSleepTimerHud": {
+    "description": "HUD message when starting a sleep timer.",
+    "placeholders": {
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "playbackFailedWithTitle": "Couldn't play {title}; skipped to the next track",
+  "@playbackFailedWithTitle": {
+    "description": "SnackBar when a titled file fails and playback skips ahead.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
   }
 }

@@ -981,4 +981,192 @@ class AppLocalizationsEn extends AppLocalizations {
   String playlistDeleteConfirm(String name) {
     return 'Delete \"$name\"? This can\'t be undone.';
   }
+
+  @override
+  String get commonClose => 'Close';
+
+  @override
+  String get playerCollapse => 'Collapse';
+
+  @override
+  String get playerNowPlaying => 'Now playing';
+
+  @override
+  String get playerLyricsTab => 'Lyrics';
+
+  @override
+  String get playerQueueTab => 'Queue';
+
+  @override
+  String get playerPickSongToStart => 'Pick a song to start playing';
+
+  @override
+  String get lyricsTitle => 'Lyrics';
+
+  @override
+  String get lyricsTextSizeTooltip => 'Text size';
+
+  @override
+  String get lyricsSettingsTooltip => 'Lyrics display settings';
+
+  @override
+  String get lyricsHideTranslation => 'Hide translation';
+
+  @override
+  String get lyricsShowTranslation => 'Show translation';
+
+  @override
+  String get lyricsEmpty => 'No lyrics';
+
+  @override
+  String get queueSequential => 'Sequential';
+
+  @override
+  String get queueShuffle => 'Shuffle';
+
+  @override
+  String get queueRepeatAll => 'Repeat all';
+
+  @override
+  String get queueRepeatOne => 'Repeat one';
+
+  @override
+  String get queueAtBottomSuffix => ' · End of queue';
+
+  @override
+  String get queueClearTitle => 'Clear queue';
+
+  @override
+  String get queueClearConfirm => 'Clear the current queue?';
+
+  @override
+  String get queueClearTooltip => 'Clear queue';
+
+  @override
+  String get queueRemove => 'Remove from queue';
+
+  @override
+  String get queueEmpty => 'The queue is empty';
+
+  @override
+  String get queueLocate => 'Go to now playing';
+
+  @override
+  String queueDeleteSelected(int count) {
+    return 'Delete selected ($count)';
+  }
+
+  @override
+  String get queueSelectDelete => 'Select to delete';
+
+  @override
+  String get queueSingleRepeat => 'Repeat one';
+
+  @override
+  String get queueModeRepeatAll => 'Repeat all';
+
+  @override
+  String get sleepTimerTitle => 'Sleep timer';
+
+  @override
+  String get sleepTimerFading => 'Fading out';
+
+  @override
+  String get sleepTimerEndOfTrack => 'End of track';
+
+  @override
+  String get sleepTimerEndOfQueue => 'End of playlist';
+
+  @override
+  String get sleepTimerFadingLabel => 'Fading out…';
+
+  @override
+  String get feedbackPlaying => 'Playing';
+
+  @override
+  String get feedbackPaused => 'Paused';
+
+  @override
+  String get feedbackFirstTrack => 'Already at the first track';
+
+  @override
+  String get feedbackLastTrack => 'Already at the last track';
+
+  @override
+  String get feedbackStopped => 'Stopped · queue kept';
+
+  @override
+  String get feedbackSleepTimerCancelled => 'Sleep timer cancelled';
+
+  @override
+  String get feedbackNoTrack => 'Nothing is playing';
+
+  @override
+  String get playbackFailedNoTitle =>
+      'Couldn\'t play this file; skipped to the next track';
+
+  @override
+  String get sleepTimerExpiredWaiting =>
+      'Sleep timer reached; waiting for the current track to finish';
+
+  @override
+  String get sleepTimerFinishedPaused =>
+      'Sleep timer finished; playback paused';
+
+  @override
+  String get sleepTimerFinishedStopped =>
+      'Sleep timer finished; playback stopped';
+
+  @override
+  String queueTotalCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count songs',
+      one: '1 song',
+      zero: 'No songs',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String sleepTimerMinutes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count minutes',
+      one: '1 minute',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String playbackFailedRepeated(int count) {
+    return 'Couldn\'t play $count tracks in a row; auto-skip stopped';
+  }
+
+  @override
+  String queuePlayModeTooltip(String mode) {
+    return 'Play mode: $mode';
+  }
+
+  @override
+  String sleepTimerCancel(String state) {
+    return 'Cancel timer ($state)';
+  }
+
+  @override
+  String sleepTimerActiveTooltip(String state) {
+    return 'Sleep timer · $state';
+  }
+
+  @override
+  String feedbackSleepTimerHud(String state) {
+    return 'Sleep timer · $state';
+  }
+
+  @override
+  String playbackFailedWithTitle(String title) {
+    return 'Couldn\'t play $title; skipped to the next track';
+  }
 }

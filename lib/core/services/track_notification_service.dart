@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../l10n/app_l10n.dart';
 import '../database/database.dart';
 import '../utils/logger.dart';
 import 'player_service.dart';
@@ -91,7 +92,19 @@ class TrackNotificationService {
     // 先保持 no-op，避免漏传平台 settings 触发运行时 ArgumentError。
     if (!Platform.isMacOS) return;
 
+    await _initializePlugin();
+    if (_ready) _player.currentSongNotifier.addListener(_onSongChanged);
+  }
+
+  /// 语言切换后重新注册通知动作，让「下一首」按钮标签跟随应用语言。
+  Future<void> refreshLocale() async {
+    if (!Platform.isMacOS || !_ready) return;
+    await _initializePlugin();
+  }
+
+  Future<void> _initializePlugin() async {
     try {
+      final l10n = appLocalizationsFor(_settings.settings.locale);
       await _plugin.initialize(
         // 含通知动作时不能 const：DarwinNotificationAction 只有 factory 构造。
         settings: InitializationSettings(
@@ -106,7 +119,7 @@ class TrackNotificationService {
               DarwinNotificationCategory(
                 _categoryId,
                 actions: <DarwinNotificationAction>[
-                  DarwinNotificationAction.plain(_actionNext, '下一首'),
+                  DarwinNotificationAction.plain(_actionNext, l10n.playerNext),
                 ],
               ),
             ],
@@ -122,10 +135,7 @@ class TrackNotificationService {
       AppLogger.info('Notify', 'Notifications initialized');
     } catch (e) {
       AppLogger.warning('Notify', 'Failed to initialize notifications', e);
-      return;
     }
-
-    _player.currentSongNotifier.addListener(_onSongChanged);
   }
 
   void _onSongChanged() {

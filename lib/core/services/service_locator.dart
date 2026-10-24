@@ -4,6 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../audio/audio_engine_factory.dart';
 import '../audio/platform_media_controls.dart';
+import '../../l10n/app_l10n.dart';
 import '../database/database.dart';
 import '../utils/app_locale.dart';
 import '../utils/logger.dart';
@@ -275,7 +276,12 @@ class ServiceLocator {
 
     // 外部操作（菜单/媒体键）的统一出口：菜单与媒体控制都经它转发，
     // 从而共享同一套 HUD 文案与控件脉冲；睡眠定时动作也经它（原生菜单入口）。
-    _feedback = PlaybackFeedbackService(_player!, hud, _sleepTimer!);
+    _feedback = PlaybackFeedbackService(
+      _player!,
+      hud,
+      _sleepTimer!,
+      l10n: () => appLocalizationsFor(_settings!.settings.locale),
+    );
 
     // macOS 沙箱：恢复 security-scoped bookmarks（与 UI 生命周期解耦，
     // 保证每次启动都无条件执行，不依赖音乐库页面是否成功渲染）。

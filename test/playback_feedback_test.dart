@@ -6,7 +6,9 @@ import 'package:txvziwm/core/services/hud_service.dart';
 import 'package:txvziwm/core/services/playback_feedback_service.dart';
 import 'package:txvziwm/core/services/player_service.dart';
 import 'package:txvziwm/core/services/sleep_timer_service.dart';
+import 'package:txvziwm/l10n/app_localizations.dart';
 
+import 'helpers/l10n.dart';
 import 'helpers/silent_audio_engine.dart';
 
 /// 外部播放入口（原生菜单 / 媒体键 / 系统「正在播放」面板）的反馈契约：
@@ -18,12 +20,19 @@ void main() {
   late HudService hud;
   late SleepTimerService sleepTimer;
   late PlaybackFeedbackService feedback;
+  late AppLocalizations l10n;
 
-  setUp(() {
+  setUp(() async {
     player = _StubPlayer();
     hud = HudService();
     sleepTimer = SleepTimerService(player);
-    feedback = PlaybackFeedbackService(player, hud, sleepTimer);
+    l10n = await loadL10n();
+    feedback = PlaybackFeedbackService(
+      player,
+      hud,
+      sleepTimer,
+      l10n: () => l10n,
+    );
   });
 
   tearDown(() {

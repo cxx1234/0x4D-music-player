@@ -25,14 +25,6 @@ class FolderWatcherEvent {
     required this.addedOrUpdated,
     required this.removed,
   });
-
-  String get description {
-    final parts = <String>[
-      if (addedOrUpdated > 0) '添加/更新 $addedOrUpdated',
-      if (removed > 0) '移除 $removed',
-    ];
-    return parts.isEmpty ? '无变化' : parts.join('，');
-  }
 }
 
 /// Watches configured music folders for file changes in real time.
