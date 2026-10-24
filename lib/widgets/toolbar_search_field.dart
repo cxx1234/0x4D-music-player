@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/l10n.dart';
+
 /// 页面标题栏内的搜索框组件（配合 `PageToolbar.actions` 使用）。
 ///
 /// - **宽度弹性**：最小固定 [minWidth]；最大为窗口宽度的 [maxWidthFactor]
@@ -13,7 +15,7 @@ class ToolbarSearchField extends StatefulWidget {
     super.key,
     required this.onChanged,
     required this.onClose,
-    this.hintText = '搜索',
+    this.hintText,
     this.minWidth = 240,
     this.maxWidthFactor = 0.4,
   });
@@ -24,7 +26,8 @@ class ToolbarSearchField extends StatefulWidget {
   /// 点击关闭按钮时回调（退出搜索模式）。
   final VoidCallback onClose;
 
-  final String hintText;
+  /// 搜索框占位文案；null 时使用通用「搜索」文案。
+  final String? hintText;
 
   /// 最小宽度（小窗口/内容不足时保持）。
   final double minWidth;
@@ -123,7 +126,7 @@ class _ToolbarSearchFieldState extends State<ToolbarSearchField> {
                     onChanged: widget.onChanged,
                     textInputAction: TextInputAction.search,
                     decoration: InputDecoration(
-                      hintText: widget.hintText,
+                      hintText: widget.hintText ?? context.l10n.commonSearch,
                       isDense: true,
                       filled: true,
                       fillColor: theme.colorScheme.surfaceContainerHigh,
@@ -135,7 +138,7 @@ class _ToolbarSearchFieldState extends State<ToolbarSearchField> {
                       suffixIcon: hasText
                           ? IconButton(
                               icon: const Icon(Icons.clear, size: 18),
-                              tooltip: '清空',
+                              tooltip: context.l10n.commonClear,
                               onPressed: _clear,
                             )
                           : null,
@@ -165,7 +168,7 @@ class _ToolbarSearchFieldState extends State<ToolbarSearchField> {
           const SizedBox(width: 4),
           IconButton(
             icon: const Icon(Icons.close),
-            tooltip: '关闭搜索',
+            tooltip: context.l10n.commonCloseSearch,
             onPressed: _close,
           ),
         ],

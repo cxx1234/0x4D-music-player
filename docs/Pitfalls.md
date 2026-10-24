@@ -136,6 +136,26 @@
 - ⚠️ **判定不能写成「`primaryFocus` 非空」**：路由自身的 `FocusScope`（`ModalRoute` 的 autofocus）在启动后就是 `primaryFocus`，那样写会让空格**永远**不再播放 / 暂停。必须要求「非 `FocusScopeNode` 的真实聚焦节点」，见 `lib/core/utils/keyboard_focus.dart` 的 `hasKeyboardFocus`。
 - **护栏**：`test/keyboard_focus_test.dart`；`docs/UI-Rules.md` §10；`docs/Performance-Optimization.md` §9.2。
 
+### B9. 2026-10-22 侧键 remap 工具发的是**合成滑动手势**，Dart 一条都收不到
+
+- **现象**：装了 `SensibleSideButtons` 后按鼠标侧键，Flutter 侧**完全静音** ——
+  `Listener` 没有 pointer 事件，`HardwareKeyboard` 也没有 key 事件；把该 app
+  退出/禁用后，才收到 `PointerDownEvent.buttons = 0x08 / 0x10`。
+- **根因**（读它源码确认）：它在 `CGEventTap` 上截 `otherMouseDown/Up`，**返回 NULL
+  把原始按钮吞掉**，然后自己发一个**合成手势事件**（`CGEventType.gesture` + IOHID
+  子类型 swipe `0x10`，方向写在 `ended` 帧的字段里）。那既不是按键也不是滚轮 ——
+  Flutter 的 macOS embedder 只转发 key / mouse / scroll，手势事件进不了 Dart。
+- **本项目结论：不支持，也不再验证**。要接住只能在 Runner 里加原生
+  `NSEvent` 本地监听（`[.swipe, .gesture]`），为一个小众 remap 工具改原生层 +
+  依赖“AppKit 会不会把它转成 `.swipe`”的未证实行为，不划算。工具开着时侧键在
+  本 app 里就是没反应 —— 关掉它（原始按钮那条路可用）或让工具改发 ⌘`[`。
+- **探查工具**：`test/demo/input_probe.dart`（`flutter run -d macos -t
+  test/demo/input_probe.dart`）把 pointer / scroll / pan-zoom / key 全打出来 ——
+  先看事件形状，再决定接哪一层。
+- **通用教训**：某个输入在别的 app 里能用，**不代表框架收得到**。这类 remap 工具的
+  输出至少有三种（原样透传按钮 / 合成快捷键 / 合成手势），而且**没有一个统一入口**；
+  遇到“按了没反应”先用探针，别猜。
+
 ## C. Flutter 框架层
 
 ### C1. 2026-08-19 → 08-24 Flutter 3.47 macOS 全窗口闪烁（Intel 专属）
@@ -222,6 +242,34 @@
   而 macOS 那 52px 是**原生红绿灯**（标题栏透明、Flutter 视图铺满整窗）——
   面板装不下时顶边被钳到 y=8，正好钻进红绿灯底下。修法：扣
   `layoutConfig.menuTopInset`（macOS 52，其余 0），装不下就在面板内部滚动。
+
+### C8. 2026-08-02 `ListTile` 选中色溢出 `ListView` 视口
+
+- **症状**：滚动音乐库时，当前播放行的高亮背景画到列表视口之外，把相邻区域也染上色（issue #5）。
+- **根因**：`ListTile.selectedTileColor` 不是 `ListTile` 自己画的，而是**最近的 `Material` 祖先**
+  画的水墨层，而 `Material` 默认 `clipBehavior: Clip.none`。视口裁剪只能裁滚动内容树里的绘制，
+  裁不到「视口之上那层 Material 画的高亮」。
+- **修法**：给列表包一层自己的 `Material(type: MaterialType.transparency, clipBehavior:
+  Clip.hardEdge)`，让高亮落在视口内的 Material 上（`lib/features/library/library_page.dart`
+  的歌曲列表与文件夹列表两处，实际落点 `067ed90`）。上游同因：flutter/flutter#152832。
+- **护栏**：视觉问题，无自动化测试；靠本条目 + 代码位置自查。
+- **复发提示**：任何「Material 绘制的效果 + 可滚动视口」的组合（选中色、Ink 水波纹、`Card`
+  阴影）都可能跑到视口外 —— 先查最近 `Material` 的 `clipBehavior`，而不是给 `ListView` 加裁剪。
+
+### C9. 2026-08-11 网格 / `Sliver` 的 itemBuilder context 不能当菜单锚点
+
+- **症状**：在播放列表网格卡片上长按，直接崩溃：
+  `type 'RenderSliverGrid' is not a subtype of type 'RenderBox?'`（issue #12）。
+- **根因**：锚点用 `context.findRenderObject() as RenderBox` 硬转，而 `SliverGrid` /
+  `SliverList` 的 `itemBuilder` context 解析到的是 `RenderSliverGrid` / `RenderSliverList`，
+  它们不是 `RenderBox`；卡片 / 行自己的 `Builder` context 才是。
+- **修法**：锚点一律取自**卡片 / 行自己的 context**（`d506d5b` 先修；`2b3023c` 起统一走
+  `MorphMenu` + `cardContext`）。公共换算 `overlayRectOf` 现在是 `is! RenderBox` 就返回 `null`，
+  不再硬转（`lib/widgets/context_menu.dart`）。
+- **护栏**：`test/context_menu_test.dart` 的「Sliver 的 itemBuilder context 拿不到行矩形 →
+  返回 null（不抛类型错）」。
+- **复发提示**：写新的列表 / 网格菜单时，`onTap` / `onLongPress` 闭包里用的 context 必须是
+  itemBuilder 里再包一层 `Builder` 得到的那个，别把 sliver 的 context 传进菜单。
 
 ## D. 领域事故索引（细节留在原文档）
 

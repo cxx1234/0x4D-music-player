@@ -275,6 +275,26 @@
   禁用裸空格键等价。新增「全局无修饰键快捷键」时必须一并考虑这条归属规则。
 - 回归测试：`test/keyboard_focus_test.dart`（4 例）。
 
+### 10.1 「返回」的输入（2026-10-22）
+
+- **入口**：鼠标「后退」侧键（`PointerDownEvent.buttons` 的 `kBackMouseButton`，
+  0x08）/ 硬件浏览器后退键 / ⌘`[` —— 统一走
+  `lib/core/navigation/back_navigation.dart` 的 `BackNavigationHandler`
+  （根 `Listener` + `addLateKeyEventHandler`，和 Esc 同一个理由：不抢输入控件）。
+- **行为**：`popTopRoute` —— 弹掉最上层路由。对话框 / 右键菜单 / BottomSheet 也在
+  同一条 Navigator 上，所以它们同样算“一层”，会先被关掉。回到 Shell 时**什么都不做**
+  （不切 tab、不退出应用）。
+- **不做「前进」**：Navigator 没有前进历史（pop 掉的 route 实例不能复用），要做得
+  自己维护页面工厂 + 状态快照。前进键直接忽略，不弹提示。
+- **remap 工具的合成手势：不支持**。`SensibleSideButtons` 这类工具把侧键换成
+  **合成的 swipe 手势**（不是按键、也不是滚轮），Flutter 引擎不会把它转成 Dart
+  事件。要支持得在 Runner 里加原生 `NSEvent` 监听，成本与收益不成比例，**本轮
+  不做**。需要侧键时：关掉这类工具（原始按钮那条路可用），或让工具改发 ⌘`[`。
+  机制与探针见 `Pitfalls.md` B9。
+- ⚠️ **不认 ⌘← / ⌘→**：macOS 菜单里它们是上一首 / 下一首。
+- 回归测试：`test/back_navigation_test.dart`（5 例：三种按键判定、侧键弹一层、
+  ⌘`[` 弹一层、主键点击不算、在主界面时无动作）。
+
 ## 11. 容器变换菜单（2026-10-01）
 
 「浮层菜单从触发它的控件里长出来」这一套现在有两处用：播放条左侧的**睡眠定时**
@@ -373,6 +393,13 @@
 - 入口：设置 › 外观 › 歌词显示（`lib/features/settings/lyrics_settings_page.dart`），
   以及播放页歌词工具栏的 `tune_rounded` 按钮；从播放页进入后返回，播放页必须重新同步设置并立即应用。
 - 设置 › 外观的卡片顺序固定为：主题模式 → 主题色 → 歌词显示 → 底栏播放进度填充。
+- 切歌时歌词区必须先清空旧文档并进入 loading；等 `PlayerService.loadedSongNotifier`
+  指向当前曲后，再重新挂上 progress source 并 `loadDocument`。不能把
+  `currentSongNotifier` 当成“新曲已加载”信号，否则旧歌词会挂在新歌下面，且
+  `loadDocument` 可能沿用上一首的最后位置。
+- App 从后台恢复时 `LyricsViewModel` 必须对账当前曲与 document 所属曲目；`LyricsView`
+  用 document 作为 `LyricView` 的 key，并在 resume 时重建一次，避免后台漏帧后
+  沿用旧的 view session。
 - **宽屏（≥ 780）**：左侧实时循环预览，右侧独立滚动的设置列表；
   **窄屏不显示预览**，只保留设置项（`LayoutBuilder` 断点见页面内 `_kPreviewBreakpoint`）。
 - 预览用独立 `LyricController` + 页面 `Ticker` 驱动的假进度源，循环内置示例歌词，

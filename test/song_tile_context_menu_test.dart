@@ -6,6 +6,8 @@ import 'package:txvziwm/core/database/database.dart';
 import 'package:txvziwm/widgets/context_menu.dart';
 import 'package:txvziwm/widgets/song_tile.dart';
 
+import 'helpers/l10n.dart';
+
 /// 歌曲行的鼠标右键（次级点击）：
 /// - 行内**有**三点菜单时，右键必须打开**同一个** `PopupMenuButton`（位置/动画
 ///   与点三点一致），而不是另弹一份；
@@ -28,7 +30,7 @@ Song _song(int id) => Song(
 
 Future<void> _pumpRow(WidgetTester tester, SongTile tile) async {
   await tester.pumpWidget(
-    MaterialApp(
+    localizedApp(
       home: Scaffold(
         body: ListView.builder(
           itemExtent: SongTile.kRowHeight,

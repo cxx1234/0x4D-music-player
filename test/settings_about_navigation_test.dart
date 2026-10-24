@@ -5,6 +5,8 @@ import 'package:txvziwm/features/settings/about_page.dart';
 import 'package:txvziwm/features/settings/settings_page.dart';
 import 'package:txvziwm/features/shell/shell_controller.dart';
 
+import 'helpers/l10n.dart';
+
 /// 菜单「关于本软件」→ 设置 › 关于页 的导航链路。
 ///
 /// 链路是：原生菜单 → `MenuService.openAbout`（app.dart 注入）→
@@ -18,7 +20,7 @@ void main() {
     addTearDown(controller.dispose);
 
     await tester.pumpWidget(
-      MaterialApp(
+      localizedApp(
         home: Scaffold(body: SettingsPage(controller: controller)),
       ),
     );
@@ -33,7 +35,7 @@ void main() {
 
   testWidgets('没有 controller 时也不炸（设置页可独立构建）', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: SettingsPage())),
+      localizedApp(home: const Scaffold(body: SettingsPage())),
     );
     expect(find.byType(AboutPage), findsNothing);
   });

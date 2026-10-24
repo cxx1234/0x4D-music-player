@@ -7,9 +7,11 @@ import 'package:flutter_lyric/flutter_lyric.dart';
 
 import '../../core/constants/layout.dart';
 import '../../core/database/database.dart';
+import '../../core/models/lyric_load_state.dart';
 import '../../core/models/lyric_text_size.dart';
 import '../../core/services/lyrics_view_model.dart';
 import '../../core/services/service_locator.dart';
+import '../../l10n/l10n.dart';
 import '../../widgets/player_bar.dart';
 import '../../widgets/song_info_card.dart';
 import '../album/album_page.dart';
@@ -163,7 +165,7 @@ class _PlayerPageState extends State<PlayerPage> {
             toolbarHeight: kToolbarHeight,
             leading: IconButton(
               icon: const Icon(Icons.keyboard_arrow_down),
-              tooltip: '收起',
+              tooltip: context.l10n.playerCollapse,
               onPressed: () => Navigator.of(context).pop(),
             ),
             title: Row(
@@ -172,7 +174,10 @@ class _PlayerPageState extends State<PlayerPage> {
                 const Icon(Icons.music_note_rounded),
                 const SizedBox(width: 8),
                 // 字号与 DetailTopBar 标题一致（titleMedium）。
-                Text('正在播放', style: theme.textTheme.titleMedium),
+                Text(
+                  context.l10n.playerNowPlaying,
+                  style: theme.textTheme.titleMedium,
+                ),
               ],
             ),
             centerTitle: false,
@@ -181,7 +186,7 @@ class _PlayerPageState extends State<PlayerPage> {
                 // 窄模式：切换歌词/播放队列（选中高亮 + 图标换关闭，再点退出）
                 _AppBarTab(
                   icon: Icons.lyrics_rounded,
-                  label: '歌词',
+                  label: context.l10n.playerLyricsTab,
                   selected: _narrowTab == NarrowTab.lyrics,
                   closeWhenSelected: true,
                   onTap: () => setState(() {
@@ -193,7 +198,7 @@ class _PlayerPageState extends State<PlayerPage> {
                 ),
                 _AppBarTab(
                   icon: Icons.queue_music_rounded,
-                  label: '播放列表',
+                  label: context.l10n.playerQueueTab,
                   iconSize: 24,
                   selected: _narrowTab == NarrowTab.queue,
                   closeWhenSelected: true,
@@ -212,13 +217,13 @@ class _PlayerPageState extends State<PlayerPage> {
                 // 宽模式：切换右栏内容（选中高亮 + 显示文字）
                 _AppBarTab(
                   icon: Icons.lyrics_rounded,
-                  label: '歌词',
+                  label: context.l10n.playerLyricsTab,
                   selected: !_showQueue,
                   onTap: () => setState(() => widget.uiState.showQueue = false),
                 ),
                 _AppBarTab(
                   icon: Icons.queue_music_rounded,
-                  label: '播放列表',
+                  label: context.l10n.playerQueueTab,
                   iconSize: 24,
                   selected: _showQueue,
                   onTap: () => setState(() {
@@ -265,10 +270,13 @@ class _PlayerPageState extends State<PlayerPage> {
                         color: theme.colorScheme.primary,
                       ),
                       const SizedBox(height: 24),
-                      Text('未在播放', style: theme.textTheme.headlineMedium),
+                      Text(
+                        context.l10n.nowPlayingNotPlaying,
+                        style: theme.textTheme.headlineMedium,
+                      ),
                       const SizedBox(height: 8),
                       Text(
-                        '选择一首歌曲开始播放',
+                        context.l10n.playerPickSongToStart,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -314,6 +322,7 @@ class _PlayerPageState extends State<PlayerPage> {
                       locateOnOpen: _locateOnQueueOpen,
                       lyricsController: _lyrics.controller,
                       hasTranslation: _lyrics.hasTranslationNotifier,
+                      lyricsLoadState: _lyrics.loadStateNotifier,
                       onToggleTranslation: _toggleTranslation,
                       onTextSizeChanged: _onTextSizeChanged,
                       onLineTap: _handleLyricLineTap,
@@ -460,6 +469,7 @@ class _PlayerPageState extends State<PlayerPage> {
             locateOnOpen: _locateOnQueueOpen,
             lyricsController: _lyrics.controller,
             hasTranslation: _lyrics.hasTranslationNotifier,
+            lyricsLoadState: _lyrics.loadStateNotifier,
             onToggleTranslation: _toggleTranslation,
             onTextSizeChanged: _onTextSizeChanged,
             onLineTap: _handleLyricLineTap,
@@ -500,7 +510,7 @@ class _PlayerPageState extends State<PlayerPage> {
         onOpenAlbum: () => _openAlbum(context, song),
         // 正在播放的信息卡显示的是当前曲（已在队列中）→ 用专用菜单，
         // 不含「播放下一首 / 添加到播放队列」等队列操作。
-        menuBuilder: currentSongMenuItems,
+        menuBuilder: (song) => currentSongMenuItems(context.l10n, song),
         onMenuSelected: (s, v) => handleSongMenuAction(context, s, v),
       ),
     );
@@ -602,6 +612,9 @@ class _NarrowLyricsQueue extends StatefulWidget {
   /// 当前歌词是否含翻译副行（无翻译时禁用翻译开关）。
   final ValueListenable<bool>? hasTranslation;
 
+  /// 当前曲目的歌词加载状态。
+  final ValueListenable<LyricLoadState>? lyricsLoadState;
+
   /// 翻译显示开关变化回调（页面级，触发歌词重载）。
   final VoidCallback? onToggleTranslation;
 
@@ -621,6 +634,7 @@ class _NarrowLyricsQueue extends StatefulWidget {
     required this.uiState,
     required this.lyricsController,
     this.hasTranslation,
+    this.lyricsLoadState,
     this.onToggleTranslation,
     this.onTextSizeChanged,
     this.onLineTap,
@@ -677,6 +691,7 @@ class _NarrowLyricsQueueState extends State<_NarrowLyricsQueue> {
                 uiState: widget.uiState,
                 isNarrow: true,
                 hasTranslation: widget.hasTranslation,
+                loadState: widget.lyricsLoadState,
                 onToggleTranslation: widget.onToggleTranslation,
                 onTextSizeChanged: widget.onTextSizeChanged,
                 onLineTap: widget.onLineTap,
@@ -731,6 +746,9 @@ class _RightPanel extends StatefulWidget {
   /// 当前歌词是否含翻译副行（无翻译时禁用翻译开关）。
   final ValueListenable<bool>? hasTranslation;
 
+  /// 当前曲目的歌词加载状态。
+  final ValueListenable<LyricLoadState>? lyricsLoadState;
+
   /// 翻译显示开关变化回调（页面级，触发歌词重载）。
   final VoidCallback? onToggleTranslation;
 
@@ -750,6 +768,7 @@ class _RightPanel extends StatefulWidget {
     required this.uiState,
     required this.lyricsController,
     this.hasTranslation,
+    this.lyricsLoadState,
     this.onToggleTranslation,
     this.onTextSizeChanged,
     this.onLineTap,
@@ -806,6 +825,7 @@ class _RightPanelState extends State<_RightPanel> {
                       theme: widget.theme,
                       uiState: widget.uiState,
                       hasTranslation: widget.hasTranslation,
+                      loadState: widget.lyricsLoadState,
                       onToggleTranslation: widget.onToggleTranslation,
                       onTextSizeChanged: widget.onTextSizeChanged,
                       onLineTap: widget.onLineTap,
@@ -858,7 +878,9 @@ class _AppBarTab extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           onTap: onTap,
           child: Tooltip(
-            message: closeWhenSelected && selected ? '关闭' : label,
+            message: closeWhenSelected && selected
+                ? context.l10n.commonClose
+                : label,
             child: SizedBox(
               // 固定墨迹高度（不随图标尺寸变化）。
               height: 36,

@@ -5,12 +5,14 @@ import 'package:txvziwm/core/models/lyric_text_size.dart';
 import 'package:txvziwm/features/settings/lyrics_settings_page.dart';
 import 'package:txvziwm/features/settings/settings_page.dart';
 
+import 'helpers/l10n.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('外观 › 歌词显示：点击后打开歌词设置页', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: SettingsPage())),
+      localizedApp(home: const Scaffold(body: SettingsPage())),
     );
 
     final row = find.text('歌词显示');
@@ -27,7 +29,7 @@ void main() {
   });
 
   testWidgets('ServiceLocator 未就绪时歌词页仍可独立构建', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: LyricsSettingsPage()));
+    await tester.pumpWidget(localizedApp(home: const LyricsSettingsPage()));
 
     expect(find.text('字号'), findsOneWidget);
     expect(find.text('翻译副行'), findsOneWidget);

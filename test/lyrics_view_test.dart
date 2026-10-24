@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_lyric/flutter_lyric.dart';
 
+import 'package:txvziwm/core/models/lyric_load_state.dart';
 import 'package:txvziwm/core/models/lyric_text_size.dart';
 import 'package:txvziwm/features/player/lyrics_view.dart';
 import 'package:txvziwm/features/player/player_ui_state.dart';
 
-Widget _wrap(Widget child) => MaterialApp(
+import 'helpers/l10n.dart';
+
+Widget _wrap(Widget child) => localizedApp(
   home: Scaffold(body: SizedBox(width: 400, height: 400, child: child)),
 );
 
@@ -33,6 +36,33 @@ void main() {
     expect(find.byType(LyricView), findsNothing);
   });
 
+  testWidgets('歌词加载中：显示进度，不显示「暂无歌词」', (tester) async {
+    final controller = LyricController();
+    final loadState = ValueNotifier<LyricLoadState>(LyricLoadState.loading);
+    addTearDown(controller.dispose);
+    addTearDown(loadState.dispose);
+
+    await tester.pumpWidget(
+      _wrap(
+        LyricsView(
+          controller: controller,
+          theme: ThemeData(),
+          uiState: PlayerUiState(),
+          loadState: loadState,
+        ),
+      ),
+    );
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.text('暂无歌词'), findsNothing);
+
+    loadState.value = LyricLoadState.empty;
+    await tester.pump();
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('暂无歌词'), findsOneWidget);
+  });
+
   testWidgets('有歌词：渲染 LyricView，不显示占位', (tester) async {
     final controller = LyricController()..load('[00:01.00]第一行\n[00:05.00]第二行');
     addTearDown(controller.dispose);
@@ -48,6 +78,28 @@ void main() {
 
     expect(find.byType(LyricView), findsOneWidget);
     expect(find.text('暂无歌词'), findsNothing);
+  });
+
+  testWidgets('文档切换：重建 LyricView，避免沿用旧会话', (tester) async {
+    final controller = LyricController()..load('[00:01.00]第一行');
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _wrap(
+        LyricsView(
+          controller: controller,
+          theme: ThemeData(),
+          uiState: PlayerUiState(),
+        ),
+      ),
+    );
+
+    final before = tester.state(find.byType(LyricView));
+    controller.load('[00:01.00]第二首');
+    await tester.pump();
+    final after = tester.state(find.byType(LyricView));
+
+    expect(identical(before, after), isFalse);
   });
 
   testWidgets('点文本大小 → 弹三档菜单 → 选择"大"写入 uiState', (tester) async {

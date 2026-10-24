@@ -9,6 +9,7 @@ import 'package:txvziwm/widgets/player_bar.dart';
 import 'package:txvziwm/widgets/sleep_timer_button.dart';
 
 import 'helpers/fake_audio_engine.dart';
+import 'helpers/l10n.dart';
 
 /// 睡眠定时：三种触发方式（倒计时 / 播完当前曲 / 播完当前列表）+ 淡出收尾。
 ///
@@ -72,7 +73,7 @@ void main() {
     expect(engine.pauseCalls, 1);
     expect(timer.isActive, isFalse);
     expect(engine.volume, 1.0, reason: '淡出后必须还原音量，否则下次播放是静音');
-    expect(timer.takeNotice(), '睡眠定时结束，已暂停');
+    expect(timer.takeNotice(), SleepTimerNotice.finishedPaused);
     expect(timer.takeNotice(), isNull, reason: '提示只消费一次');
   });
 
@@ -107,7 +108,7 @@ void main() {
     expect(engine.releaseCalls, 1, reason: '曲末收尾释放引擎（再播会重新加载）');
     expect(player.position, Duration.zero);
     expect(timer.isActive, isFalse);
-    expect(timer.takeNotice(), '睡眠定时结束，已停止播放');
+    expect(timer.takeNotice(), SleepTimerNotice.finishedStopped);
   });
 
   test('单曲循环下「播完当前曲目」同样生效（引擎 loop 下仍上报完成事件）', () async {
@@ -174,7 +175,7 @@ void main() {
     expect(timer.remaining, isNull, reason: '等曲末时没有倒计时可显示');
     expect(
       timer.takeNotice(),
-      '睡眠定时到点，播完当前曲目后停止',
+      SleepTimerNotice.expiredWaitingForTrack,
       reason: '切换等待时提示一次（倒计时突然消失，不提示会像定时失效）',
     );
 
@@ -185,7 +186,7 @@ void main() {
     expect(player.currentIndex, 0);
     expect(engine.releaseCalls, 1);
     expect(timer.isActive, isFalse);
-    expect(timer.takeNotice(), '睡眠定时结束，已停止播放');
+    expect(timer.takeNotice(), SleepTimerNotice.finishedStopped);
   });
 
   test('设置开启但到点时已暂停：立即收尾，不转入等待', () async {
@@ -204,7 +205,7 @@ void main() {
     expect(timer.isActive, isFalse);
     expect(player.isPlaying, isFalse);
     expect(engine.pauseCalls, pausesBefore, reason: '不该再碰引擎');
-    expect(timer.takeNotice(), '睡眠定时结束，已暂停');
+    expect(timer.takeNotice(), SleepTimerNotice.finishedPaused);
   });
 
   test('淡出期间开始播放新曲目：淡出中止、音量还原、不会把新曲暂停', () async {
@@ -295,7 +296,7 @@ void main() {
   testWidgets('播放条左侧有睡眠定时入口，菜单可选时长', (tester) async {
     final timer = makeTimer(tick: const Duration(seconds: 1));
     await tester.pumpWidget(
-      MaterialApp(
+      localizedApp(
         home: Scaffold(
           body: PlayerBar(
             player: player,
@@ -335,7 +336,7 @@ void main() {
     timer.startForDuration(const Duration(minutes: 90));
 
     await tester.pumpWidget(
-      MaterialApp(
+      localizedApp(
         home: Scaffold(
           body: PlayerBar(
             player: player,

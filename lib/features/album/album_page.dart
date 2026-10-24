@@ -8,6 +8,8 @@ import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
 import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
+import '../../l10n/app_localizations.dart';
+import '../../l10n/l10n.dart';
 import '../../widgets/cached_album_art.dart';
 import '../../widgets/context_menu.dart';
 import '../../widgets/cover_card.dart';
@@ -23,9 +25,9 @@ import '../playlist/song_actions.dart';
 import 'album_view_model.dart';
 
 /// 专辑副标题：优先显示 albumArtist；无则显示「多位歌手」。
-String _albumSubtitle(Album album) {
+String _albumSubtitle(AppLocalizations l10n, Album album) {
   final artist = album.albumArtist?.trim();
-  return (artist == null || artist.isEmpty) ? '多位歌手' : artist;
+  return (artist == null || artist.isEmpty) ? l10n.albumVariousArtists : artist;
 }
 
 class AlbumsPage extends StatefulWidget {
@@ -131,12 +133,14 @@ class _AlbumsPageState extends State<AlbumsPage> {
 
   Widget _buildAppBar(int count) {
     return PageToolbar(
-      title: '专辑',
-      subtitle: _searchActive ? '匹配 $count 张' : '$count 张',
+      title: context.l10n.albumTitle,
+      subtitle: _searchActive
+          ? context.l10n.albumMatch(count)
+          : context.l10n.albumCount(count),
       actions: _searchActive
           ? [
               ToolbarSearchField(
-                hintText: '搜索专辑',
+                hintText: context.l10n.albumSearchHint,
                 onChanged: (v) => setState(() => _query = v),
                 onClose: _exitSearch,
               ),
@@ -144,7 +148,7 @@ class _AlbumsPageState extends State<AlbumsPage> {
           : [
               IconButton(
                 icon: const Icon(Icons.search),
-                tooltip: '搜索',
+                tooltip: context.l10n.commonSearch,
                 onPressed: _enterSearch,
               ),
             ],
@@ -159,10 +163,13 @@ class _AlbumsPageState extends State<AlbumsPage> {
           children: [
             Icon(Icons.album, size: 64, color: theme.colorScheme.primary),
             const SizedBox(height: 16),
-            Text('暂无专辑', style: theme.textTheme.headlineSmall),
+            Text(
+              context.l10n.albumEmptyTitle,
+              style: theme.textTheme.headlineSmall,
+            ),
             const SizedBox(height: 8),
             Text(
-              '导入音乐文件夹后会自动按专辑归类',
+              context.l10n.albumEmptyHint,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -198,7 +205,7 @@ class _AlbumsPageState extends State<AlbumsPage> {
               borderRadius: 0,
             ),
             title: album.name,
-            subtitle: _albumSubtitle(album),
+            subtitle: _albumSubtitle(context.l10n, album),
             onTap: () => _openAlbumDetail(context, album),
             onSecondaryTap: (cardContext) => _showAlbumMenu(album, cardContext),
           );
@@ -225,9 +232,9 @@ class _AlbumsPageState extends State<AlbumsPage> {
     final value = await showCardMenu<String>(
       context: cardContext,
       cardRect: cardRect,
-      entries: const [
-        MorphMenuEntry('添加到播放队列', 'queue'),
-        MorphMenuEntry('播放全部', 'play'),
+      entries: [
+        MorphMenuEntry(context.l10n.albumAddToQueue, 'queue'),
+        MorphMenuEntry(context.l10n.playerPlayAll, 'play'),
       ],
     );
     if (value == null || !mounted) return;
@@ -237,7 +244,7 @@ class _AlbumsPageState extends State<AlbumsPage> {
     if (songs.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('专辑里没有可播放的歌曲')));
+      ).showSnackBar(SnackBar(content: Text(context.l10n.albumNoPlayable)));
       return;
     }
 
@@ -347,8 +354,8 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
                 borderRadius: 12,
               ),
               title: widget.album.name,
-              subtitle: _albumSubtitle(widget.album),
-              info: '${_songs.length} 首歌曲',
+              subtitle: _albumSubtitle(context.l10n, widget.album),
+              info: context.l10n.albumSongCount(_songs.length),
               action: PlayAllButton(
                 onPlayAll: () =>
                     ServiceLocator.player.playFromList(_songs, startIndex: 0),
@@ -378,7 +385,7 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
                         startIndex: row.songIndex,
                       ),
                       leadingText: song.trackNumber?.toString() ?? '',
-                      menuBuilder: (song) => songMenuItems(song),
+                      menuBuilder: (song) => songMenuItems(context.l10n, song),
                       onMenuSelected: (song, value) async {
                         await handleSongMenuAction(context, song, value);
                         // 菜单动作不改变本页列表内容，无需重查。

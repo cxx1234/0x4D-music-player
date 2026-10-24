@@ -5,6 +5,76 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.4.0] - 2026-10-24
+
+### Added
+- Localization infrastructure for English and Simplified Chinese. `flutter gen-l10n`
+  generates `AppLocalizations` from `lib/l10n/app_en.arb` (template) and `app_zh.arb`;
+  `MaterialApp` now installs the localization delegates and resolves an explicit
+  in-app language or the system language. Non-Chinese systems fall back to English.
+  A new Settings › General › Language row persists the choice in `settings.json`
+  (`system` / `en` / `zh`, unknown values fall back to `system`), and the lyrics
+  translation subline now follows the in-app language instead of the platform locale.
+  All existing UI copy is migrated to the ARB files — see `docs/I18n.md`.
+  The macOS native menu still follows the system language; syncing it with the
+  in-app choice is tracked in `docs/TODO.md`
+- A guard test fails when a CJK string literal appears under `lib/` outside
+  `lib/l10n/`, so new hardcoded UI copy cannot slip back in
+
+### Changed
+- Shell navigation, the startup error page, the mini player, playback controls,
+  search/empty states, song rows and the song info card now follow the app
+  language
+- The settings, lyrics settings, about and log pages now follow the app language,
+  including theme-mode and accent-color labels. Core enums no longer carry
+  hardcoded labels; display text lives in `lib/l10n/enum_labels.dart`. English
+  segmented buttons shrink instead of overflowing fixed-height rows
+- The library, album and artist pages now follow the app language, including
+  sort-order labels and scan summaries. Counts use ICU plurals, and the scan
+  summary joins fragments with the locale's list separator
+- Playlists, favorites, M3U import/export dialogs, the playlist picker, the
+  add-songs sheet and the shared song menu now follow the app language.
+  Import/export results and selected-song counts use ICU plurals
+- The player page, queue, lyrics view and sleep-timer control now follow the app
+  language. Service messages are semantic (`PlaybackFailure`, `SleepTimerNotice`)
+  and localized at the presentation layer, so HUD and notification text also
+  change as soon as the in-app language changes
+
+## [0.2.8] - 2026-10-22
+
+### Added
+- Desktop back navigation from the mouse's back button, the hardware browser-back
+  key, and ⌘`[`. All three land in one handler that pops the top route, so
+  dialogs, popup menus and bottom sheets count as one step too; at the shell
+  nothing happens (no tab switch, no quit). Forward is deliberately not
+  implemented — a popped route cannot be re-pushed, so "forward" would need a
+  page-factory history the navigator does not keep. ⌘←/⌘→ are left alone because
+  the macOS menu uses them for previous/next track. Remapping tools that post a
+  synthetic swipe gesture instead of a button or a shortcut
+  (`SensibleSideButtons`) are out of scope: Flutter's embedder never turns that
+  gesture into a Dart event, and reaching it would mean a native monitor in the
+  runner (see `Pitfalls.md` B9) — turn such a tool off, or make it send ⌘`[`
+
+### Fixed
+- Track changes no longer leave the previous song's lyrics under the new title
+  or replay the old line scroll. The lyric view clears immediately, shows a
+  loading state, and only loads the new document after
+  `PlayerService.loadedSongNotifier` reports that the new track is in the
+  engine. Async reads are generation-guarded, so a late result from a rapid
+  switch cannot overwrite the current song
+- Toggling translation now reparses the current document without resetting the
+  playback position
+- Returning from the background no longer leaves the previous song's lyrics
+  visible under the new track. `LyricsViewModel` now reconciles the document
+  owner against `PlayerService.currentSong` on resume, reloads when the
+  background missed a track change or left a load half-finished, and
+  reattaches the progress source when needed
+- `LyricsView` rebuilds on resume and keys `LyricView` by the current document,
+  so a view session created before backgrounding cannot be reused for the new
+  song
+
 ## [0.2.7] - 2026-10-22
 
 ### Added

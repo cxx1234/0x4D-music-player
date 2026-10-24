@@ -1,0 +1,8 @@
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-localization-file: app_localizations.dart
+output-class: AppLocalizations
+nullable-getter: false
+# 非中文系统回退英文：supportedLocales 的顺序由该选项决定。
+preferred-supported-locales:
+  - en

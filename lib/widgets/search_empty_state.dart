@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
+
 /// 搜索无结果的空状态（配合 `PageToolbar` 下的 `Expanded` 使用）。
 class SearchEmptyState extends StatelessWidget {
   const SearchEmptyState({super.key, this.query, this.message});
@@ -13,11 +15,12 @@ class SearchEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final text =
         message ??
         (query == null || query!.trim().isEmpty
-            ? '没有找到相关内容'
-            : '没有找到与「${query!.trim()}」相关的内容');
+            ? l10n.searchEmptyTitle
+            : l10n.searchEmptyQuery(query!.trim()));
 
     return Center(
       child: Column(
@@ -28,7 +31,7 @@ class SearchEmptyState extends StatelessWidget {
           Text(text, style: theme.textTheme.headlineSmall),
           const SizedBox(height: 8),
           Text(
-            '换个关键词试试',
+            l10n.searchEmptyHint,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
+import '../../l10n/l10n.dart';
 
 /// 展示"选择播放列表"底部弹层，将 [songs] 加入选中的播放列表。
 /// 含"新建播放列表…"入口。返回是否成功加入。
@@ -44,13 +45,16 @@ class _PlaylistPickerSheetState extends State<_PlaylistPickerSheet> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text('添加到播放列表', style: theme.textTheme.titleMedium),
+            child: Text(
+              context.l10n.playlistAddTo,
+              style: theme.textTheme.titleMedium,
+            ),
           ),
           if (playlists.isEmpty)
             Padding(
               padding: const EdgeInsets.all(24),
               child: Text(
-                '还没有播放列表，先新建一个吧',
+                context.l10n.playlistPickerEmpty,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -81,7 +85,7 @@ class _PlaylistPickerSheetState extends State<_PlaylistPickerSheet> {
             ),
           ListTile(
             leading: const Icon(Icons.add),
-            title: const Text('新建播放列表…'),
+            title: Text(context.l10n.playlistNewEllipsis),
             onTap: _createAndReturn,
           ),
         ],
@@ -94,20 +98,20 @@ class _PlaylistPickerSheetState extends State<_PlaylistPickerSheet> {
     final name = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('新建播放列表'),
+        title: Text(context.l10n.playlistNew),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: '名称'),
+          decoration: InputDecoration(labelText: context.l10n.commonName),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
+            child: Text(context.l10n.commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('创建'),
+            child: Text(context.l10n.commonCreate),
           ),
         ],
       ),

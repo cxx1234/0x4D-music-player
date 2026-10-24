@@ -17,6 +17,18 @@ enum SleepTimerMode {
   endOfQueue,
 }
 
+/// 睡眠定时到点后需要提示用户的语义化事件（文案由 UI 本地化）。
+enum SleepTimerNotice {
+  /// 倒计时到点，但设置要求先播完当前曲目。
+  expiredWaitingForTrack,
+
+  /// 淡出结束并暂停。
+  finishedPaused,
+
+  /// 在曲末停止播放（未继续下一首）。
+  finishedStopped,
+}
+
 /// 睡眠定时状态；`null`（见 [SleepTimerService.state]）表示未激活。
 @immutable
 class SleepTimerState {
@@ -123,7 +135,8 @@ class SleepTimerService {
   );
 
   /// 到点提示（消费即清）：UI 订阅它在任意页面弹一次提示。
-  final ValueNotifier<String?> notice = ValueNotifier<String?>(null);
+  final ValueNotifier<SleepTimerNotice?> notice =
+      ValueNotifier<SleepTimerNotice?>(null);
 
   Timer? _timer;
 
@@ -179,7 +192,7 @@ class SleepTimerService {
   }
 
   /// 消费并清除到点提示（返回 null 表示没有待提示的消息）。
-  String? takeNotice() {
+  SleepTimerNotice? takeNotice() {
     final value = notice.value;
     notice.value = null;
     return value;
@@ -240,7 +253,7 @@ class SleepTimerService {
       _startForMode(SleepTimerMode.endOfTrack);
       // 提示一次"到点了、改为等这一首播完"：否则用户只看到倒计时突然消失，
       // 会以为定时失效了（真正停下时还会再弹一条）。
-      notice.value = '睡眠定时到点，播完当前曲目后停止';
+      notice.value = SleepTimerNotice.expiredWaitingForTrack;
       return;
     }
     // 淡出期间**保持激活**（fading 标志）：让「取消定时」入口留到最后一刻。
@@ -253,7 +266,7 @@ class SleepTimerService {
     // （见 [_onPlayerChanged]）时，状态已为空 —— 不要在这里谎报「已暂停」。
     if (state.value?.fading != true) return;
     state.value = null;
-    if (!_player.isPlaying) notice.value = '睡眠定时结束，已暂停';
+    if (!_player.isPlaying) notice.value = SleepTimerNotice.finishedPaused;
   }
 
   /// 曲目自然播完的接管点（见 [PlayerService.onBeforeTrackAdvance]）。
@@ -264,7 +277,7 @@ class SleepTimerService {
         current.mode == SleepTimerMode.endOfTrack ||
         (current.mode == SleepTimerMode.endOfQueue && isLastInOrder);
     if (!takeOver) return false;
-    _notify('睡眠定时结束，已停止播放');
+    _notify(SleepTimerNotice.finishedStopped);
     // 曲目已经自然播完（引擎此刻静音），无需淡出。用 [PlayerService.stopPlayback]
     // 而不是 pause：引擎停在"已完成"状态时，再按播放键会什么也不做（audioplayers
     // 的 resume 不会自动回到开头）；stopPlayback 释放引擎并归零，下次播放会
@@ -274,7 +287,7 @@ class SleepTimerService {
   }
 
   /// 统一的"到点"收尾：清状态 + 发提示。
-  void _notify(String message) {
+  void _notify(SleepTimerNotice message) {
     if (_disposed) return;
     _timer?.cancel();
     _timer = null;

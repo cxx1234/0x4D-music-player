@@ -6,6 +6,7 @@ import 'package:txvziwm/core/services/player_service.dart';
 import 'package:txvziwm/widgets/control_pulse.dart';
 import 'package:txvziwm/widgets/player_controls.dart';
 
+import 'helpers/l10n.dart';
 import 'helpers/silent_audio_engine.dart';
 
 /// 控件脉冲：外部操作（快捷键 / 媒体键）时，屏幕上的对应按钮也要有反馈。
@@ -87,7 +88,7 @@ void main() {
     final theme = ThemeData();
 
     await tester.pumpWidget(
-      MaterialApp(
+      localizedApp(
         home: Scaffold(
           body: Center(
             child: PlayerControls(player: player, theme: theme, pulses: pulses),

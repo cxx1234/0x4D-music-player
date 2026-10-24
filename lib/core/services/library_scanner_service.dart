@@ -99,8 +99,8 @@ class ScanResult {
 
   @override
   String toString() =>
-      '添加 $added，更新 $updated，标记缺失 $markedMissing，清理残留 $purged，'
-      '跳过 $skipped，错误 $errors';
+      'added $added, updated $updated, markedMissing $markedMissing, '
+      'purged $purged, skipped $skipped, errors $errors';
 }
 
 /// Scans music folders for audio files and syncs them with the database.

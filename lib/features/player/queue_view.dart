@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/player_service.dart';
+import '../../l10n/app_localizations.dart';
+import '../../l10n/l10n.dart';
 import '../../widgets/context_menu.dart';
 import '../../widgets/song_tile.dart';
 import 'player_ui_state.dart';
@@ -16,18 +18,19 @@ import 'player_view_model.dart';
 ///
 /// [atBottom]：列表滚动到底时传 true，追加「· 到底了」（仅不循环模式有意义）。
 String queueFooterText(
+  AppLocalizations l10n,
   PlayerRepeatMode repeatMode,
   bool isShuffled, {
   bool atBottom = false,
 }) {
   switch (repeatMode) {
     case PlayerRepeatMode.one:
-      return '单曲循环播放';
+      return l10n.queueRepeatOne;
     case PlayerRepeatMode.all:
-      return isShuffled ? '随机播放' : '循环列表播放';
+      return isShuffled ? l10n.queueShuffle : l10n.queueRepeatAll;
     case PlayerRepeatMode.off:
-      final base = isShuffled ? '随机播放' : '顺序播放';
-      return atBottom ? '$base · 到底了' : base;
+      final base = isShuffled ? l10n.queueShuffle : l10n.queueSequential;
+      return atBottom ? '$base${l10n.queueAtBottomSuffix}' : base;
   }
 }
 
@@ -271,16 +274,16 @@ class _QueueViewState extends State<QueueView> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('清空播放列表'),
-        content: const Text('确定要清空当前播放列表吗？'),
+        title: Text(context.l10n.queueClearTitle),
+        content: Text(context.l10n.queueClearConfirm),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
+            child: Text(context.l10n.commonCancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('清空'),
+            child: Text(context.l10n.commonClear),
           ),
         ],
       ),
@@ -301,7 +304,9 @@ class _QueueViewState extends State<QueueView> {
     final value = await showRowMenu<String>(
       context: rowContext,
       rowRect: rowRect,
-      entries: const [PopupMenuItem(value: 'remove', child: Text('从队列移除'))],
+      entries: [
+        PopupMenuItem(value: 'remove', child: Text(context.l10n.queueRemove)),
+      ],
     );
     if (value != 'remove' || !mounted) return;
     // 随机模式下展示位置 ≠ 逻辑下标，必须换算（与批量删除同一处理）。
@@ -329,7 +334,7 @@ class _QueueViewState extends State<QueueView> {
     if (queue.isEmpty) {
       return Center(
         child: Text(
-          '播放列表为空',
+          context.l10n.queueEmpty,
           style: theme.textTheme.bodyLarge?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -459,9 +464,11 @@ class _QueueViewState extends State<QueueView> {
 
   String _playModeTooltip(PlayerRepeatMode repeat, bool shuffled) {
     if (repeat == PlayerRepeatMode.all) {
-      return shuffled ? '随机播放' : '列表循环';
+      return shuffled
+          ? context.l10n.queueShuffle
+          : context.l10n.queueModeRepeatAll;
     }
-    return '顺序播放';
+    return context.l10n.queueSequential;
   }
 
   Widget _buildToolbar(int count) {
@@ -472,7 +479,7 @@ class _QueueViewState extends State<QueueView> {
           Padding(
             padding: EdgeInsets.only(left: widget.isNarrow ? 12 : 0),
             child: Text(
-              '共 $count 首',
+              context.l10n.queueTotalCount(count),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -482,13 +489,13 @@ class _QueueViewState extends State<QueueView> {
           if (_showLocate)
             IconButton(
               icon: const Icon(Icons.my_location_rounded, size: 20),
-              tooltip: '定位到当前播放',
+              tooltip: context.l10n.queueLocate,
               onPressed: _scrollToCurrent,
             ),
           if (_deleteMode) ...[
             IconButton(
               icon: const Icon(Icons.close, size: 20),
-              tooltip: '取消',
+              tooltip: context.l10n.commonCancel,
               onPressed: _toggleDeleteMode,
             ),
             const SizedBox(width: 4),
@@ -500,13 +507,15 @@ class _QueueViewState extends State<QueueView> {
                     ? theme.colorScheme.error
                     : null,
               ),
-              tooltip: '删除选中 (${_selectedIndices.length})',
+              tooltip: context.l10n.queueDeleteSelected(
+                _selectedIndices.length,
+              ),
               onPressed: _selectedIndices.isNotEmpty ? _deleteSelected : null,
             ),
           ] else if (_reorderMode) ...[
             IconButton(
               icon: const Icon(Icons.check, size: 20),
-              tooltip: '完成排序',
+              tooltip: context.l10n.playlistDoneSorting,
               onPressed: _toggleReorderMode,
             ),
           ] else ...[
@@ -515,17 +524,17 @@ class _QueueViewState extends State<QueueView> {
             if (!vm.isShuffled)
               IconButton(
                 icon: const Icon(Icons.reorder_rounded, size: 20),
-                tooltip: '手动排序',
+                tooltip: context.l10n.playlistManualSort,
                 onPressed: _toggleReorderMode,
               ),
             IconButton(
               icon: const Icon(Icons.checklist_rounded, size: 20),
-              tooltip: '选择删除',
+              tooltip: context.l10n.queueSelectDelete,
               onPressed: _toggleDeleteMode,
             ),
             IconButton(
               icon: const Icon(Icons.delete_sweep_rounded, size: 20),
-              tooltip: '清空列表',
+              tooltip: context.l10n.queueClearTooltip,
               onPressed: _confirmClear,
             ),
             // 单曲循环独立按钮（单曲循环时高亮，关闭回到基础模式）。
@@ -537,7 +546,7 @@ class _QueueViewState extends State<QueueView> {
                     ? theme.colorScheme.primary
                     : theme.colorScheme.onSurfaceVariant,
               ),
-              tooltip: '单曲循环',
+              tooltip: context.l10n.queueSingleRepeat,
               onPressed: vm.toggleSingleRepeat,
             ),
             // 播放模式合并按钮：顺序 / 列表循环 / 随机循环 三态循环。
@@ -552,8 +561,9 @@ class _QueueViewState extends State<QueueView> {
                     ? theme.colorScheme.primary
                     : theme.colorScheme.onSurfaceVariant,
               ),
-              tooltip:
-                  '播放模式：${_playModeTooltip(vm.baseRepeatMode, vm.isShuffled)}',
+              tooltip: context.l10n.queuePlayModeTooltip(
+                _playModeTooltip(vm.baseRepeatMode, vm.isShuffled),
+              ),
               onPressed: vm.cyclePlayMode,
             ),
           ],
@@ -565,6 +575,7 @@ class _QueueViewState extends State<QueueView> {
   Widget _buildFooter() {
     final icon = _queueFooterIcon(vm.repeatMode, vm.isShuffled);
     final text = queueFooterText(
+      context.l10n,
       vm.repeatMode,
       vm.isShuffled,
       // 列表滚动到底（extentAfter == 0）时才显示「· 到底了」。

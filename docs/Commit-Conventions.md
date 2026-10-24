@@ -70,3 +70,22 @@ Full suite N passing; analyze clean.
 
 提交前照 §1 的 `type(scope)` 自查主题行；若某个坑值得后人知道，写进
 `docs/Pitfalls.md` 并在正文用一行 `Docs:` 指向它，而不是在正文里长篇复述。
+
+## 8. Issue / PR
+
+**语言分工**：`docs/` 与代码注释用中文，commit / CHANGELOG / **issue / PR 一律英文** ——
+它们属于同一条历史链（issue → commit → CHANGELOG），换语言会让引用关系断开，也让
+public 仓库的 issue 搜不到、引用不了。引用中文 UI 原文时保留原样（如 `我的收藏`）。
+
+- **关得回去**：修复类提交在正文末尾写 `Closes #<n>`（修多个就多行）。关闭评论写三件事：
+  根因一句 / 落点（sha 或文件）/ 怎么验证。只写 `Fixed in <sha>` 不够 —— 那个 sha 的主题行
+  往往和 issue 无关（#4 就是反例：修复藏在 `cbc19f9` 的 "Bug fixes" 第 2 条里）。
+- **正文不是可选**：现象 / 复现 / 期望 vs 实际 / 环境。环境记录**当时实测**的版本，
+  之后机器升级了也不要改 —— 那条版本是"能复现的那个"。空正文的 issue 事后无法判断是否复发。
+- **勾选必须与代码一致**：勾之前先找出落点（文件或 sha）；找不到就说明它没做完。
+  同理，写的计划范围也要和实际交付对齐（#3 的 "USLT/SYLT" 只交付了 USLT）。
+- **一条 issue 一件事**：跟踪型 cockpit issue 只放清单和链接，具体工作拆成独立 issue；
+  拆出去的子项在原 issue 里标 `moved to #<n>` 并取消勾选，别留悬空的 `[ ]`。
+- **label**：至少一个 `bug` / `enhancement` / `feature`；`V0.x` 里程碑只挂落在该版本范围内的 issue，
+  版本发布后及时关掉对应里程碑。
+- 模板在 `.github/ISSUE_TEMPLATE/`（bug / feature 两个表单），新建 issue 时按表单填。

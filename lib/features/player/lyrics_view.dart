@@ -6,9 +6,12 @@ import '../../core/constants/motion.dart';
 import '../../core/models/lyric_distance_blur_level.dart';
 import '../../core/models/lyric_effect_strength.dart';
 import '../../core/models/lyric_line_transition_style.dart';
+import '../../core/models/lyric_load_state.dart';
 import '../../core/models/lyric_slide_alignment.dart';
 import '../../core/models/lyric_text_size.dart';
 import '../../core/utils/lyric_preset.dart';
+import '../../l10n/enum_labels.dart';
+import '../../l10n/l10n.dart';
 import 'player_ui_state.dart';
 
 /// 歌词视图：上方菜单栏（文本大小）+ 歌词内容区。
@@ -37,6 +40,9 @@ class LyricsView extends StatefulWidget {
   /// 为 null 时不限制（按钮始终可点）；非 null 且为 false 时翻译按钮禁用。
   final ValueListenable<bool>? hasTranslation;
 
+  /// 当前曲目的歌词加载状态；为 null 时按旧行为只区分有/无歌词。
+  final ValueListenable<LyricLoadState>? loadState;
+
   /// 点击某句歌词的回调（4.x 把 tap 从 controller 移到了 View 上，
   /// `seekPosition` 已按 timeOffset 修正）。
   final ValueChanged<LyricLineDetails>? onLineTap;
@@ -51,6 +57,7 @@ class LyricsView extends StatefulWidget {
     required this.uiState,
     this.isNarrow = false,
     this.hasTranslation,
+    this.loadState,
     this.onToggleTranslation,
     this.onTextSizeChanged,
     this.onLineTap,
@@ -61,7 +68,7 @@ class LyricsView extends StatefulWidget {
   State<LyricsView> createState() => _LyricsViewState();
 }
 
-class _LyricsViewState extends State<LyricsView> {
+class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
   // 缓存 LyricPreset：仅字号档位/文本效果/主题变化时重建（避免播放页高频
   // rebuild 反复 relayout/repaint）。
   LyricPreset? _preset;
@@ -82,13 +89,24 @@ class _LyricsViewState extends State<LyricsView> {
   /// 「当前是否有歌词」：只在有/无切换时通知，避免 setPosition 每帧重建歌词树。
   final ValueNotifier<bool> _hasLyrics = ValueNotifier(false);
 
+  LyricDocument? _lastDocument;
+  bool _hasBuilt = false;
+
   ThemeData get theme => widget.theme;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.controller.addListener(_syncHasLyrics);
+    _lastDocument = widget.controller.document;
     _syncHasLyrics();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _hasBuilt = true;
   }
 
   @override
@@ -97,20 +115,40 @@ class _LyricsViewState extends State<LyricsView> {
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_syncHasLyrics);
       widget.controller.addListener(_syncHasLyrics);
+      _lastDocument = widget.controller.document;
       _syncHasLyrics();
     }
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      // 后台期间 controller 可能已经换了文档，但画面没有机会重建；回前台
+      // 主动同步一次，并让带 document key 的 LyricView 重新建立会话。
+      _syncHasLyrics();
+      setState(() {});
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.controller.removeListener(_syncHasLyrics);
     _hasLyrics.dispose();
     super.dispose();
   }
 
   void _syncHasLyrics() {
-    final has = widget.controller.document?.lines.isNotEmpty ?? false;
+    final document = widget.controller.document;
+    final documentChanged = !identical(document, _lastDocument);
+    _lastDocument = document;
+    final has = document?.lines.isNotEmpty ?? false;
     if (_hasLyrics.value != has) _hasLyrics.value = has;
+    if (documentChanged && has && _hasBuilt && mounted) {
+      // hasLyrics 真→真时 ValueListenableBuilder 不会重建；文档换了要主动
+      // 触发一次，让下面的 document key 生效。
+      setState(() {});
+    }
   }
 
   LyricPreset _buildPreset() {
@@ -161,7 +199,7 @@ class _LyricsViewState extends State<LyricsView> {
           CheckedPopupMenuItem(
             value: size,
             checked: size == widget.uiState.lyricTextSize,
-            child: Text(size.label),
+            child: Text(size.label(context.l10n)),
           ),
       ],
     );
@@ -184,7 +222,7 @@ class _LyricsViewState extends State<LyricsView> {
             Padding(
               padding: EdgeInsets.only(left: widget.isNarrow ? 12 : 0),
               child: Text(
-                '歌词',
+                context.l10n.lyricsTitle,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -197,14 +235,14 @@ class _LyricsViewState extends State<LyricsView> {
             Builder(
               builder: (anchor) => IconButton(
                 icon: const Icon(Icons.text_fields_rounded, size: 20),
-                tooltip: '文本大小',
+                tooltip: context.l10n.lyricsTextSizeTooltip,
                 onPressed: () => _showTextSizeMenu(anchor),
               ),
             ),
             if (widget.onOpenSettings != null)
               IconButton(
                 icon: const Icon(Icons.tune_rounded, size: 20),
-                tooltip: '歌词显示设置',
+                tooltip: context.l10n.lyricsSettingsTooltip,
                 onPressed: widget.onOpenSettings,
               ),
           ],
@@ -236,7 +274,9 @@ class _LyricsViewState extends State<LyricsView> {
         : theme.colorScheme.onSurfaceVariant;
     return IconButton(
       icon: Icon(Icons.translate_rounded, size: 20, color: color),
-      tooltip: active ? '关闭翻译' : '显示翻译',
+      tooltip: active
+          ? context.l10n.lyricsHideTranslation
+          : context.l10n.lyricsShowTranslation,
       onPressed: enabled
           ? () {
               setState(() {
@@ -261,13 +301,42 @@ class _LyricsViewState extends State<LyricsView> {
           ),
           const SizedBox(height: 12),
           Text(
-            '暂无歌词',
+            context.l10n.lyricsEmpty,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLoading() {
+    return Center(
+      child: SizedBox(
+        width: 22,
+        height: 22,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLyricsBody(LyricLoadState? loadState) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: _hasLyrics,
+      builder: (context, hasLyrics, _) {
+        if (loadState == LyricLoadState.loading) return _buildLoading();
+        if (!hasLyrics) return _buildEmpty();
+        return LyricView(
+          key: ObjectKey(widget.controller.document),
+          controller: widget.controller,
+          preset: _buildPreset(),
+          onLineTap: widget.onLineTap,
+        );
+      },
     );
   }
 
@@ -282,17 +351,13 @@ class _LyricsViewState extends State<LyricsView> {
             // 宽模式仅内容区右侧留白 10（顶栏保持与队列一致，窄模式不额外加）。
             child: Padding(
               padding: EdgeInsets.only(right: widget.isNarrow ? 0 : 20),
-              child: ValueListenableBuilder<bool>(
-                valueListenable: _hasLyrics,
-                builder: (context, hasLyrics, _) {
-                  if (!hasLyrics) return _buildEmpty();
-                  return LyricView(
-                    controller: widget.controller,
-                    preset: _buildPreset(),
-                    onLineTap: widget.onLineTap,
-                  );
-                },
-              ),
+              child: widget.loadState == null
+                  ? _buildLyricsBody(null)
+                  : ValueListenableBuilder<LyricLoadState>(
+                      valueListenable: widget.loadState!,
+                      builder: (context, loadState, _) =>
+                          _buildLyricsBody(loadState),
+                    ),
             ),
           ),
         ],

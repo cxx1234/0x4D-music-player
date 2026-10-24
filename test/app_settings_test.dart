@@ -216,4 +216,34 @@ void main() {
     final restored = AppSettings.fromJson({'musicFolders': []});
     expect(restored.lyricCountdown, isTrue);
   });
+
+  group('界面语言', () {
+    test('默认跟随系统', () {
+      const s = AppSettings();
+      expect(s.locale, 'system');
+    });
+
+    test('toJson/fromJson 往返保留 locale', () {
+      const s = AppSettings(locale: 'en');
+      final restored = AppSettings.fromJson(s.toJson());
+      expect(restored.locale, 'en');
+      expect(restored.toJson()['locale'], 'en');
+    });
+
+    test('fromJson 缺失该键时回退 system', () {
+      final restored = AppSettings.fromJson({'musicFolders': []});
+      expect(restored.locale, 'system');
+    });
+
+    test('fromJson 未知语言回退 system（不锁死在不支持的语言上）', () {
+      final restored = AppSettings.fromJson({'locale': 'ja'});
+      expect(restored.locale, 'system');
+    });
+
+    test('copyWith 可切换语言', () {
+      const s = AppSettings();
+      expect(s.copyWith(locale: 'zh').locale, 'zh');
+      expect(s.copyWith(locale: 'zh').copyWith(locale: 'en').locale, 'en');
+    });
+  });
 }

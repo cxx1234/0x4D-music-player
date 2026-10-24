@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 import '../../core/models/accent_color.dart';
 import '../../core/services/album_art_cache_service.dart';
 import '../../core/services/service_locator.dart';
+import '../../core/utils/app_locale.dart';
+import '../../l10n/app_localizations.dart';
+import '../../l10n/enum_labels.dart';
+import '../../l10n/l10n.dart';
 import '../../widgets/page_toolbar.dart';
 import '../shell/shell_controller.dart';
 import 'about_page.dart';
@@ -32,6 +36,9 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 主题模式（启动时从设置读取，默认跟随系统）。
   ThemeMode _themeMode = ThemeMode.system;
 
+  /// 界面语言（`'system'` / `'en'` / `'zh'`，启动时从设置读取）。
+  String _locale = 'system';
+
   /// 界面强调色（启动时从设置读取，默认石墨灰）。
   AccentColor _accent = AccentColor.graphite;
 
@@ -58,6 +65,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (ServiceLocator.isReady) {
       _resumePlayback = ServiceLocator.settings.resumePlaybackPosition;
       _themeMode = ServiceLocator.settings.themeMode;
+      _locale = ServiceLocator.settings.localeName;
       _accent = ServiceLocator.settings.accentColor;
       _nowPlayingBarFill = ServiceLocator.settings.nowPlayingBarFill;
       _sleepTimerFinishCurrentTrack =
@@ -97,20 +105,23 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _clearCache() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('清理封面缓存'),
-        content: const Text('将删除不再被任何歌曲或专辑引用的封面文件。\n正在使用的封面不受影响。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('清理'),
-          ),
-        ],
-      ),
+      builder: (dialogContext) {
+        final l10n = dialogContext.l10n;
+        return AlertDialog(
+          title: Text(l10n.settingsClearCoverCacheTitle),
+          content: Text(l10n.settingsClearCoverCacheBody),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.commonCancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(l10n.settingsClearCoverCacheAction),
+            ),
+          ],
+        );
+      },
     );
     if (confirmed != true || !mounted) return;
     final removed = await ServiceLocator.songRepo.cleanupOrphanCovers();
@@ -118,9 +129,7 @@ class _SettingsPageState extends State<SettingsPage> {
     await _loadCacheSize();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(removed > 0 ? '已清理 $removed 个未使用的封面' : '没有可清理的封面缓存'),
-      ),
+      SnackBar(content: Text(context.l10n.settingsCoverCacheCleared(removed))),
     );
   }
 
@@ -142,7 +151,12 @@ class _SettingsPageState extends State<SettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(title, style: theme.textTheme.titleMedium),
-        Text(subtitle, style: _subtitleStyle(theme)),
+        Text(
+          subtitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: _subtitleStyle(theme),
+        ),
       ],
     );
   }
@@ -153,9 +167,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   /// 主题模式 → 展示文案。
   String _themeModeLabel(ThemeMode mode) => switch (mode) {
-    ThemeMode.system => '跟随系统',
-    ThemeMode.light => '浅色',
-    ThemeMode.dark => '深色',
+    ThemeMode.system => context.l10n.commonFollowSystem,
+    ThemeMode.light => context.l10n.themeModeLight,
+    ThemeMode.dark => context.l10n.themeModeDark,
   };
 
   /// 主题模式 → 图标（分段按钮窄版用）。
@@ -163,6 +177,19 @@ class _SettingsPageState extends State<SettingsPage> {
     ThemeMode.system => Icons.brightness_auto,
     ThemeMode.light => Icons.light_mode_outlined,
     ThemeMode.dark => Icons.dark_mode_outlined,
+  };
+
+  /// 切换界面语言（UI 状态 + 写盘；MaterialApp 监听 localeNotifier 重建）。
+  void _setLocale(String value) {
+    setState(() => _locale = normalizeAppLocaleName(value));
+    ServiceLocator.settings.setLocale(value);
+  }
+
+  /// 当前语言选项的展示文案。
+  String _localeLabel(AppLocalizations l10n) => switch (_locale) {
+    'en' => l10n.settingsLanguageEnglish,
+    'zh' => l10n.settingsLanguageSimplifiedChinese,
+    _ => l10n.settingsLanguageSystem,
   };
 
   /// 切换续播开关（UI 状态 + 写盘）。
@@ -198,13 +225,14 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final granted = await ServiceLocator.trackNotifications.ensurePermission();
     if (granted || !mounted) return;
+    final l10n = context.l10n;
     ScaffoldMessenger.of(context)
       ..removeCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: const Text('通知权限未开启，切歌通知不会显示'),
+          content: Text(l10n.settingsNotificationsDenied),
           action: SnackBarAction(
-            label: '打开系统设置',
+            label: l10n.settingsOpenSystemSettings,
             onPressed: () => unawaited(
               ServiceLocator.trackNotifications.openNotificationSettings(),
             ),
@@ -283,6 +311,7 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 「音乐库」分组卡片：目前为强制刷新入口。无文件夹时禁用（ListTile 置灰）。
   Widget _buildLibraryCard() {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final hasFolders =
         ServiceLocator.isReady &&
         ServiceLocator.settings.musicFolders.isNotEmpty;
@@ -299,8 +328,10 @@ class _SettingsPageState extends State<SettingsPage> {
         leading: const Icon(Icons.refresh),
         title: _buildOptionText(
           theme,
-          '强制刷新',
-          hasFolders ? '重新解析全部歌曲，修复异常元数据/封面' : '请先在音乐库添加文件夹',
+          l10n.settingsForceRescanTitle,
+          hasFolders
+              ? l10n.settingsForceRescanSubtitle
+              : l10n.settingsForceRescanNoFolders,
         ),
         subtitle: null,
         trailing: Icon(
@@ -314,6 +345,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildPlaybackCard() {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 24),
       elevation: 0,
@@ -327,7 +359,11 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             minVerticalPadding: 16,
             leading: const Icon(Icons.replay_rounded),
-            title: _buildOptionText(theme, '续播上次播放位置', '启动后恢复上次播放进度'),
+            title: _buildOptionText(
+              theme,
+              l10n.settingsResumeTitle,
+              l10n.settingsResumeSubtitle,
+            ),
             subtitle: null,
             trailing: _buildCompactSwitch(
               value: _resumePlayback,
@@ -338,7 +374,11 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             minVerticalPadding: 16,
             leading: const Icon(Icons.notifications_none_rounded),
-            title: _buildOptionText(theme, '切歌时显示系统通知', '只应用在后台/关窗时弹出，前台不打扰'),
+            title: _buildOptionText(
+              theme,
+              l10n.settingsTrackNotificationTitle,
+              l10n.settingsTrackNotificationSubtitle,
+            ),
             subtitle: null,
             trailing: _buildCompactSwitch(
               value: _showTrackChangeNotification,
@@ -351,7 +391,11 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             minVerticalPadding: 16,
             leading: const Icon(Icons.timer_outlined),
-            title: _buildOptionText(theme, '睡眠定时先播完当前曲', '关闭则到点立即淡出暂停'),
+            title: _buildOptionText(
+              theme,
+              l10n.settingsSleepFinishTrackTitle,
+              l10n.settingsSleepFinishTrackSubtitle,
+            ),
             subtitle: null,
             trailing: _buildCompactSwitch(
               value: _sleepTimerFinishCurrentTrack,
@@ -368,6 +412,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   /// 「主题色」行：行内直排圆点（首项「跟随系统」+ 预设色板），点选即换肤。
   Widget _buildAccentRow(ThemeData theme) {
+    final l10n = context.l10n;
     // 跟随系统圆点的实时预览色：仅 macOS 有 SystemAccentService，
     // 其余平台用兜底空 notifier（恒定 null，不触发重建）。
     final systemAccent = ServiceLocator.isReady
@@ -402,9 +447,12 @@ class _SettingsPageState extends State<SettingsPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('主题色', style: theme.textTheme.titleMedium),
                   Text(
-                    '选择界面强调色或跟随系统',
+                    l10n.settingsAccentTitle,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  Text(
+                    l10n.settingsAccentSubtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: _subtitleStyle(theme),
@@ -502,7 +550,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
 
     return Tooltip(
-      message: accent.label,
+      message: accent.label(context.l10n),
       child: GestureDetector(
         onTap: () => _setAccentColor(accent),
         child: Container(
@@ -560,35 +608,54 @@ class _SettingsPageState extends State<SettingsPage> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('主题模式', style: theme.textTheme.titleMedium),
-                            Text('选择应用的明暗外观', style: _subtitleStyle(theme)),
+                            Text(
+                              context.l10n.settingsThemeTitle,
+                              style: theme.textTheme.titleMedium,
+                            ),
+                            Text(
+                              context.l10n.settingsThemeSubtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _subtitleStyle(theme),
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(width: 8),
-                      SegmentedButton<ThemeMode>(
-                        showSelectedIcon: false,
-                        segments: [
-                          for (final mode in ThemeMode.values)
-                            if (compact)
-                              ButtonSegment(
-                                value: mode,
-                                icon: Icon(_themeModeIcon(mode)),
-                                tooltip: _themeModeLabel(mode),
-                              )
-                            else
-                              ButtonSegment(
-                                value: mode,
-                                icon: Icon(_themeModeIcon(mode)),
-                                label: Text(_themeModeLabel(mode)),
-                              ),
-                        ],
-                        selected: {_themeMode},
-                        onSelectionChanged: (selection) {
-                          final mode = selection.first;
-                          setState(() => _themeMode = mode);
-                          ServiceLocator.settings.setThemeMode(mode);
-                        },
+                      // 语言切换后标签长度变化（中文 3 字 vs 英文单词），
+                      // 给按钮一个上限并允许等比缩小，避免挤压左侧文案。
+                      Flexible(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 360),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerRight,
+                            child: SegmentedButton<ThemeMode>(
+                              showSelectedIcon: false,
+                              segments: [
+                                for (final mode in ThemeMode.values)
+                                  if (compact)
+                                    ButtonSegment(
+                                      value: mode,
+                                      icon: Icon(_themeModeIcon(mode)),
+                                      tooltip: _themeModeLabel(mode),
+                                    )
+                                  else
+                                    ButtonSegment(
+                                      value: mode,
+                                      icon: Icon(_themeModeIcon(mode)),
+                                      label: Text(_themeModeLabel(mode)),
+                                    ),
+                              ],
+                              selected: {_themeMode},
+                              onSelectionChanged: (selection) {
+                                final mode = selection.first;
+                                setState(() => _themeMode = mode);
+                                ServiceLocator.settings.setThemeMode(mode);
+                              },
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   );
@@ -601,7 +668,11 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             minVerticalPadding: 16,
             leading: const Icon(Icons.lyrics_outlined),
-            title: _buildOptionText(theme, '歌词显示', '字号、翻译与歌词动效'),
+            title: _buildOptionText(
+              theme,
+              context.l10n.settingsLyricsTitle,
+              context.l10n.settingsLyricsSubtitle,
+            ),
             subtitle: null,
             trailing: Icon(Icons.chevron_right, color: chevronColor),
             onTap: _openLyricsSettings,
@@ -611,7 +682,11 @@ class _SettingsPageState extends State<SettingsPage> {
             // 与其它设置行一致的行高（续播/通用各行均为 16）。
             minVerticalPadding: 16,
             leading: const Icon(Icons.timeline_rounded),
-            title: _buildOptionText(theme, '底栏播放进度填充', '播放时底栏背景从左向右显示进度'),
+            title: _buildOptionText(
+              theme,
+              context.l10n.settingsNowPlayingFillTitle,
+              context.l10n.settingsNowPlayingFillSubtitle,
+            ),
             trailing: _buildCompactSwitch(
               value: _nowPlayingBarFill,
               onChanged: _setNowPlayingBarFill,
@@ -623,8 +698,64 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  /// 「语言」行：弹出菜单选择跟随系统 / English / 简体中文。
+  Widget _buildLanguageRow(ThemeData theme) {
+    final l10n = context.l10n;
+    return ListTile(
+      minVerticalPadding: 16,
+      leading: const Icon(Icons.language),
+      title: _buildOptionText(
+        theme,
+        l10n.settingsLanguageTitle,
+        l10n.settingsLanguageSubtitle,
+      ),
+      subtitle: null,
+      trailing: PopupMenuButton<String>(
+        initialValue: _locale,
+        enabled: ServiceLocator.isReady,
+        onSelected: _setLocale,
+        itemBuilder: (menuContext) => [
+          CheckedPopupMenuItem(
+            value: 'system',
+            checked: _locale == 'system',
+            child: Text(menuContext.l10n.settingsLanguageSystem),
+          ),
+          CheckedPopupMenuItem(
+            value: 'en',
+            checked: _locale == 'en',
+            child: Text(menuContext.l10n.settingsLanguageEnglish),
+          ),
+          CheckedPopupMenuItem(
+            value: 'zh',
+            checked: _locale == 'zh',
+            child: Text(menuContext.l10n.settingsLanguageSimplifiedChinese),
+          ),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _localeLabel(l10n),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              Icon(
+                Icons.arrow_drop_down,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildGeneralCard() {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final chevronColor = theme.colorScheme.onSurfaceVariant;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -635,10 +766,15 @@ class _SettingsPageState extends State<SettingsPage> {
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
+          _buildLanguageRow(theme),
           ListTile(
             minVerticalPadding: 16,
             leading: const Icon(Icons.receipt_long_outlined),
-            title: _buildOptionText(theme, '日志', '查看应用运行日志'),
+            title: _buildOptionText(
+              theme,
+              l10n.settingsLogsTitle,
+              l10n.settingsLogsSubtitle,
+            ),
             subtitle: null,
             trailing: Icon(Icons.chevron_right, color: chevronColor),
             onTap: () => Navigator.of(
@@ -648,7 +784,11 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             minVerticalPadding: 16,
             leading: const Icon(Icons.photo_library_outlined),
-            title: _buildOptionText(theme, '缓存', '封面图片缓存（可安全清理）'),
+            title: _buildOptionText(
+              theme,
+              l10n.settingsCacheTitle,
+              l10n.settingsCacheSubtitle,
+            ),
             subtitle: null,
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
@@ -665,7 +805,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 TextButton.icon(
                   onPressed: _clearCache,
                   icon: const Icon(Icons.cleaning_services, size: 18),
-                  label: const Text('清理'),
+                  label: Text(l10n.settingsClearCoverCacheAction),
                 ),
               ],
             ),
@@ -675,8 +815,8 @@ class _SettingsPageState extends State<SettingsPage> {
             leading: const Icon(Icons.info_outline),
             title: _buildOptionText(
               theme,
-              '关于',
-              '版本 ${ServiceLocator.appVersion ?? ''} · 开源许可',
+              l10n.settingsAboutTitle,
+              l10n.settingsAboutSubtitle(ServiceLocator.appVersion ?? ''),
             ),
             subtitle: null,
             trailing: Icon(Icons.chevron_right, color: chevronColor),
@@ -702,9 +842,10 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Column(
       children: [
-        const PageToolbar(title: '设置'),
+        PageToolbar(title: l10n.settingsTitle),
         const Divider(height: 1),
         Expanded(
           // 项目约定：含 ListTile/InkWell 的滚动区必须外包透明 Material +
@@ -715,13 +856,13 @@ class _SettingsPageState extends State<SettingsPage> {
             child: ListView(
               padding: const EdgeInsets.only(bottom: 24),
               children: [
-                _buildSectionHeader('音乐库'),
+                _buildSectionHeader(l10n.settingsSectionLibrary),
                 _buildLibraryCard(),
-                _buildSectionHeader('播放设置'),
+                _buildSectionHeader(l10n.settingsSectionPlayback),
                 _buildPlaybackCard(),
-                _buildSectionHeader('外观'),
+                _buildSectionHeader(l10n.settingsSectionAppearance),
                 _buildAppearanceCard(),
-                _buildSectionHeader('通用'),
+                _buildSectionHeader(l10n.settingsSectionGeneral),
                 _buildGeneralCard(),
               ],
             ),

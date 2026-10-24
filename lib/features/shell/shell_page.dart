@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../core/constants/layout.dart';
+import '../../l10n/l10n.dart';
 import '../album/album_page.dart';
 import '../artist/artist_page.dart';
 import '../library/library_page.dart';
 import '../playlist/playlist_page.dart';
 import '../settings/settings_page.dart';
 import 'shell_controller.dart';
+import 'shell_l10n.dart';
 
 export 'shell_controller.dart';
 
@@ -120,7 +122,7 @@ class _ShellPageState extends State<ShellPage> {
                   for (final item in NavigationItem.values)
                     NavigationRailDestination(
                       icon: Icon(item.icon, size: 26),
-                      label: Text(item.label),
+                      label: Text(item.label(context.l10n)),
                     ),
                 ],
               ),

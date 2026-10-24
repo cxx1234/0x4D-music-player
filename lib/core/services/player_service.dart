@@ -21,6 +21,35 @@ enum PlayerRepeatMode {
   all,
 }
 
+/// 需要提示给用户的播放失败类型。
+enum PlaybackFailureKind {
+  /// 单个文件加载/播放失败，已自动跳过。
+  loadFailed,
+
+  /// 连续失败达到上限，自动跳转已停止。
+  repeatedFailures,
+}
+
+/// 一次播放失败（语义化，由 UI 按当前语言本地化）。
+@immutable
+class PlaybackFailure {
+  const PlaybackFailure.loadFailed(this.title)
+    : kind = PlaybackFailureKind.loadFailed,
+      consecutiveCount = null;
+
+  const PlaybackFailure.repeatedFailures(this.consecutiveCount)
+    : kind = PlaybackFailureKind.repeatedFailures,
+      title = null;
+
+  final PlaybackFailureKind kind;
+
+  /// [PlaybackFailureKind.loadFailed]：失败曲目的标题（未知时为 null）。
+  final String? title;
+
+  /// [PlaybackFailureKind.repeatedFailures]：连续失败次数。
+  final int? consecutiveCount;
+}
+
 /// Core audio playback service.
 ///
 /// ### 职责划分（2026-09 播放引擎抽象重构）
@@ -121,8 +150,8 @@ class PlayerService extends ChangeNotifier {
   /// 连续播放失败计数上限:达到后停止自动跳转(防坏文件死循环)。
   static const int _kMaxConsecutiveErrors = 3;
 
-  /// 最近一次播放错误的用户可读消息(消费即清,供 UI 提示一次)。
-  String? _lastPlaybackError;
+  /// 最近一次播放失败（消费即清，供 UI 按当前语言提示一次）。
+  PlaybackFailure? _lastPlaybackError;
 
   /// 连续播放失败计数。
   int _consecutiveErrors = 0;
@@ -177,6 +206,16 @@ class PlayerService extends ChangeNotifier {
     _playQueue.currentSong,
   );
 
+  /// The song that has actually finished loading into the engine.
+  ///
+  /// [currentSongNotifier] changes as soon as the queue index changes, which is
+  /// before the engine has the new file. Lyrics use this notifier to wait for
+  /// the new track before rendering its document, so a load window cannot keep
+  /// showing (or repositioning) the previous song's lyrics.
+  late final ValueNotifier<Song?> loadedSongNotifier = ValueNotifier<Song?>(
+    null,
+  );
+
   /// 播放/暂停状态翻转通知器（playing 变化时触发）。
   late final ValueNotifier<bool> playingNotifier = ValueNotifier<bool>(
     _engine.isPlaying,
@@ -223,6 +262,12 @@ class PlayerService extends ChangeNotifier {
     if (!_notifyPending) return;
     _notifyPending = false;
     notifyListeners();
+  }
+
+  /// Invalidate both the loaded-index flag and the public loaded-song signal.
+  void _markUnloaded() {
+    _loadedIndex = null;
+    loadedSongNotifier.value = null;
   }
 
   /// PlayQueue 变化的统一入口：转发给本 service 的监听者，并维护按歌曲 id
@@ -339,7 +384,7 @@ class PlayerService extends ChangeNotifier {
     }
     // 加载窗口内先摘掉「已加载」标记：position/duration 不再读上一首的引擎值
     // （媒体控制 1s 轮询与位置落盘都可能落在这个窗口里）。
-    _loadedIndex = null;
+    _markUnloaded();
     // 加载事务：把这次加载期间产生的通知合并为一次 UI 重建。
     _loadDepth++;
     try {
@@ -359,6 +404,7 @@ class PlayerService extends ChangeNotifier {
       if (_engine.loadedPath == null) return false;
       // 加载成功后才标记「已加载」（此前 position/duration 回退到队列保存值）。
       _loadedIndex = targetIndex;
+      loadedSongNotifier.value = song;
       // 复查用户意图：加载期间用户可能已经按了暂停（`pause()` 只改 `_shouldPlay`），
       // 这里若无条件起播，就会出现「声音在放、界面与系统面板显示已暂停」的不一致。
       if (autoPlay && _shouldPlay) await _engine.play();
@@ -380,7 +426,7 @@ class PlayerService extends ChangeNotifier {
     _playQueue.setCurrentIndex(index);
     // 手动 / 自动切歌都从曲目开头播放，不使用续播位置。
     _resumePosition = null;
-    _loadedIndex = null;
+    _markUnloaded();
     await _loadCurrent(autoPlay: play);
   }
 
@@ -419,7 +465,7 @@ class PlayerService extends ChangeNotifier {
   /// 引擎并归零状态。
   Future<void> _finishQueue() async {
     _shouldPlay = false;
-    _loadedIndex = null;
+    _markUnloaded();
     _resumePosition = Duration.zero;
     await _engine.release();
     _playQueue.setCurrentIndex(0);
@@ -575,8 +621,8 @@ class PlayerService extends ChangeNotifier {
     }
   }
 
-  /// 消费并清除最近的播放错误消息(返回 null 表示没有待提示的错误)。
-  String? takePlaybackError() {
+  /// 消费并清除最近的播放失败（null 表示没有待提示的错误）。
+  PlaybackFailure? takePlaybackError() {
     final err = _lastPlaybackError;
     _lastPlaybackError = null;
     return err;
@@ -590,7 +636,7 @@ class PlayerService extends ChangeNotifier {
     _playQueue.replace(songs, startIndex);
     // 用户主动选歌播放：放弃启动续播位置。
     _resumePosition = null;
-    _loadedIndex = null;
+    _markUnloaded();
     _rebuildOrder(keepCurrentFirst: true);
     await _loadCurrent(autoPlay: true);
   }
@@ -609,7 +655,7 @@ class PlayerService extends ChangeNotifier {
     _onSongsAppended(from, songs.length);
     if (wasEmpty) {
       _resumePosition = null;
-      _loadedIndex = null;
+      _markUnloaded();
       _playQueue.setCurrentIndex(0);
       await _loadCurrent(autoPlay: true);
     }
@@ -651,7 +697,7 @@ class PlayerService extends ChangeNotifier {
 
   Future<void> stop() async {
     _shouldPlay = false;
-    _loadedIndex = null;
+    _markUnloaded();
     _resumePosition = null;
     await _engine.release();
     _playQueue.clear();
@@ -667,7 +713,7 @@ class PlayerService extends ChangeNotifier {
   /// 这正是引擎接口“只做一件事”的收益。
   Future<void> stopPlayback() async {
     _shouldPlay = false;
-    _loadedIndex = null;
+    _markUnloaded();
     _resumePosition = Duration.zero;
     await _engine.release();
     _playQueue.setPlaybackState(Duration.zero, Duration.zero);
@@ -876,13 +922,13 @@ class PlayerService extends ChangeNotifier {
     _playQueue.removeAt(index);
     _onSongRemoved(index);
     if (_playQueue.isEmpty) {
-      _loadedIndex = null;
+      _markUnloaded();
       await _engine.release();
       return;
     }
     if (removedCurrent) {
       // 删掉的是正在播放的曲目：索引已由 PlayQueue 修正，重新加载新的当前曲。
-      _loadedIndex = null;
+      _markUnloaded();
       _resumePosition = null;
       await _loadCurrent(autoPlay: wasPlaying);
     }
@@ -894,7 +940,7 @@ class PlayerService extends ChangeNotifier {
     if (index < 0 || index >= _playQueue.length) return;
     _playQueue.setCurrentIndex(index);
     _resumePosition = null;
-    _loadedIndex = null;
+    _markUnloaded();
     await _loadCurrent(autoPlay: true);
   }
 
@@ -929,7 +975,7 @@ class PlayerService extends ChangeNotifier {
     _shouldPlay = false;
     _playQueue.clear();
     _order = [];
-    _loadedIndex = null;
+    _markUnloaded();
     _resumePosition = null;
     await _engine.release();
   }
@@ -946,7 +992,7 @@ class PlayerService extends ChangeNotifier {
 
     if (_playQueue.isEmpty) {
       _order = [];
-      _loadedIndex = null;
+      _markUnloaded();
       await _engine.release();
       return;
     }
@@ -960,7 +1006,7 @@ class PlayerService extends ChangeNotifier {
       return;
     }
     // 正在播放的曲目已被剪掉 → 重新加载新的当前曲。
-    _loadedIndex = null;
+    _markUnloaded();
     _resumePosition = null;
     await _loadCurrent(autoPlay: wasPlaying);
   }
@@ -981,8 +1027,9 @@ class PlayerService extends ChangeNotifier {
   /// [takePlaybackError] 消费并提示。
   void _reportPlaybackError(String where, Object e, StackTrace? s) {
     _consecutiveErrors++;
-    final title = _playQueue.currentSong?.title;
-    _lastPlaybackError = '无法播放${title != null ? '：$title' : '该文件'}，已自动跳过';
+    _lastPlaybackError = PlaybackFailure.loadFailed(
+      _playQueue.currentSong?.title,
+    );
     AppLogger.error('Player', 'Playback failed in $where', e, s);
     notifyListeners();
   }
@@ -1003,7 +1050,9 @@ class PlayerService extends ChangeNotifier {
   /// 则放弃这次自动跳转——否则迟到的跳过会把用户刚选的歌顶掉。
   Future<void> _skipOnFailure(String? failedPath) async {
     if (_consecutiveErrors >= _kMaxConsecutiveErrors) {
-      _lastPlaybackError = '连续 $_kMaxConsecutiveErrors 次无法播放，已停止自动跳转';
+      _lastPlaybackError = const PlaybackFailure.repeatedFailures(
+        _kMaxConsecutiveErrors,
+      );
       AppLogger.error(
         'Player',
         'Reached $_kMaxConsecutiveErrors consecutive playback failures; auto-skip stopped',
@@ -1044,6 +1093,7 @@ class PlayerService extends ChangeNotifier {
     // 通知器最后释放：cancel 订阅后 _onQueueChanged/_onPlayingChanged 不会再
     // 被触发，避免在已 dispose 的 ValueNotifier 上写入。
     currentSongNotifier.dispose();
+    loadedSongNotifier.dispose();
     playingNotifier.dispose();
     super.dispose();
   }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/constants/motion.dart';
+import '../../l10n/l10n.dart';
 import '../../core/utils/logger.dart';
 import '../../widgets/detail_top_bar.dart';
 import 'log_detail_page.dart';
@@ -176,12 +177,12 @@ class _LogPageState extends State<LogPage> {
     final variant = Theme.of(context).colorScheme.onSurfaceVariant;
     return Scaffold(
       appBar: DetailTopBar(
-        title: '日志',
+        title: context.l10n.logsTitle,
         actions: [
           if (_days.length > 1)
             PopupMenuButton<String>(
               popUpAnimationStyle: kPopupMenuAnimationStyle,
-              tooltip: '选择日期',
+              tooltip: context.l10n.logsSelectDate,
               initialValue: _selectedDay,
               onSelected: _selectDay,
               itemBuilder: (context) => [
@@ -232,12 +233,11 @@ class _LogPageState extends State<LogPage> {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
               const SizedBox(height: 12),
-              Text('暂无日志', style: theme.textTheme.bodyMedium),
+              Text(context.l10n.logsEmpty, style: theme.textTheme.bodyMedium),
               if (kDebugMode) ...[
                 const SizedBox(height: 8),
                 Text(
-                  '当前为 Debug 构建,日志仅输出到控制台,不会写入本页。'
-                  'Release/Profile 构建才会生成日志文件。',
+                  context.l10n.logsDebugHint,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,

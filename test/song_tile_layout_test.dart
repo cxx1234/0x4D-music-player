@@ -6,6 +6,8 @@ import 'package:txvziwm/widgets/cached_album_art.dart';
 import 'package:txvziwm/widgets/list_item_tile.dart';
 import 'package:txvziwm/widgets/song_tile.dart';
 
+import 'helpers/l10n.dart';
+
 /// 列表统一行高（与 `ListView.itemExtent: 72` 一致）。
 const double _kRowExtent = 72;
 
@@ -35,7 +37,7 @@ Future<void> _pumpList(
   bool showIndex = true,
 }) async {
   await tester.pumpWidget(
-    MaterialApp(
+    localizedApp(
       home: Scaffold(
         body: ListView.builder(
           itemExtent: _kRowExtent,
@@ -111,7 +113,7 @@ void main() {
 
   testWidgets('ListItemTile 无副标题时同样保持行高与居中', (tester) async {
     await tester.pumpWidget(
-      MaterialApp(
+      localizedApp(
         home: Scaffold(
           body: ListView.builder(
             itemExtent: _kRowExtent,

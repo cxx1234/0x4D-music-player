@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../core/services/playback_feedback_service.dart';
 import '../core/services/player_service.dart';
+import '../l10n/l10n.dart';
 import 'control_pulse.dart';
 
 /// 播放控制按钮行：上一首 / 播放·暂停 / 下一首。
@@ -30,6 +31,7 @@ class PlayerControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return Row(
       mainAxisAlignment: alignment,
       children: [
@@ -41,7 +43,7 @@ class PlayerControls extends StatelessWidget {
             icon: Icons.skip_previous_rounded,
             isActive: pulsing,
             iconSize: 32,
-            tooltip: '上一首',
+            tooltip: l10n.playerPrevious,
             onPressed: player.previous,
           ),
         ),
@@ -53,7 +55,7 @@ class PlayerControls extends StatelessWidget {
           action: PlaybackAction.playPause,
           builder: (context, pulsing) => IconButton(
             iconSize: compact ? 44 : 64,
-            tooltip: player.isPlaying ? '暂停' : '播放',
+            tooltip: player.isPlaying ? l10n.playerPause : l10n.playerPlay,
             onPressed: player.togglePlay,
             style: pulsing
                 ? IconButton.styleFrom(
@@ -80,7 +82,7 @@ class PlayerControls extends StatelessWidget {
             icon: Icons.skip_next_rounded,
             isActive: pulsing,
             iconSize: 32,
-            tooltip: '下一首',
+            tooltip: l10n.playerNext,
             onPressed: player.next,
           ),
         ),

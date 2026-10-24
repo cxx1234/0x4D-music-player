@@ -1,5 +1,7 @@
 # 0x4D Music Player
 
+**English** · [简体中文](README_zh.md)
+
 A local music player built with **Flutter**.
 
 <p align="center">
@@ -12,6 +14,12 @@ A local music player built with **Flutter**.
   <sub>Now Playing — synced lyrics with per-character fill and line transitions</sub>
 </p>
 
+## Why 0x4D?
+
+`0x4D` is how a hex editor writes 77 — the ASCII code of the letter **M**. The name is "Music"
+spelled the way the tooling underneath spells it, and the icon is drawn the same way: the lettering
+is set in a 9×9 dot-matrix font, one circle per pixel, with a flat eighth note running through the `4`.
+
 ## Features
 
 - **Local music library** — pick a folder, scan your files, and parse embedded metadata (title, artist, album artist, album, track, disc, duration, year, genre, bitrate, sample rate, cover art). A file watcher keeps the library in sync when files change; removing a folder also cleans up orphaned albums and artists.
@@ -23,6 +31,7 @@ A local music player built with **Flutter**.
 - **Lyrics** — synced LRC/QRC/YRC lyrics on the Now Playing page, auto-detected next to the audio file or read from embedded tags. Bilingual lines (e.g. Chinese-Japanese) are split into two timelines, and playback drives the highlight on every display frame.
 - **Lyrics display** — a dedicated **Settings › Appearance › Lyrics display** page, also reachable from the player toolbar. On wide windows a live looped preview sits beside the controls, which cover text size and translation, per-character fill and Word Pop, line transitions, row-wave motion, distance blur and intro/interlude countdown dots. The preview and the player build the same preset, so what you see is what plays.
 - **System media controls** (macOS) — lock-screen / media-key controls (play, pause, next, previous, seek) with Now Playing metadata and cover art; dock menu and window restore after close.
+- **Localized UI** — English and Simplified Chinese, switchable in **Settings › General › Language** (follow system / English / 简体中文) with no restart.
 - **Smart sorting** — pinyin and Japanese kana based sort keys for natural ordering in the library.
 - **Cover art caching** — album art is extracted once and cached for fast browsing.
 - **Volume & favorites** — persistent volume control and a favorites toggle on the player bar.
@@ -30,10 +39,9 @@ A local music player built with **Flutter**.
 
 ### Planned
 
-- Multiple Display Language Support
 - Gapless playback
 - DSD support
-- Windows / Linux system media controls
+- Windows / Linux support (maybe?)
 
 ## Getting Started
 
@@ -53,6 +61,21 @@ flutter run -d macos
 > app, delete `build/macos`, then run again — hot reload and hot restart do not recompile
 > Swift. **Do not run `flutter clean`** in this project: it hangs on the SQLite native
 > assets built through Swift Package Manager.
+
+### Localization
+
+UI strings live in `lib/l10n/app_en.arb` (template) and `lib/l10n/app_zh.arb`.
+After editing either file, regenerate the Dart classes:
+
+```bash
+flutter gen-l10n
+```
+
+The app language can be switched in **Settings › General › Language**
+(follow system / English / Simplified Chinese) and is persisted in `settings.json`.
+The generated `app_localizations*.dart` files are committed. See
+[docs/I18n.md](docs/I18n.md) for conventions and known limits — notably, the macOS
+native menu still follows the system language.
 
 ### macOS permissions
 
@@ -95,6 +118,16 @@ See [docs/Architecture.md](docs/Architecture.md) for the full architecture and [
 ```bash
 flutter test
 ```
+
+## Credits
+
+- **App icon** — the `0x4D` lettering is set in
+  [BoutiqueBitmap9x9 Circle Dot](https://fontspeech.blogspot.com/) (精品點陣體 9×9 圓形版) by
+  字言字型 / fancy type foundry, and the artwork was composed in [Krita](https://krita.org/).
+  The font file stays in `assets/fonts/` as the design source and is not bundled into the app.
+  It is free software: unlimited permission to use, copy and distribute, with or without
+  modification, commercially or otherwise; derivative works must carry the same licence, and the
+  font name `BoutiqueBitmap` remains reserved.
 
 ## License
 

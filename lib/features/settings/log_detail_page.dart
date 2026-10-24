@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import '../../widgets/detail_top_bar.dart';
 import 'log_page.dart';
 
@@ -24,7 +25,7 @@ class LogDetailPage extends StatelessWidget {
     final color = logLevelColor(theme, entry.level);
 
     return Scaffold(
-      appBar: DetailTopBar(title: '日志详情'),
+      appBar: DetailTopBar(title: context.l10n.logDetailTitle),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [

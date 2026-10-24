@@ -8,8 +8,10 @@ import 'package:txvziwm/core/services/play_queue.dart';
 import 'package:txvziwm/core/services/playback_feedback_service.dart';
 import 'package:txvziwm/core/services/player_service.dart';
 import 'package:txvziwm/core/services/sleep_timer_service.dart';
+import 'package:txvziwm/l10n/app_localizations.dart';
 
 import 'helpers/fake_audio_engine.dart';
+import 'helpers/l10n.dart';
 
 /// macOS 原生菜单桥接：通道入站动作的分发 + 出站状态推送（含睡眠定时）。
 void main() {
@@ -23,8 +25,9 @@ void main() {
   late SleepTimerService sleepTimer;
   late HudService hud;
   late MenuService menu;
+  late AppLocalizations l10n;
 
-  setUp(() {
+  setUp(() async {
     engine = FakeAudioEngine();
     player = PlayerService(engine, playQueue: PlayQueue());
     // 步长调小：用例里要靠它验证"倒计时 tick 不会重复推通道"。
@@ -33,9 +36,10 @@ void main() {
       tickInterval: const Duration(milliseconds: 20),
     );
     hud = HudService();
+    l10n = await loadL10n();
     menu = MenuService.attach(
       player,
-      PlaybackFeedbackService(player, hud, sleepTimer),
+      PlaybackFeedbackService(player, hud, sleepTimer, l10n: () => l10n),
       sleepTimer,
     );
     // 出站方向给个空 handler：否则每次 _push() 都会打一条

@@ -1,0 +1,42 @@
+name: Feature / task
+description: A planned piece of work with explicit acceptance criteria
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Write in English. A task is only ready to start when "Acceptance" can be judged by someone
+        else without asking you, and "Open questions" is empty.
+  - type: textarea
+    id: background
+    attributes:
+      label: Background
+      description: Why now, and what already exists in the code. Link the tracking issue if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: subtasks
+    attributes:
+      label: Subtasks
+      description: Tick a box only after you can point at the landing change (file or commit).
+      value: |
+        - [ ] 1.
+        - [ ] 2.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance
+      description: Observable behaviour, not wording. Include the analyze/test expectation when code changes.
+      value: |
+        -
+    validations:
+      required: true
+  - type: textarea
+    id: open-questions
+    attributes:
+      label: Open questions
+      description: Decisions still missing (scope, UI entry point, thresholds).
+    validations:
+      required: false

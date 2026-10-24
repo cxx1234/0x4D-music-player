@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/constants/motion.dart';
 import '../core/database/database.dart';
+import '../l10n/l10n.dart';
 import 'cached_album_art.dart';
 
 /// 歌曲行组件：封面 + 标题 + 歌手/专辑 + 时长 + 播放态高亮 + 可选"更多"菜单。
@@ -284,7 +285,7 @@ class _SongTileState extends State<SongTile> {
             PopupMenuButton<String>(
               key: _menuKey,
               popUpAnimationStyle: kPopupMenuAnimationStyle,
-              tooltip: '更多',
+              tooltip: context.l10n.commonMore,
               icon: const Icon(Icons.more_vert),
               onSelected: (value) => onMenuSelected?.call(song, value),
               // 菜单项依赖实时播放状态（随机开关/是否已在队列），必须在每次

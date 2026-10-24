@@ -7,6 +7,7 @@ import 'router.dart';
 import 'startup_error_page.dart';
 import 'theme.dart';
 import '../core/models/accent_color.dart';
+import '../core/navigation/back_navigation.dart';
 import '../core/navigation/route_observer.dart';
 import '../core/services/player_service.dart';
 import '../core/services/service_locator.dart';
@@ -17,6 +18,8 @@ import '../features/player/player_page.dart';
 import '../features/player/player_ui_state.dart';
 import '../features/shell/now_playing_bar.dart';
 import '../features/shell/shell_page.dart';
+import '../l10n/app_localizations.dart';
+import '../l10n/l10n.dart';
 import '../widgets/hud_overlay.dart';
 
 class App extends StatefulWidget {
@@ -38,6 +41,11 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   /// Shell tab 外部控制（播放页跳歌手/专辑时切 tab）。
   final _shellController = ShellController();
 
+  /// 「返回」的输入分发：鼠标后退侧键 / ⌘[ / 浏览器后退键。
+  late final BackNavigationHandler _backNavigation = BackNavigationHandler(
+    onBack: _goBack,
+  );
+
   @override
   void initState() {
     super.initState();
@@ -45,8 +53,18 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     // 键盘导航退出口（P1）：Esc 取消焦点。注册为 **late** key handler —— 只有
     // 对话框 / 弹层菜单 / 文本框都没处理该键时才轮到这里（详见 utils/keyboard_focus.dart）。
     FocusManager.instance.addLateKeyEventHandler(handleKeyboardFocusKeyEvent);
+    // 返回（鼠标后退侧键 / ⌘[ / 浏览器后退键）。与 Esc 一样用 late handler，
+    // 不抢输入控件与弹层。
+    FocusManager.instance.addLateKeyEventHandler(_backNavigation.handleKey);
     _initializeServices();
   }
+
+  /// 返回一层路由。
+  ///
+  /// 对话框 / 右键菜单 / BottomSheet 都挂在同一个 Navigator 上，所以它们也是一
+  /// 层 —— 会先被关掉，符合「一层一层退」。已经回到主界面（Shell）时什么都不做，
+  /// 不切 tab、不退出应用。
+  void _goBack() => popTopRoute(_navKey.currentState);
 
   /// 初始化核心服务(幂等),失败时进入启动错误页。
   Future<void> _initializeServices() async {
@@ -102,6 +120,11 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       // 点击切歌通知横幅 → 打开「正在播放」页（core 不反向依赖 features，
       // 回调由此注入，与上述 MenuService 的注入方式一致）。
       ServiceLocator.trackNotifications.onOpenPlayer = _openPlayer;
+      // 语言切换后歌词的中文翻译副行显示条件会变，重新解析当前歌词。
+      // 重试路径可能再次执行，先移除避免重复挂监听。
+      ServiceLocator.settings.localeNotifier
+        ..removeListener(_onLocaleChanged)
+        ..addListener(_onLocaleChanged);
       setState(() => _initialized = true);
     }
   }
@@ -113,12 +136,24 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     _initializeServices();
   }
 
+  /// 界面语言切换：歌词翻译副行是否显示取决于界面语言，需要重新解析。
+  void _onLocaleChanged() {
+    if (!ServiceLocator.isReady) return;
+    ServiceLocator.lyrics.refreshLocaleDependentContent();
+    // 系统通知的「下一首」动作标签在插件初始化时注册，切换语言后重新注册。
+    unawaited(ServiceLocator.trackNotifications.refreshLocale());
+  }
+
   @override
   void dispose() {
+    if (ServiceLocator.isReady) {
+      ServiceLocator.settings.localeNotifier.removeListener(_onLocaleChanged);
+    }
     WidgetsBinding.instance.removeObserver(this);
     FocusManager.instance.removeLateKeyEventHandler(
       handleKeyboardFocusKeyEvent,
     );
+    FocusManager.instance.removeLateKeyEventHandler(_backNavigation.handleKey);
     _showBar.dispose();
     _shellController.dispose();
     super.dispose();
@@ -212,6 +247,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
         ? Listenable.merge([
             settings.themeModeNotifier,
             settings.accentColorNotifier,
+            settings.localeNotifier,
             systemAccent?.systemAccentNotifier ?? _fallbackSystemAccent,
           ])
         : Listenable.merge([
@@ -235,6 +271,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
             (accent.followsSystem && systemColor == null);
         return MaterialApp(
           title: '0x4D',
+          locale: settings?.localeNotifier.value,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           theme: neutral
               ? AppTheme.monochrome(brightness: Brightness.light)
               : AppTheme.light(seed: seed),
@@ -262,31 +301,36 @@ class _AppState extends State<App> with WidgetsBindingObserver {
             return Overlay(
               initialEntries: [
                 OverlayEntry(
-                  builder: (context) => Scaffold(
-                    // 所有页面（Shell + 子页面 + 播放页）都渲染在底栏上方，底栏不被
-                    // 子页面盖住。顶部不再有全局顶栏，改由各页面自行避让（左侧边栏
-                    // 顶部预留 45 给红绿灯，右侧内容区用统一高度的 PageToolbar）。
-                    body: GestureDetector(
-                      // 键盘导航退出口（P3）：点空白处取消焦点。
-                      // `translucent` + 根级只当兜底 —— 按钮 / 列表行 / 弹层菜单
-                      // 自己的手势会赢下手势竞技场（内层优先），只有「真的没东西
-                      // 可点」时才轮到它，不会误伤交互。
-                      behavior: HitTestBehavior.translucent,
-                      onTap: () => clearKeyboardFocus(),
-                      child: _PlayerNoticeConsumer(
-                        child: child ?? const SizedBox.shrink(),
+                  builder: (context) => Listener(
+                    // 鼠标「后退」侧键（button 4）。Listener 不进手势竞技场，
+                    // 不会和按钮 / 列表行 / 弹层菜单抢手势。
+                    onPointerDown: _backNavigation.handlePointerDown,
+                    child: Scaffold(
+                      // 所有页面（Shell + 子页面 + 播放页）都渲染在底栏上方，底栏不被
+                      // 子页面盖住。顶部不再有全局顶栏，改由各页面自行避让（左侧边栏
+                      // 顶部预留 45 给红绿灯，右侧内容区用统一高度的 PageToolbar）。
+                      body: GestureDetector(
+                        // 键盘导航退出口（P3）：点空白处取消焦点。
+                        // `translucent` + 根级只当兜底 —— 按钮 / 列表行 / 弹层菜单
+                        // 自己的手势会赢下手势竞技场（内层优先），只有「真的没东西
+                        // 可点」时才轮到它，不会误伤交互。
+                        behavior: HitTestBehavior.translucent,
+                        onTap: () => clearKeyboardFocus(),
+                        child: _PlayerNoticeConsumer(
+                          child: child ?? const SizedBox.shrink(),
+                        ),
                       ),
-                    ),
-                    bottomNavigationBar: ValueListenableBuilder<bool>(
-                      valueListenable: _showBar,
-                      builder: (context, show, _) {
-                        // 全屏“正在播放”打开时隐藏底栏，关闭后恢复。
-                        // 启动失败时不显示底栏（此时没有播放器/队列）。
-                        if (!show || _startupError != null) {
-                          return const SizedBox.shrink();
-                        }
-                        return NowPlayingBar(onTap: _openPlayer);
-                      },
+                      bottomNavigationBar: ValueListenableBuilder<bool>(
+                        valueListenable: _showBar,
+                        builder: (context, show, _) {
+                          // 全屏“正在播放”打开时隐藏底栏，关闭后恢复。
+                          // 启动失败时不显示底栏（此时没有播放器/队列）。
+                          if (!show || _startupError != null) {
+                            return const SizedBox.shrink();
+                          }
+                          return NowPlayingBar(onTap: _openPlayer);
+                        },
+                      ),
                     ),
                   ),
                 ),
@@ -355,17 +399,33 @@ class _PlayerNoticeConsumerState extends State<_PlayerNoticeConsumer> {
   void _onPlayerChanged() {
     final err = _player!.takePlaybackError();
     if (err == null || !mounted) return;
+    final l10n = context.l10n;
+    final message = switch (err.kind) {
+      PlaybackFailureKind.loadFailed =>
+        err.title == null
+            ? l10n.playbackFailedNoTitle
+            : l10n.playbackFailedWithTitle(err.title!),
+      PlaybackFailureKind.repeatedFailures => l10n.playbackFailedRepeated(
+        err.consecutiveCount ?? 0,
+      ),
+    };
     // 连跳多首坏文件时会连续产生提示：**替换**当前提示而不是排队，否则会积起
     // 一串"无法播放"按顺序慢慢弹完（观感很差，且滞后于真实进度）。
     ScaffoldMessenger.of(context)
       ..removeCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(err)));
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// 睡眠定时到点：提示一次（到点时可能不在播放页，按钮状态的变化未必看得到）。
   void _onSleepTimerNotice() {
-    final message = _sleepTimer!.takeNotice();
-    if (message == null || !mounted) return;
+    final notice = _sleepTimer!.takeNotice();
+    if (notice == null || !mounted) return;
+    final l10n = context.l10n;
+    final message = switch (notice) {
+      SleepTimerNotice.expiredWaitingForTrack => l10n.sleepTimerExpiredWaiting,
+      SleepTimerNotice.finishedPaused => l10n.sleepTimerFinishedPaused,
+      SleepTimerNotice.finishedStopped => l10n.sleepTimerFinishedStopped,
+    };
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));

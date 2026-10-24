@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:txvziwm/app/theme.dart';
 import 'package:txvziwm/features/settings/settings_page.dart';
 
+import 'helpers/l10n.dart';
+
 /// 「外观」分组里两行 leading 图标（主题模式 / 主题色）的着色回归。
 ///
 /// 坑：这两行不是 ListTile（一行要放分段按钮、一行要横排色板圆点），自己拼的
@@ -21,7 +23,7 @@ void main() {
 
   Future<void> pumpSettings(WidgetTester tester, Brightness brightness) {
     return tester.pumpWidget(
-      MaterialApp(
+      localizedApp(
         theme: AppTheme.monochrome(brightness: brightness),
         home: const Scaffold(body: SettingsPage()),
       ),

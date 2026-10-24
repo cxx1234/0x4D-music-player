@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/services/service_locator.dart';
+import '../../l10n/l10n.dart';
 import '../../widgets/detail_top_bar.dart';
 
 /// 关于页：应用信息 + 开源许可 + 项目主页。
@@ -16,7 +17,7 @@ class AboutPage extends StatelessWidget {
     Clipboard.setData(const ClipboardData(text: repoUrl));
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('已复制项目链接')));
+    ).showSnackBar(SnackBar(content: Text(context.l10n.aboutLinkCopied)));
   }
 
   /// 选项副标题样式：比 bodySmall 再小一档、偏灰（与设置页/SongTile 一致）。
@@ -43,6 +44,7 @@ class AboutPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final muted = theme.textTheme.bodyMedium?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
@@ -51,7 +53,7 @@ class AboutPage extends StatelessWidget {
     final version = ServiceLocator.appVersion ?? '…';
 
     return Scaffold(
-      appBar: DetailTopBar(title: '关于'),
+      appBar: DetailTopBar(title: l10n.aboutTitle),
       // 项目约定：含 ListTile/InkWell 的滚动区外包透明 Material + Clip.hardEdge。
       body: Material(
         type: MaterialType.transparency,
@@ -81,9 +83,9 @@ class AboutPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Center(child: Text('版本 $version', style: muted)),
+            Center(child: Text(l10n.aboutVersion(version), style: muted)),
             const SizedBox(height: 8),
-            Center(child: Text('本地音乐播放器', style: muted)),
+            Center(child: Text(l10n.aboutTagline, style: muted)),
             const SizedBox(height: 32),
             Card(
               margin: EdgeInsets.zero,
@@ -97,13 +99,21 @@ class AboutPage extends StatelessWidget {
                   ListTile(
                     minVerticalPadding: 16,
                     leading: const Icon(Icons.code),
-                    title: _buildOptionText(theme, '开源许可', 'MIT License'),
+                    title: _buildOptionText(
+                      theme,
+                      l10n.aboutLicenses,
+                      'MIT License',
+                    ),
                     subtitle: null,
                   ),
                   ListTile(
                     minVerticalPadding: 16,
                     leading: const Icon(Icons.link),
-                    title: _buildOptionText(theme, '项目主页', repoUrl),
+                    title: _buildOptionText(
+                      theme,
+                      l10n.aboutProjectHome,
+                      repoUrl,
+                    ),
                     subtitle: null,
                     trailing: const Icon(Icons.copy),
                     onTap: () => _copyRepoUrl(context),

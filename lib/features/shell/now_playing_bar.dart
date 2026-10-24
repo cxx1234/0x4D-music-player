@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/services/playback_feedback_service.dart';
 import '../../core/services/service_locator.dart';
+import '../../l10n/l10n.dart';
 import '../../widgets/cached_album_art.dart';
 import '../../widgets/control_pulse.dart';
 
@@ -19,6 +20,7 @@ class NowPlayingBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
 
     if (!ServiceLocator.isReady) {
       return const SizedBox(height: 64);
@@ -81,7 +83,7 @@ class NowPlayingBar extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  song?.title ?? '未在播放',
+                                  song?.title ?? l10n.nowPlayingNotPlaying,
                                   style: theme.textTheme.bodyLarge?.copyWith(
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -89,7 +91,7 @@ class NowPlayingBar extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 Text(
-                                  song?.artist ?? '选择一首歌曲',
+                                  song?.artist ?? l10n.nowPlayingPickSong,
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.onSurfaceVariant,
                                   ),
@@ -113,7 +115,7 @@ class NowPlayingBar extends StatelessWidget {
                                   onPressed: song != null
                                       ? () => player.previous()
                                       : null,
-                                  tooltip: '上一首',
+                                  tooltip: l10n.playerPrevious,
                                 ),
                               ),
                               ControlPulse(
@@ -133,7 +135,9 @@ class NowPlayingBar extends StatelessWidget {
                                   onPressed: song != null
                                       ? () => player.togglePlay()
                                       : null,
-                                  tooltip: player.isPlaying ? '暂停' : '播放',
+                                  tooltip: player.isPlaying
+                                      ? l10n.playerPause
+                                      : l10n.playerPlay,
                                 ),
                               ),
                               ControlPulse(
@@ -145,7 +149,7 @@ class NowPlayingBar extends StatelessWidget {
                                   onPressed: song != null
                                       ? () => player.next()
                                       : null,
-                                  tooltip: '下一首',
+                                  tooltip: l10n.playerNext,
                                 ),
                               ),
                             ],

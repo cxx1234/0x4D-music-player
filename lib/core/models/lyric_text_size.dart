@@ -1,17 +1,12 @@
 /// 歌词字号档位。
 ///
-/// 与 [SongSortOrder] 同为「枚举自带 UI 文案放 core 层」的既有模式：
-/// core 层的 [SettingsService] 需要存取该类型（歌词字号写盘持久化），
-/// 因此不放在 features/player（避免 core → features 反向依赖）。
+/// 展示文案见 `lib/l10n/enum_labels.dart`。
 enum LyricTextSize {
-  small('小', 1.0),
-  medium('中', 1.25),
-  large('大', 1.5);
+  small(1.0),
+  medium(1.25),
+  large(1.5);
 
-  const LyricTextSize(this.label, this.scale);
-
-  /// 菜单展示用的中文标签。
-  final String label;
+  const LyricTextSize(this.scale);
 
   /// 相对基准字号的缩放比例。
   final double scale;

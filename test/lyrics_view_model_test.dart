@@ -26,6 +26,8 @@ Song _song(String filePath, {String? lyricsFilePath}) => Song(
 );
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('resolveLrcPath', () {
     late Directory dir;
 
