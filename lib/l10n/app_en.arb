@@ -1,0 +1,23 @@
+{
+  "@@locale": "en",
+  "settingsLanguageTitle": "Language",
+  "@settingsLanguageTitle": {
+    "description": "Settings row title for the app display language."
+  },
+  "settingsLanguageSubtitle": "App display language",
+  "@settingsLanguageSubtitle": {
+    "description": "Settings row subtitle explaining that the setting changes the app UI language."
+  },
+  "settingsLanguageSystem": "Follow system",
+  "@settingsLanguageSystem": {
+    "description": "Language option: use the operating system language (English for non-Chinese systems)."
+  },
+  "settingsLanguageEnglish": "English",
+  "@settingsLanguageEnglish": {
+    "description": "Language option: English."
+  },
+  "settingsLanguageSimplifiedChinese": "简体中文",
+  "@settingsLanguageSimplifiedChinese": {
+    "description": "Language option: Simplified Chinese."
+  }
+}

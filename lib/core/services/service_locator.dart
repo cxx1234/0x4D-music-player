@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../audio/audio_engine_factory.dart';
 import '../audio/platform_media_controls.dart';
 import '../database/database.dart';
+import '../utils/app_locale.dart';
 import '../utils/logger.dart';
 import 'folder_watcher_service.dart';
 import 'hud_service.dart';
@@ -297,6 +298,8 @@ class ServiceLocator {
     // 初值取持久化设置，避免启动后用默认 true 与用户上次设置不一致。
     _lyrics = LyricsViewModel(
       _player!,
+      // 翻译副行只跟应用界面语言一致：显式选英文时，即使系统是中文也隐藏。
+      isChineseUi: () => isChineseUiLocale(_settings!.settings.locale),
       initialShowTranslation: _settings!.settings.showTranslation,
     );
 

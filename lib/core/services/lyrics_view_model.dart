@@ -128,6 +128,15 @@ class LyricsViewModel with WidgetsBindingObserver {
     _loadForSong(_player.currentSong, trackChanged: false);
   }
 
+  /// 界面语言变化后重新解析当前歌词。
+  ///
+  /// 翻译副行只在中文界面显示；语言切换时必须重解析，否则会继续沿用切换前
+  /// 的文档（详见 [_loadLyricText]）。
+  void refreshLocaleDependentContent() {
+    if (_currentContent == null) return;
+    _loadForSong(_player.currentSong, trackChanged: false, waitForTrack: false);
+  }
+
   void _onSongChanged() {
     final song = _player.currentSong;
     final waitForTrack = _hasSeenSong && song != null;

@@ -54,6 +54,21 @@ flutter run -d macos
 > Swift. **Do not run `flutter clean`** in this project: it hangs on the SQLite native
 > assets built through Swift Package Manager.
 
+### Localization
+
+UI strings live in `lib/l10n/app_en.arb` (template) and `lib/l10n/app_zh.arb`.
+After editing either file, regenerate the Dart classes:
+
+```bash
+flutter gen-l10n
+```
+
+The app language can be switched in **Settings › General › Language**
+(follow system / English / Simplified Chinese) and is persisted in `settings.json`.
+The generated `app_localizations*.dart` files are committed. See
+[docs/I18n.md](docs/I18n.md) for conventions and known limits — notably, the macOS
+native menu still follows the system language.
+
 ### macOS permissions
 
 Music folders inside `~/Music` are protected by the **Media & Apple Music** privacy setting.

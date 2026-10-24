@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import '../../core/models/accent_color.dart';
 import '../../core/services/album_art_cache_service.dart';
 import '../../core/services/service_locator.dart';
+import '../../core/utils/app_locale.dart';
+import '../../l10n/app_localizations.dart';
+import '../../l10n/l10n.dart';
 import '../../widgets/page_toolbar.dart';
 import '../shell/shell_controller.dart';
 import 'about_page.dart';
@@ -32,6 +35,9 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 主题模式（启动时从设置读取，默认跟随系统）。
   ThemeMode _themeMode = ThemeMode.system;
 
+  /// 界面语言（`'system'` / `'en'` / `'zh'`，启动时从设置读取）。
+  String _locale = 'system';
+
   /// 界面强调色（启动时从设置读取，默认石墨灰）。
   AccentColor _accent = AccentColor.graphite;
 
@@ -58,6 +64,7 @@ class _SettingsPageState extends State<SettingsPage> {
     if (ServiceLocator.isReady) {
       _resumePlayback = ServiceLocator.settings.resumePlaybackPosition;
       _themeMode = ServiceLocator.settings.themeMode;
+      _locale = ServiceLocator.settings.localeName;
       _accent = ServiceLocator.settings.accentColor;
       _nowPlayingBarFill = ServiceLocator.settings.nowPlayingBarFill;
       _sleepTimerFinishCurrentTrack =
@@ -163,6 +170,19 @@ class _SettingsPageState extends State<SettingsPage> {
     ThemeMode.system => Icons.brightness_auto,
     ThemeMode.light => Icons.light_mode_outlined,
     ThemeMode.dark => Icons.dark_mode_outlined,
+  };
+
+  /// 切换界面语言（UI 状态 + 写盘；MaterialApp 监听 localeNotifier 重建）。
+  void _setLocale(String value) {
+    setState(() => _locale = normalizeAppLocaleName(value));
+    ServiceLocator.settings.setLocale(value);
+  }
+
+  /// 当前语言选项的展示文案。
+  String _localeLabel(AppLocalizations l10n) => switch (_locale) {
+    'en' => l10n.settingsLanguageEnglish,
+    'zh' => l10n.settingsLanguageSimplifiedChinese,
+    _ => l10n.settingsLanguageSystem,
   };
 
   /// 切换续播开关（UI 状态 + 写盘）。
@@ -623,6 +643,61 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  /// 「语言」行：弹出菜单选择跟随系统 / English / 简体中文。
+  Widget _buildLanguageRow(ThemeData theme) {
+    final l10n = context.l10n;
+    return ListTile(
+      minVerticalPadding: 16,
+      leading: const Icon(Icons.language),
+      title: _buildOptionText(
+        theme,
+        l10n.settingsLanguageTitle,
+        l10n.settingsLanguageSubtitle,
+      ),
+      subtitle: null,
+      trailing: PopupMenuButton<String>(
+        initialValue: _locale,
+        enabled: ServiceLocator.isReady,
+        onSelected: _setLocale,
+        itemBuilder: (menuContext) => [
+          CheckedPopupMenuItem(
+            value: 'system',
+            checked: _locale == 'system',
+            child: Text(menuContext.l10n.settingsLanguageSystem),
+          ),
+          CheckedPopupMenuItem(
+            value: 'en',
+            checked: _locale == 'en',
+            child: Text(menuContext.l10n.settingsLanguageEnglish),
+          ),
+          CheckedPopupMenuItem(
+            value: 'zh',
+            checked: _locale == 'zh',
+            child: Text(menuContext.l10n.settingsLanguageSimplifiedChinese),
+          ),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.only(left: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _localeLabel(l10n),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              Icon(
+                Icons.arrow_drop_down,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildGeneralCard() {
     final theme = Theme.of(context);
     final chevronColor = theme.colorScheme.onSurfaceVariant;
@@ -635,6 +710,7 @@ class _SettingsPageState extends State<SettingsPage> {
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
+          _buildLanguageRow(theme),
           ListTile(
             minVerticalPadding: 16,
             leading: const Icon(Icons.receipt_long_outlined),

@@ -12,6 +12,7 @@ import '../models/lyric_effect_strength.dart';
 import '../models/lyric_line_transition_style.dart';
 import '../models/lyric_slide_alignment.dart';
 import '../models/lyric_text_size.dart';
+import '../utils/app_locale.dart';
 import '../utils/logger.dart';
 
 /// A music folder with an optional macOS security-scoped bookmark.
@@ -41,6 +42,9 @@ class MusicFolder {
 class AppSettings {
   final List<MusicFolder> musicFolders;
   final String themeMode;
+
+  /// 界面语言（[kAppLocaleNames] 之一）：`'system'` / `'en'` / `'zh'`。
+  final String locale;
 
   /// 界面强调色（[AccentColor.name]，如 'system'/'graphite'/'deepPurple'）。
   final String accentColor;
@@ -101,6 +105,7 @@ class AppSettings {
   const AppSettings({
     this.musicFolders = const [],
     this.themeMode = 'system',
+    this.locale = 'system',
     this.accentColor = 'graphite',
     this.songSortOrder = 'title',
     this.resumePlaybackPosition = true,
@@ -126,6 +131,7 @@ class AppSettings {
   Map<String, dynamic> toJson() => {
     'musicFolders': musicFolders.map((f) => f.toJson()).toList(),
     'themeMode': themeMode,
+    'locale': locale,
     'accentColor': accentColor,
     'songSortOrder': songSortOrder,
     'resumePlaybackPosition': resumePlaybackPosition,
@@ -164,6 +170,7 @@ class AppSettings {
     return AppSettings(
       musicFolders: folders,
       themeMode: json['themeMode'] as String? ?? 'system',
+      locale: normalizeAppLocaleName(json['locale'] as String?),
       accentColor: json['accentColor'] as String? ?? 'graphite',
       songSortOrder: json['songSortOrder'] as String? ?? 'title',
       resumePlaybackPosition: json['resumePlaybackPosition'] as bool? ?? true,
@@ -189,6 +196,7 @@ class AppSettings {
   AppSettings copyWith({
     List<MusicFolder>? musicFolders,
     String? themeMode,
+    String? locale,
     String? accentColor,
     String? songSortOrder,
     bool? resumePlaybackPosition,
@@ -210,6 +218,7 @@ class AppSettings {
     return AppSettings(
       musicFolders: musicFolders ?? this.musicFolders,
       themeMode: themeMode ?? this.themeMode,
+      locale: locale ?? this.locale,
       accentColor: accentColor ?? this.accentColor,
       songSortOrder: songSortOrder ?? this.songSortOrder,
       resumePlaybackPosition:
@@ -458,6 +467,9 @@ class SettingsService {
     // 同步主题模式：启动读取持久化值并通知 MaterialApp。
     themeModeNotifier.value = _themeModeFromName(_settings.themeMode);
 
+    // 同步界面语言（默认跟随系统；旧配置缺失该键时保持 null）。
+    localeNotifier.value = appLocaleFromName(_settings.locale);
+
     // 同步主题色（默认石墨灰；老配置文件缺失该键时保持默认）。
     accentColorNotifier.value = AccentColor.fromName(_settings.accentColor);
 
@@ -542,6 +554,23 @@ class SettingsService {
   Future<void> setThemeMode(ThemeMode mode) async {
     _settings = _settings.copyWith(themeMode: mode.name);
     themeModeNotifier.value = mode;
+    await _save();
+  }
+
+  /// 界面语言持久化名（`'system'` / `'en'` / `'zh'`）。
+  String get localeName => _settings.locale;
+
+  /// 界面语言覆盖值；`'system'` 返回 null，交给 MaterialApp 按系统解析。
+  Locale? get localeOverride => appLocaleFromName(_settings.locale);
+
+  /// 界面语言变化通知：设置页切换后驱动 [MaterialApp] 重建。
+  final ValueNotifier<Locale?> localeNotifier = ValueNotifier<Locale?>(null);
+
+  /// 持久化界面语言并广播变化（触发 [MaterialApp] 切换语言）。
+  Future<void> setLocale(String locale) async {
+    final name = normalizeAppLocaleName(locale);
+    _settings = _settings.copyWith(locale: name);
+    localeNotifier.value = appLocaleFromName(name);
     await _save();
   }
 

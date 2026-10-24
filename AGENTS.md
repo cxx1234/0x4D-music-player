@@ -11,6 +11,7 @@
 | `docs/Architecture.md` | 分层与模块边界 |
 | `docs/Performance-Optimization.md` | 性能约束与已知热点 |
 | `docs/ErrorHandling.md` | 错误处理约定 |
+| `docs/I18n.md` | 改界面文案 / 新增语言 / ARB 与生成流程 |
 | `docs/TODO.md` | 未做的路线图 —— **不要顺手实现** |
 
 ## 工作约定

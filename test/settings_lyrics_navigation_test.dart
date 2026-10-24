@@ -5,12 +5,14 @@ import 'package:txvziwm/core/models/lyric_text_size.dart';
 import 'package:txvziwm/features/settings/lyrics_settings_page.dart';
 import 'package:txvziwm/features/settings/settings_page.dart';
 
+import 'helpers/l10n.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('外观 › 歌词显示：点击后打开歌词设置页', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: SettingsPage())),
+      localizedApp(home: const Scaffold(body: SettingsPage())),
     );
 
     final row = find.text('歌词显示');

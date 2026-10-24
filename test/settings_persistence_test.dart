@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:txvziwm/core/services/settings_service.dart';
@@ -61,5 +62,25 @@ void main() {
     expect(json['showTrackChangeNotification'], false);
     // 原子写不留下临时文件
     expect(await File('${dir.path}/settings.json.tmp').exists(), isFalse);
+  });
+
+  test('界面语言写盘并在重新初始化后恢复', () async {
+    final settings = SettingsService();
+    await settings.initialize();
+    expect(settings.localeOverride, isNull);
+
+    await settings.setLocale('en');
+
+    final json =
+        jsonDecode(await File('${dir.path}/settings.json').readAsString())
+            as Map<String, dynamic>;
+    expect(json['locale'], 'en');
+    expect(settings.localeNotifier.value, const Locale('en'));
+
+    final reloaded = SettingsService();
+    await reloaded.initialize();
+    expect(reloaded.localeName, 'en');
+    expect(reloaded.localeOverride, const Locale('en'));
+    expect(reloaded.localeNotifier.value, const Locale('en'));
   });
 }

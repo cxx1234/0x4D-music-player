@@ -18,6 +18,7 @@ import '../features/player/player_page.dart';
 import '../features/player/player_ui_state.dart';
 import '../features/shell/now_playing_bar.dart';
 import '../features/shell/shell_page.dart';
+import '../l10n/app_localizations.dart';
 import '../widgets/hud_overlay.dart';
 
 class App extends StatefulWidget {
@@ -118,6 +119,11 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       // 点击切歌通知横幅 → 打开「正在播放」页（core 不反向依赖 features，
       // 回调由此注入，与上述 MenuService 的注入方式一致）。
       ServiceLocator.trackNotifications.onOpenPlayer = _openPlayer;
+      // 语言切换后歌词的中文翻译副行显示条件会变，重新解析当前歌词。
+      // 重试路径可能再次执行，先移除避免重复挂监听。
+      ServiceLocator.settings.localeNotifier
+        ..removeListener(_onLocaleChanged)
+        ..addListener(_onLocaleChanged);
       setState(() => _initialized = true);
     }
   }
@@ -129,8 +135,18 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     _initializeServices();
   }
 
+  /// 界面语言切换：歌词翻译副行是否显示取决于界面语言，需要重新解析。
+  void _onLocaleChanged() {
+    if (ServiceLocator.isReady) {
+      ServiceLocator.lyrics.refreshLocaleDependentContent();
+    }
+  }
+
   @override
   void dispose() {
+    if (ServiceLocator.isReady) {
+      ServiceLocator.settings.localeNotifier.removeListener(_onLocaleChanged);
+    }
     WidgetsBinding.instance.removeObserver(this);
     FocusManager.instance.removeLateKeyEventHandler(
       handleKeyboardFocusKeyEvent,
@@ -229,6 +245,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
         ? Listenable.merge([
             settings.themeModeNotifier,
             settings.accentColorNotifier,
+            settings.localeNotifier,
             systemAccent?.systemAccentNotifier ?? _fallbackSystemAccent,
           ])
         : Listenable.merge([
@@ -252,6 +269,9 @@ class _AppState extends State<App> with WidgetsBindingObserver {
             (accent.followsSystem && systemColor == null);
         return MaterialApp(
           title: '0x4D',
+          locale: settings?.localeNotifier.value,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           theme: neutral
               ? AppTheme.monochrome(brightness: Brightness.light)
               : AppTheme.light(seed: seed),

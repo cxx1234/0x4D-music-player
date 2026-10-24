@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Localization infrastructure for English and Simplified Chinese. `flutter gen-l10n`
+  generates `AppLocalizations` from `lib/l10n/app_en.arb` (template) and `app_zh.arb`;
+  `MaterialApp` now installs the localization delegates and resolves an explicit
+  in-app language or the system language. Non-Chinese systems fall back to English.
+  A new Settings › General › Language row persists the choice in `settings.json`
+  (`system` / `en` / `zh`, unknown values fall back to `system`), and the lyrics
+  translation subline now follows the in-app language instead of the platform locale.
+  Existing page copy is intentionally not migrated yet — see `docs/I18n.md`.
+  The macOS native menu still follows the system language; syncing it with the
+  in-app choice is tracked in `docs/TODO.md`
+
 ## [0.2.8] - 2026-10-22
 
 ### Added
