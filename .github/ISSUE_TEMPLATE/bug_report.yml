@@ -1,0 +1,57 @@
+name: Bug report
+description: Something behaves differently from what the app should do
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Write in English. Record facts that can be re-checked later — what you did and what happened,
+        not just "it's broken". The section headings below become the search index for the next person.
+  - type: textarea
+    id: symptom
+    attributes:
+      label: Symptom
+      description: What you observe, in one or two sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Numbered steps, assuming a fresh launch unless stated otherwise.
+      value: |
+        1.
+        2.
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected vs actual
+      value: |
+        Expected:
+        Actual:
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: >
+        Fill in what you actually ran when the bug happened, and leave it that way — do not rewrite it
+        later when your machine changes. The recorded version is the one that reproduces.
+      value: |
+        - Flutter: (paste `flutter --version`)
+        - OS: (paste `sw_vers -productVersion` on macOS)
+        - Arch: x86_64 / arm64
+        - App version: (Settings -> About)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / stack trace
+      description: Relevant lines from the log page in Settings, or the console.
+      render: text
+    validations:
+      required: false

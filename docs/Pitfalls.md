@@ -243,6 +243,34 @@
   面板装不下时顶边被钳到 y=8，正好钻进红绿灯底下。修法：扣
   `layoutConfig.menuTopInset`（macOS 52，其余 0），装不下就在面板内部滚动。
 
+### C8. 2026-08-02 `ListTile` 选中色溢出 `ListView` 视口
+
+- **症状**：滚动音乐库时，当前播放行的高亮背景画到列表视口之外，把相邻区域也染上色（issue #5）。
+- **根因**：`ListTile.selectedTileColor` 不是 `ListTile` 自己画的，而是**最近的 `Material` 祖先**
+  画的水墨层，而 `Material` 默认 `clipBehavior: Clip.none`。视口裁剪只能裁滚动内容树里的绘制，
+  裁不到「视口之上那层 Material 画的高亮」。
+- **修法**：给列表包一层自己的 `Material(type: MaterialType.transparency, clipBehavior:
+  Clip.hardEdge)`，让高亮落在视口内的 Material 上（`lib/features/library/library_page.dart`
+  的歌曲列表与文件夹列表两处，实际落点 `067ed90`）。上游同因：flutter/flutter#152832。
+- **护栏**：视觉问题，无自动化测试；靠本条目 + 代码位置自查。
+- **复发提示**：任何「Material 绘制的效果 + 可滚动视口」的组合（选中色、Ink 水波纹、`Card`
+  阴影）都可能跑到视口外 —— 先查最近 `Material` 的 `clipBehavior`，而不是给 `ListView` 加裁剪。
+
+### C9. 2026-08-11 网格 / `Sliver` 的 itemBuilder context 不能当菜单锚点
+
+- **症状**：在播放列表网格卡片上长按，直接崩溃：
+  `type 'RenderSliverGrid' is not a subtype of type 'RenderBox?'`（issue #12）。
+- **根因**：锚点用 `context.findRenderObject() as RenderBox` 硬转，而 `SliverGrid` /
+  `SliverList` 的 `itemBuilder` context 解析到的是 `RenderSliverGrid` / `RenderSliverList`，
+  它们不是 `RenderBox`；卡片 / 行自己的 `Builder` context 才是。
+- **修法**：锚点一律取自**卡片 / 行自己的 context**（`d506d5b` 先修；`2b3023c` 起统一走
+  `MorphMenu` + `cardContext`）。公共换算 `overlayRectOf` 现在是 `is! RenderBox` 就返回 `null`，
+  不再硬转（`lib/widgets/context_menu.dart`）。
+- **护栏**：`test/context_menu_test.dart` 的「Sliver 的 itemBuilder context 拿不到行矩形 →
+  返回 null（不抛类型错）」。
+- **复发提示**：写新的列表 / 网格菜单时，`onTap` / `onLongPress` 闭包里用的 context 必须是
+  itemBuilder 里再包一层 `Builder` 得到的那个，别把 sliver 的 context 传进菜单。
+
 ## D. 领域事故索引（细节留在原文档）
 
 | 症状 | 出处 |
