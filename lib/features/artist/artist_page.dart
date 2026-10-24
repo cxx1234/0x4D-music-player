@@ -8,6 +8,7 @@ import '../../core/services/service_locator.dart';
 import '../../core/utils/index_letters.dart';
 import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
+import '../../l10n/l10n.dart';
 import '../../widgets/cached_album_art.dart';
 import '../../widgets/context_menu.dart';
 import '../../widgets/detail_top_bar.dart';
@@ -121,12 +122,14 @@ class _ArtistsPageState extends State<ArtistsPage> {
 
   Widget _buildAppBar(int count) {
     return PageToolbar(
-      title: '歌手',
-      subtitle: _searchActive ? '匹配 $count 位' : '$count 位',
+      title: context.l10n.artistTitle,
+      subtitle: _searchActive
+          ? context.l10n.artistMatch(count)
+          : context.l10n.artistCount(count),
       actions: _searchActive
           ? [
               ToolbarSearchField(
-                hintText: '搜索歌手',
+                hintText: context.l10n.artistSearchHint,
                 onChanged: (v) => setState(() => _query = v),
                 onClose: _exitSearch,
               ),
@@ -134,7 +137,7 @@ class _ArtistsPageState extends State<ArtistsPage> {
           : [
               IconButton(
                 icon: const Icon(Icons.search),
-                tooltip: '搜索',
+                tooltip: context.l10n.commonSearch,
                 onPressed: _enterSearch,
               ),
             ],
@@ -149,10 +152,13 @@ class _ArtistsPageState extends State<ArtistsPage> {
           children: [
             Icon(Icons.person, size: 64, color: theme.colorScheme.primary),
             const SizedBox(height: 16),
-            Text('暂无歌手', style: theme.textTheme.headlineSmall),
+            Text(
+              context.l10n.artistEmptyTitle,
+              style: theme.textTheme.headlineSmall,
+            ),
             const SizedBox(height: 8),
             Text(
-              '导入音乐文件夹后会自动按歌手归类',
+              context.l10n.artistEmptyHint,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -197,8 +203,10 @@ class _ArtistsPageState extends State<ArtistsPage> {
                 ),
               ),
               title: artist.name,
-              subtitle:
-                  '$songCount 首歌曲${albumCount > 0 ? ' · $albumCount 张专辑' : ''}',
+              subtitle: albumCount > 0
+                  ? '${context.l10n.artistSongs(songCount)}'
+                        ' · ${context.l10n.artistAlbums(albumCount)}'
+                  : context.l10n.artistSongs(songCount),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _openArtistDetail(context, artist),
               // 右键：与歌曲行同一位置（行尾菜单槽位）。
@@ -228,7 +236,9 @@ class _ArtistsPageState extends State<ArtistsPage> {
     final value = await showRowMenu<String>(
       context: rowContext,
       rowRect: rowRect,
-      entries: const [PopupMenuItem(value: 'play', child: Text('播放全部'))],
+      entries: [
+        PopupMenuItem(value: 'play', child: Text(context.l10n.playerPlayAll)),
+      ],
     );
     if (value != 'play' || !mounted) return;
 
@@ -237,7 +247,7 @@ class _ArtistsPageState extends State<ArtistsPage> {
     if (songs.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('这位歌手还没有可播放的歌曲')));
+      ).showSnackBar(SnackBar(content: Text(context.l10n.artistNoPlayable)));
       return;
     }
     ServiceLocator.player.playFromList(songs, startIndex: 0);
@@ -336,7 +346,9 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
           // Albums section
           if (_albums.isNotEmpty) ...[
             SliverToBoxAdapter(
-              child: _SectionHeader(title: '专辑 (${_albums.length})'),
+              child: _SectionHeader(
+                title: context.l10n.artistSectionAlbums(_albums.length),
+              ),
             ),
             SliverToBoxAdapter(
               child: Padding(
@@ -368,7 +380,7 @@ class _ArtistDetailContentState extends State<_ArtistDetailContent> {
           // Songs section
           SliverToBoxAdapter(
             child: _SectionHeader(
-              title: '歌曲 (${_songs.length})',
+              title: context.l10n.artistSectionSongs(_songs.length),
               trailing: PlayAllButton(
                 onPlayAll: () =>
                     ServiceLocator.player.playFromList(_songs, startIndex: 0),

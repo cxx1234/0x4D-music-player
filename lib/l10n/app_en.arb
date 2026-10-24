@@ -567,5 +567,303 @@
   "lyricsSectionCountdown": "Countdown",
   "@lyricsSectionCountdown": {
     "description": "Lyrics settings section: countdown."
+  },
+  "commonListSeparator": ", ",
+  "@commonListSeparator": {
+    "description": "Separator used when joining a list of status fragments."
+  },
+  "libraryTitle": "Library",
+  "@libraryTitle": {
+    "description": "Library page title and sidebar label."
+  },
+  "libraryYourLibrary": "Your library",
+  "@libraryYourLibrary": {
+    "description": "Empty/loading state title in the library."
+  },
+  "libraryEmptyHint": "Import a music folder to get started",
+  "@libraryEmptyHint": {
+    "description": "Hint shown when the library has no music folder."
+  },
+  "libraryImportFolder": "Import folder",
+  "@libraryImportFolder": {
+    "description": "Button that opens the music folder picker."
+  },
+  "libraryAccessExpired": "Music folder access has expired. Grant access again.",
+  "@libraryAccessExpired": {
+    "description": "Banner shown when a sandbox bookmark can no longer be restored."
+  },
+  "libraryRegrant": "Grant access again",
+  "@libraryRegrant": {
+    "description": "Banner action that asks for folder access again."
+  },
+  "librarySearchSongsHint": "Search songs",
+  "@librarySearchSongsHint": {
+    "description": "Placeholder in the library search field."
+  },
+  "librarySort": "Sort",
+  "@librarySort": {
+    "description": "Tooltip for the library sort menu."
+  },
+  "libraryRescan": "Rescan",
+  "@libraryRescan": {
+    "description": "Button that rescans the whole library."
+  },
+  "libraryScanningFolders": "Scanning folders…",
+  "@libraryScanningFolders": {
+    "description": "Scan progress phase: collecting files."
+  },
+  "libraryProcessing": "Processing…",
+  "@libraryProcessing": {
+    "description": "Scan progress phase without further detail."
+  },
+  "libraryRescanFolder": "Rescan this folder",
+  "@libraryRescanFolder": {
+    "description": "Tooltip for rescanning a single music folder."
+  },
+  "libraryRemoveFolder": "Remove",
+  "@libraryRemoveFolder": {
+    "description": "Tooltip for removing a music folder."
+  },
+  "libraryScanNoNew": "No new files",
+  "@libraryScanNoNew": {
+    "description": "Scan summary when nothing was added or updated."
+  },
+  "albumTitle": "Albums",
+  "@albumTitle": {
+    "description": "Albums page title and sidebar label."
+  },
+  "albumVariousArtists": "Various artists",
+  "@albumVariousArtists": {
+    "description": "Album subtitle when the album has no album artist."
+  },
+  "albumSearchHint": "Search albums",
+  "@albumSearchHint": {
+    "description": "Placeholder in the album search field."
+  },
+  "albumEmptyTitle": "No albums yet",
+  "@albumEmptyTitle": {
+    "description": "Albums page empty state title."
+  },
+  "albumEmptyHint": "Albums are grouped automatically after you import a music folder",
+  "@albumEmptyHint": {
+    "description": "Albums page empty state hint."
+  },
+  "albumAddToQueue": "Add to queue",
+  "@albumAddToQueue": {
+    "description": "Album context menu action."
+  },
+  "albumNoPlayable": "This album has no playable songs",
+  "@albumNoPlayable": {
+    "description": "SnackBar shown when an album has no playable songs."
+  },
+  "artistTitle": "Artists",
+  "@artistTitle": {
+    "description": "Artists page title and sidebar label."
+  },
+  "artistSearchHint": "Search artists",
+  "@artistSearchHint": {
+    "description": "Placeholder in the artist search field."
+  },
+  "artistEmptyTitle": "No artists yet",
+  "@artistEmptyTitle": {
+    "description": "Artists page empty state title."
+  },
+  "artistEmptyHint": "Artists are grouped automatically after you import a music folder",
+  "@artistEmptyHint": {
+    "description": "Artists page empty state hint."
+  },
+  "artistNoPlayable": "This artist has no playable songs",
+  "@artistNoPlayable": {
+    "description": "SnackBar shown when an artist has no playable songs."
+  },
+  "sortTitle": "Title",
+  "@sortTitle": {
+    "description": "Song sort order: title."
+  },
+  "sortDateAdded": "Recently added",
+  "@sortDateAdded": {
+    "description": "Song sort order: date added."
+  },
+  "sortPlayCount": "Most played",
+  "@sortPlayCount": {
+    "description": "Song sort order: play count."
+  },
+  "sortYear": "Year",
+  "@sortYear": {
+    "description": "Song sort order: year."
+  },
+  "librarySongCount": "{count, plural, =0{No songs} =1{1 song} other{{count} songs}}",
+  "@librarySongCount": {
+    "description": "Subtitle with the number of songs in the library.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "librarySongMatch": "{count, plural, =0{No matches} =1{Matched 1 song} other{Matched {count} songs}}",
+  "@librarySongMatch": {
+    "description": "Subtitle with the number of matching songs.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "libraryScanAdded": "{count, plural, =1{Added 1 song} other{Added {count} songs}}",
+  "@libraryScanAdded": {
+    "description": "Scan summary: added songs.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "libraryScanUpdated": "{count, plural, =1{Updated 1 song} other{Updated {count} songs}}",
+  "@libraryScanUpdated": {
+    "description": "Scan summary: updated songs.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "libraryScanRemoved": "{count, plural, =1{1 song removed} other{{count} songs removed}}",
+  "@libraryScanRemoved": {
+    "description": "Scan summary: songs marked missing.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "libraryScanPurged": "{count, plural, =1{Cleared 1 leftover row} other{Cleared {count} leftover rows}}",
+  "@libraryScanPurged": {
+    "description": "Scan summary: purged ghost rows.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "libraryScanErrors": "{count, plural, =1{1 failure} other{{count} failures}}",
+  "@libraryScanErrors": {
+    "description": "Scan summary: failed files.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "albumCount": "{count, plural, =0{No albums} =1{1 album} other{{count} albums}}",
+  "@albumCount": {
+    "description": "Subtitle with the number of albums.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "albumMatch": "{count, plural, =0{No matches} =1{Matched 1 album} other{Matched {count} albums}}",
+  "@albumMatch": {
+    "description": "Subtitle with the number of matching albums.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "albumSongCount": "{count, plural, =0{No songs} =1{1 song} other{{count} songs}}",
+  "@albumSongCount": {
+    "description": "Album detail info with the number of songs.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "artistCount": "{count, plural, =0{No artists} =1{1 artist} other{{count} artists}}",
+  "@artistCount": {
+    "description": "Subtitle with the number of artists.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "artistMatch": "{count, plural, =0{No matches} =1{Matched 1 artist} other{Matched {count} artists}}",
+  "@artistMatch": {
+    "description": "Subtitle with the number of matching artists.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "artistSongs": "{count, plural, =1{1 song} other{{count} songs}}",
+  "@artistSongs": {
+    "description": "Artist row subtitle: song count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "artistAlbums": "{count, plural, =1{1 album} other{{count} albums}}",
+  "@artistAlbums": {
+    "description": "Artist row subtitle: album count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "artistSectionAlbums": "Albums ({count})",
+  "@artistSectionAlbums": {
+    "description": "Artist detail section header for albums.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "artistSectionSongs": "Songs ({count})",
+  "@artistSectionSongs": {
+    "description": "Artist detail section header for songs.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "libraryParsingMetadata": "Parsing metadata {processed}/{total}…",
+  "@libraryParsingMetadata": {
+    "description": "Scan progress phase with processed and total counts.",
+    "placeholders": {
+      "processed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "libraryScanDone": "Scan complete: {summary}",
+  "@libraryScanDone": {
+    "description": "Banner prefix for a finished scan.",
+    "placeholders": {
+      "summary": {
+        "type": "String"
+      }
+    }
+  },
+  "libraryScanFailed": "Scan failed: {error}",
+  "@libraryScanFailed": {
+    "description": "SnackBar shown when a scan throws.",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   }
 }

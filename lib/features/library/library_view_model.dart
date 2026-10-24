@@ -200,7 +200,7 @@ class LibraryViewModel extends PageViewModel {
       scanProgressNotifier.value = ScanProgress(
         processed: i,
         total: total,
-        currentFile: i == 0 ? '' : '示例歌曲 $i.mp3',
+        currentFile: i == 0 ? '' : 'Sample song $i.mp3',
         phase: i < 2 ? 'collecting' : 'parsing',
       );
       await Future<void>.delayed(const Duration(milliseconds: 350));

@@ -919,6 +919,306 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Countdown'**
   String get lyricsSectionCountdown;
+
+  /// Separator used when joining a list of status fragments.
+  ///
+  /// In en, this message translates to:
+  /// **', '**
+  String get commonListSeparator;
+
+  /// Library page title and sidebar label.
+  ///
+  /// In en, this message translates to:
+  /// **'Library'**
+  String get libraryTitle;
+
+  /// Empty/loading state title in the library.
+  ///
+  /// In en, this message translates to:
+  /// **'Your library'**
+  String get libraryYourLibrary;
+
+  /// Hint shown when the library has no music folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Import a music folder to get started'**
+  String get libraryEmptyHint;
+
+  /// Button that opens the music folder picker.
+  ///
+  /// In en, this message translates to:
+  /// **'Import folder'**
+  String get libraryImportFolder;
+
+  /// Banner shown when a sandbox bookmark can no longer be restored.
+  ///
+  /// In en, this message translates to:
+  /// **'Music folder access has expired. Grant access again.'**
+  String get libraryAccessExpired;
+
+  /// Banner action that asks for folder access again.
+  ///
+  /// In en, this message translates to:
+  /// **'Grant access again'**
+  String get libraryRegrant;
+
+  /// Placeholder in the library search field.
+  ///
+  /// In en, this message translates to:
+  /// **'Search songs'**
+  String get librarySearchSongsHint;
+
+  /// Tooltip for the library sort menu.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get librarySort;
+
+  /// Button that rescans the whole library.
+  ///
+  /// In en, this message translates to:
+  /// **'Rescan'**
+  String get libraryRescan;
+
+  /// Scan progress phase: collecting files.
+  ///
+  /// In en, this message translates to:
+  /// **'Scanning folders…'**
+  String get libraryScanningFolders;
+
+  /// Scan progress phase without further detail.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing…'**
+  String get libraryProcessing;
+
+  /// Tooltip for rescanning a single music folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Rescan this folder'**
+  String get libraryRescanFolder;
+
+  /// Tooltip for removing a music folder.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get libraryRemoveFolder;
+
+  /// Scan summary when nothing was added or updated.
+  ///
+  /// In en, this message translates to:
+  /// **'No new files'**
+  String get libraryScanNoNew;
+
+  /// Albums page title and sidebar label.
+  ///
+  /// In en, this message translates to:
+  /// **'Albums'**
+  String get albumTitle;
+
+  /// Album subtitle when the album has no album artist.
+  ///
+  /// In en, this message translates to:
+  /// **'Various artists'**
+  String get albumVariousArtists;
+
+  /// Placeholder in the album search field.
+  ///
+  /// In en, this message translates to:
+  /// **'Search albums'**
+  String get albumSearchHint;
+
+  /// Albums page empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No albums yet'**
+  String get albumEmptyTitle;
+
+  /// Albums page empty state hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Albums are grouped automatically after you import a music folder'**
+  String get albumEmptyHint;
+
+  /// Album context menu action.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to queue'**
+  String get albumAddToQueue;
+
+  /// SnackBar shown when an album has no playable songs.
+  ///
+  /// In en, this message translates to:
+  /// **'This album has no playable songs'**
+  String get albumNoPlayable;
+
+  /// Artists page title and sidebar label.
+  ///
+  /// In en, this message translates to:
+  /// **'Artists'**
+  String get artistTitle;
+
+  /// Placeholder in the artist search field.
+  ///
+  /// In en, this message translates to:
+  /// **'Search artists'**
+  String get artistSearchHint;
+
+  /// Artists page empty state title.
+  ///
+  /// In en, this message translates to:
+  /// **'No artists yet'**
+  String get artistEmptyTitle;
+
+  /// Artists page empty state hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Artists are grouped automatically after you import a music folder'**
+  String get artistEmptyHint;
+
+  /// SnackBar shown when an artist has no playable songs.
+  ///
+  /// In en, this message translates to:
+  /// **'This artist has no playable songs'**
+  String get artistNoPlayable;
+
+  /// Song sort order: title.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get sortTitle;
+
+  /// Song sort order: date added.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently added'**
+  String get sortDateAdded;
+
+  /// Song sort order: play count.
+  ///
+  /// In en, this message translates to:
+  /// **'Most played'**
+  String get sortPlayCount;
+
+  /// Song sort order: year.
+  ///
+  /// In en, this message translates to:
+  /// **'Year'**
+  String get sortYear;
+
+  /// Subtitle with the number of songs in the library.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No songs} =1{1 song} other{{count} songs}}'**
+  String librarySongCount(int count);
+
+  /// Subtitle with the number of matching songs.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No matches} =1{Matched 1 song} other{Matched {count} songs}}'**
+  String librarySongMatch(int count);
+
+  /// Scan summary: added songs.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Added 1 song} other{Added {count} songs}}'**
+  String libraryScanAdded(int count);
+
+  /// Scan summary: updated songs.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Updated 1 song} other{Updated {count} songs}}'**
+  String libraryScanUpdated(int count);
+
+  /// Scan summary: songs marked missing.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 song removed} other{{count} songs removed}}'**
+  String libraryScanRemoved(int count);
+
+  /// Scan summary: purged ghost rows.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Cleared 1 leftover row} other{Cleared {count} leftover rows}}'**
+  String libraryScanPurged(int count);
+
+  /// Scan summary: failed files.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 failure} other{{count} failures}}'**
+  String libraryScanErrors(int count);
+
+  /// Subtitle with the number of albums.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No albums} =1{1 album} other{{count} albums}}'**
+  String albumCount(int count);
+
+  /// Subtitle with the number of matching albums.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No matches} =1{Matched 1 album} other{Matched {count} albums}}'**
+  String albumMatch(int count);
+
+  /// Album detail info with the number of songs.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No songs} =1{1 song} other{{count} songs}}'**
+  String albumSongCount(int count);
+
+  /// Subtitle with the number of artists.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No artists} =1{1 artist} other{{count} artists}}'**
+  String artistCount(int count);
+
+  /// Subtitle with the number of matching artists.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No matches} =1{Matched 1 artist} other{Matched {count} artists}}'**
+  String artistMatch(int count);
+
+  /// Artist row subtitle: song count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 song} other{{count} songs}}'**
+  String artistSongs(int count);
+
+  /// Artist row subtitle: album count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 album} other{{count} albums}}'**
+  String artistAlbums(int count);
+
+  /// Artist detail section header for albums.
+  ///
+  /// In en, this message translates to:
+  /// **'Albums ({count})'**
+  String artistSectionAlbums(int count);
+
+  /// Artist detail section header for songs.
+  ///
+  /// In en, this message translates to:
+  /// **'Songs ({count})'**
+  String artistSectionSongs(int count);
+
+  /// Scan progress phase with processed and total counts.
+  ///
+  /// In en, this message translates to:
+  /// **'Parsing metadata {processed}/{total}…'**
+  String libraryParsingMetadata(int processed, int total);
+
+  /// Banner prefix for a finished scan.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan complete: {summary}'**
+  String libraryScanDone(String summary);
+
+  /// SnackBar shown when a scan throws.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan failed: {error}'**
+  String libraryScanFailed(String error);
 }
 
 class _AppLocalizationsDelegate

@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   including theme-mode and accent-color labels. Core enums no longer carry
   hardcoded labels; display text lives in `lib/l10n/enum_labels.dart`. English
   segmented buttons shrink instead of overflowing fixed-height rows
+- The library, album and artist pages now follow the app language, including
+  sort-order labels and scan summaries. Counts use ICU plurals, and the scan
+  summary joins fragments with the locale's list separator
 
 ## [0.2.8] - 2026-10-22
 

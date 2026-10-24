@@ -434,4 +434,262 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get lyricsSectionCountdown => '倒计时';
+
+  @override
+  String get commonListSeparator => '，';
+
+  @override
+  String get libraryTitle => '音乐库';
+
+  @override
+  String get libraryYourLibrary => '你的音乐库';
+
+  @override
+  String get libraryEmptyHint => '导入音乐文件夹以开始使用';
+
+  @override
+  String get libraryImportFolder => '导入文件夹';
+
+  @override
+  String get libraryAccessExpired => '音乐文件夹访问权限已失效，请重新授权';
+
+  @override
+  String get libraryRegrant => '重新授权';
+
+  @override
+  String get librarySearchSongsHint => '搜索歌曲';
+
+  @override
+  String get librarySort => '排序';
+
+  @override
+  String get libraryRescan => '重新扫描';
+
+  @override
+  String get libraryScanningFolders => '正在扫描文件夹...';
+
+  @override
+  String get libraryProcessing => '正在处理...';
+
+  @override
+  String get libraryRescanFolder => '重新扫描此文件夹';
+
+  @override
+  String get libraryRemoveFolder => '移除';
+
+  @override
+  String get libraryScanNoNew => '无新文件';
+
+  @override
+  String get albumTitle => '专辑';
+
+  @override
+  String get albumVariousArtists => '多位歌手';
+
+  @override
+  String get albumSearchHint => '搜索专辑';
+
+  @override
+  String get albumEmptyTitle => '暂无专辑';
+
+  @override
+  String get albumEmptyHint => '导入音乐文件夹后会自动按专辑归类';
+
+  @override
+  String get albumAddToQueue => '添加到播放队列';
+
+  @override
+  String get albumNoPlayable => '专辑里没有可播放的歌曲';
+
+  @override
+  String get artistTitle => '歌手';
+
+  @override
+  String get artistSearchHint => '搜索歌手';
+
+  @override
+  String get artistEmptyTitle => '暂无歌手';
+
+  @override
+  String get artistEmptyHint => '导入音乐文件夹后会自动按歌手归类';
+
+  @override
+  String get artistNoPlayable => '这位歌手还没有可播放的歌曲';
+
+  @override
+  String get sortTitle => '标题';
+
+  @override
+  String get sortDateAdded => '最近添加';
+
+  @override
+  String get sortPlayCount => '常听';
+
+  @override
+  String get sortYear => '年份';
+
+  @override
+  String librarySongCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 首',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String librarySongMatch(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '匹配 $count 首',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String libraryScanAdded(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '添加 $count 首',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String libraryScanUpdated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '更新 $count 首',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String libraryScanRemoved(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 首已移除',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String libraryScanPurged(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '清理 $count 条残留',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String libraryScanErrors(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 处失败',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String albumCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 张',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String albumMatch(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '匹配 $count 张',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String albumSongCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 首歌曲',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String artistCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 位',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String artistMatch(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '匹配 $count 位',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String artistSongs(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 首歌曲',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String artistAlbums(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 张专辑',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String artistSectionAlbums(int count) {
+    return '专辑 ($count)';
+  }
+
+  @override
+  String artistSectionSongs(int count) {
+    return '歌曲 ($count)';
+  }
+
+  @override
+  String libraryParsingMetadata(int processed, int total) {
+    return '正在解析元数据 $processed/$total...';
+  }
+
+  @override
+  String libraryScanDone(String summary) {
+    return '扫描完成：$summary';
+  }
+
+  @override
+  String libraryScanFailed(String error) {
+    return '扫描失败：$error';
+  }
 }

@@ -457,4 +457,286 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lyricsSectionCountdown => 'Countdown';
+
+  @override
+  String get commonListSeparator => ', ';
+
+  @override
+  String get libraryTitle => 'Library';
+
+  @override
+  String get libraryYourLibrary => 'Your library';
+
+  @override
+  String get libraryEmptyHint => 'Import a music folder to get started';
+
+  @override
+  String get libraryImportFolder => 'Import folder';
+
+  @override
+  String get libraryAccessExpired =>
+      'Music folder access has expired. Grant access again.';
+
+  @override
+  String get libraryRegrant => 'Grant access again';
+
+  @override
+  String get librarySearchSongsHint => 'Search songs';
+
+  @override
+  String get librarySort => 'Sort';
+
+  @override
+  String get libraryRescan => 'Rescan';
+
+  @override
+  String get libraryScanningFolders => 'Scanning folders…';
+
+  @override
+  String get libraryProcessing => 'Processing…';
+
+  @override
+  String get libraryRescanFolder => 'Rescan this folder';
+
+  @override
+  String get libraryRemoveFolder => 'Remove';
+
+  @override
+  String get libraryScanNoNew => 'No new files';
+
+  @override
+  String get albumTitle => 'Albums';
+
+  @override
+  String get albumVariousArtists => 'Various artists';
+
+  @override
+  String get albumSearchHint => 'Search albums';
+
+  @override
+  String get albumEmptyTitle => 'No albums yet';
+
+  @override
+  String get albumEmptyHint =>
+      'Albums are grouped automatically after you import a music folder';
+
+  @override
+  String get albumAddToQueue => 'Add to queue';
+
+  @override
+  String get albumNoPlayable => 'This album has no playable songs';
+
+  @override
+  String get artistTitle => 'Artists';
+
+  @override
+  String get artistSearchHint => 'Search artists';
+
+  @override
+  String get artistEmptyTitle => 'No artists yet';
+
+  @override
+  String get artistEmptyHint =>
+      'Artists are grouped automatically after you import a music folder';
+
+  @override
+  String get artistNoPlayable => 'This artist has no playable songs';
+
+  @override
+  String get sortTitle => 'Title';
+
+  @override
+  String get sortDateAdded => 'Recently added';
+
+  @override
+  String get sortPlayCount => 'Most played';
+
+  @override
+  String get sortYear => 'Year';
+
+  @override
+  String librarySongCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count songs',
+      one: '1 song',
+      zero: 'No songs',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String librarySongMatch(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Matched $count songs',
+      one: 'Matched 1 song',
+      zero: 'No matches',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String libraryScanAdded(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Added $count songs',
+      one: 'Added 1 song',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String libraryScanUpdated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Updated $count songs',
+      one: 'Updated 1 song',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String libraryScanRemoved(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count songs removed',
+      one: '1 song removed',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String libraryScanPurged(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Cleared $count leftover rows',
+      one: 'Cleared 1 leftover row',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String libraryScanErrors(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count failures',
+      one: '1 failure',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String albumCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count albums',
+      one: '1 album',
+      zero: 'No albums',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String albumMatch(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Matched $count albums',
+      one: 'Matched 1 album',
+      zero: 'No matches',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String albumSongCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count songs',
+      one: '1 song',
+      zero: 'No songs',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String artistCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count artists',
+      one: '1 artist',
+      zero: 'No artists',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String artistMatch(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Matched $count artists',
+      one: 'Matched 1 artist',
+      zero: 'No matches',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String artistSongs(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count songs',
+      one: '1 song',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String artistAlbums(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count albums',
+      one: '1 album',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String artistSectionAlbums(int count) {
+    return 'Albums ($count)';
+  }
+
+  @override
+  String artistSectionSongs(int count) {
+    return 'Songs ($count)';
+  }
+
+  @override
+  String libraryParsingMetadata(int processed, int total) {
+    return 'Parsing metadata $processed/$total…';
+  }
+
+  @override
+  String libraryScanDone(String summary) {
+    return 'Scan complete: $summary';
+  }
+
+  @override
+  String libraryScanFailed(String error) {
+    return 'Scan failed: $error';
+  }
 }

@@ -11,6 +11,9 @@ import '../../core/services/service_locator.dart';
 import '../../core/utils/index_letters.dart';
 import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
+import '../../l10n/app_localizations.dart';
+import '../../l10n/enum_labels.dart';
+import '../../l10n/l10n.dart';
 import '../../widgets/animated_collapse.dart';
 import '../../widgets/card_surface.dart';
 import '../../widgets/index_scrollbar.dart';
@@ -124,9 +127,9 @@ class _LibraryPageState extends State<LibraryPage> {
     }
     if (err == _lastShownScanError) return;
     _lastShownScanError = err;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('扫描失败：$err')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.l10n.libraryScanFailed(err))),
+    );
   }
 
   /// 扫描结果横幅出现 N 秒后自动收起。
@@ -292,7 +295,10 @@ class _LibraryPageState extends State<LibraryPage> {
         children: [
           Icon(Icons.library_music, size: 64, color: theme.colorScheme.primary),
           const SizedBox(height: 16),
-          Text('你的音乐库', style: theme.textTheme.headlineSmall),
+          Text(
+            context.l10n.libraryYourLibrary,
+            style: theme.textTheme.headlineSmall,
+          ),
           const SizedBox(height: 8),
           const CircularProgressIndicator(),
         ],
@@ -312,10 +318,13 @@ class _LibraryPageState extends State<LibraryPage> {
               color: theme.colorScheme.primary,
             ),
             const SizedBox(height: 16),
-            Text('你的音乐库', style: theme.textTheme.headlineSmall),
+            Text(
+              context.l10n.libraryYourLibrary,
+              style: theme.textTheme.headlineSmall,
+            ),
             const SizedBox(height: 8),
             Text(
-              '导入音乐文件夹以开始使用',
+              context.l10n.libraryEmptyHint,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -324,7 +333,7 @@ class _LibraryPageState extends State<LibraryPage> {
             FilledButton.icon(
               onPressed: _pickFolder,
               icon: const Icon(Icons.folder_open),
-              label: const Text('导入文件夹'),
+              label: Text(context.l10n.libraryImportFolder),
             ),
           ],
         ),
@@ -351,7 +360,7 @@ class _LibraryPageState extends State<LibraryPage> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '音乐文件夹访问权限已失效，请重新授权',
+                  context.l10n.libraryAccessExpired,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onErrorContainer,
                   ),
@@ -359,7 +368,7 @@ class _LibraryPageState extends State<LibraryPage> {
               ),
               TextButton(
                 onPressed: _reauthorizeFolder,
-                child: const Text('重新授权'),
+                child: Text(context.l10n.libraryRegrant),
               ),
             ],
           ),
@@ -385,11 +394,11 @@ class _LibraryPageState extends State<LibraryPage> {
     if (_searchActive) {
       final count = _filteredSongs.length;
       return PageToolbar(
-        title: '音乐库',
-        subtitle: '匹配 $count 首',
+        title: context.l10n.libraryTitle,
+        subtitle: context.l10n.librarySongMatch(count),
         actions: [
           ToolbarSearchField(
-            hintText: '搜索歌曲',
+            hintText: context.l10n.librarySearchSongsHint,
             onChanged: (v) => setState(() => _query = v),
             onClose: _exitSearch,
           ),
@@ -397,20 +406,20 @@ class _LibraryPageState extends State<LibraryPage> {
       );
     }
     return PageToolbar(
-      title: '音乐库',
+      title: context.l10n.libraryTitle,
       subtitle: _viewModel.songs.isNotEmpty
-          ? '${_viewModel.songs.length} 首'
+          ? context.l10n.librarySongCount(_viewModel.songs.length)
           : null,
       actions: [
         IconButton(
           icon: const Icon(Icons.search),
-          tooltip: '搜索',
+          tooltip: context.l10n.commonSearch,
           onPressed: _enterSearch,
         ),
         if (_viewModel.songs.isNotEmpty)
           PopupMenuButton<SongSortOrder>(
             popUpAnimationStyle: kPopupMenuAnimationStyle,
-            tooltip: '排序',
+            tooltip: context.l10n.librarySort,
             icon: const Icon(Icons.sort),
             // 默认 iconTheme.color 是固定纯黑/纯白（M2 遗留），显式指定跟随主题。
             iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -420,7 +429,7 @@ class _LibraryPageState extends State<LibraryPage> {
                 CheckedPopupMenuItem(
                   value: order,
                   checked: order == _viewModel.sortOrder,
-                  child: Text(order.label),
+                  child: Text(order.label(context.l10n)),
                 ),
             ],
           ),
@@ -429,13 +438,13 @@ class _LibraryPageState extends State<LibraryPage> {
             IconButton(
               onPressed: _viewModel.startScan,
               icon: const Icon(Icons.refresh),
-              tooltip: '重新扫描',
+              tooltip: context.l10n.libraryRescan,
             ),
           const SizedBox(width: 8),
           FilledButton.icon(
             onPressed: _pickFolder,
             icon: const Icon(Icons.folder_open, size: 18),
-            label: const Text('导入文件夹'),
+            label: Text(context.l10n.libraryImportFolder),
           ),
         ],
       ],
@@ -465,13 +474,16 @@ class _LibraryPageState extends State<LibraryPage> {
                       ),
                       const SizedBox(width: 12),
                       if (progress != null && progress.phase == 'collecting')
-                        const Text('正在扫描文件夹...')
+                        Text(context.l10n.libraryScanningFolders)
                       else if (progress != null && progress.phase == 'parsing')
                         Text(
-                          '正在解析元数据 ${progress.processed}/${progress.total}...',
+                          context.l10n.libraryParsingMetadata(
+                            progress.processed,
+                            progress.total,
+                          ),
                         )
                       else
-                        const Text('正在处理...'),
+                        Text(context.l10n.libraryProcessing),
                       const Spacer(),
                       if (progress != null && progress.currentFile.isNotEmpty)
                         Flexible(
@@ -521,7 +533,7 @@ class _LibraryPageState extends State<LibraryPage> {
           ),
           const SizedBox(width: 8),
           Text(
-            '扫描完成：${scanResultText(result)}',
+            context.l10n.libraryScanDone(scanResultText(context.l10n, result)),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -564,12 +576,12 @@ class _LibraryPageState extends State<LibraryPage> {
                         if (!_viewModel.isScanning)
                           IconButton(
                             icon: const Icon(Icons.refresh, size: 18),
-                            tooltip: '重新扫描此文件夹',
+                            tooltip: context.l10n.libraryRescanFolder,
                             onPressed: () => _viewModel.rescanFolder(folder),
                           ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline, size: 18),
-                          tooltip: '移除',
+                          tooltip: context.l10n.libraryRemoveFolder,
                           onPressed: () => _removeFolder(folder),
                         ),
                       ],
@@ -633,14 +645,14 @@ class _LibraryPageState extends State<LibraryPage> {
 ///
 /// 强制刷新会把全部已存在文件重解析，此时 `updated` 可能很大而 `added` 为 0，
 /// 不能沿用旧的「添加 N 首 / 无新文件」二分口径，否则会误报成「添加了全部歌曲」。
-String scanResultText(ScanResult result) {
+String scanResultText(AppLocalizations l10n, ScanResult result) {
   final parts = <String>[
-    if (result.added > 0) '添加 ${result.added} 首',
-    if (result.updated > 0) '更新 ${result.updated} 首',
-    if (result.added == 0 && result.updated == 0) '无新文件',
-    if (result.markedMissing > 0) '${result.markedMissing} 首已移除',
-    if (result.purged > 0) '清理 ${result.purged} 条残留',
-    if (result.errors > 0) '${result.errors} 处失败',
+    if (result.added > 0) l10n.libraryScanAdded(result.added),
+    if (result.updated > 0) l10n.libraryScanUpdated(result.updated),
+    if (result.added == 0 && result.updated == 0) l10n.libraryScanNoNew,
+    if (result.markedMissing > 0) l10n.libraryScanRemoved(result.markedMissing),
+    if (result.purged > 0) l10n.libraryScanPurged(result.purged),
+    if (result.errors > 0) l10n.libraryScanErrors(result.errors),
   ];
-  return parts.join('，');
+  return parts.join(l10n.commonListSeparator);
 }

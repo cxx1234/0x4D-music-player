@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:txvziwm/core/database/song_sort_order.dart';
 import 'package:txvziwm/core/models/accent_color.dart';
 import 'package:txvziwm/core/models/lyric_line_transition_style.dart';
 import 'package:txvziwm/core/utils/app_locale.dart';
@@ -199,6 +200,23 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.text('Text size'), findsOneWidget);
+    });
+  });
+
+  group('音乐库 / 专辑 / 歌手', () {
+    test('排序与计数文案跟随 locale', () async {
+      final en = await loadL10n(const Locale('en'));
+      final zh = await loadL10n(const Locale('zh'));
+
+      expect(SongSortOrder.dateAdded.label(en), 'Recently added');
+      expect(SongSortOrder.dateAdded.label(zh), '最近添加');
+      expect(en.librarySongCount(1), '1 song');
+      expect(en.librarySongCount(120), '120 songs');
+      expect(zh.librarySongCount(120), '120 首');
+      expect(en.artistSongs(2), '2 songs');
+      expect(zh.artistSongs(2), '2 首歌曲');
+      expect(en.artistAlbums(1), '1 album');
+      expect(en.albumMatch(0), 'No matches');
     });
   });
 }

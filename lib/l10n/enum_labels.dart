@@ -1,3 +1,4 @@
+import '../core/database/song_sort_order.dart';
 import '../core/models/accent_color.dart';
 import '../core/models/lyric_distance_blur_level.dart';
 import '../core/models/lyric_effect_strength.dart';
@@ -9,6 +10,15 @@ import 'app_localizations.dart';
 /// core 枚举的展示文案映射。
 ///
 /// core 层不持有 UI 文案；界面按当前 locale 调这些扩展取文案。
+extension SongSortOrderL10n on SongSortOrder {
+  String label(AppLocalizations l10n) => switch (this) {
+    SongSortOrder.title => l10n.sortTitle,
+    SongSortOrder.dateAdded => l10n.sortDateAdded,
+    SongSortOrder.playCount => l10n.sortPlayCount,
+    SongSortOrder.year => l10n.sortYear,
+  };
+}
+
 extension AccentColorL10n on AccentColor {
   String label(AppLocalizations l10n) => switch (this) {
     AccentColor.system => l10n.commonFollowSystem,
