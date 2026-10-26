@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - The album art on the now-playing info card is clickable and opens the album
-  (only when the song carries an album), with a subtle hover veil on desktop
+  (only when the song carries an album), with a subtle hover zoom on desktop
 - Hover tooltips on the icon-only entries of the left navigation rail. The rail
   only shows the label of the selected tab, so the other four entries relied on
   icon recognition alone. The selected entry is skipped (its label is already

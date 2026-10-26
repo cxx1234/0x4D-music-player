@@ -212,13 +212,21 @@ void main() {
       expect(opened, 1);
     });
 
-    testWidgets('悬停封面显示淡色遮罩', (tester) async {
+    testWidgets('悬停封面轻微放大', (tester) async {
       await tester.pumpWidget(
         _card(_song(album: 'Album'), isNarrow: true, coverSize: 200),
       );
-      double overlayOpacity() =>
-          tester.widget<AnimatedOpacity>(find.byType(AnimatedOpacity)).opacity;
-      expect(overlayOpacity(), 0);
+      double coverScale() => tester
+          .widget<AnimatedScale>(
+            find
+                .ancestor(
+                  of: find.byType(CachedAlbumArt),
+                  matching: find.byType(AnimatedScale),
+                )
+                .first,
+          )
+          .scale;
+      expect(coverScale(), 1);
 
       final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await gesture.addPointer(location: Offset.zero);
@@ -227,11 +235,11 @@ void main() {
 
       await gesture.moveTo(tester.getCenter(find.byType(CachedAlbumArt)));
       await tester.pump();
-      expect(overlayOpacity(), 1);
+      expect(coverScale(), 1.03);
 
       await gesture.moveTo(const Offset(700, 500));
       await tester.pump();
-      expect(overlayOpacity(), 0);
+      expect(coverScale(), 1);
     });
 
     testWidgets('无专辑信息时封面不可点击', (tester) async {

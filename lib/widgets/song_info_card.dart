@@ -170,12 +170,7 @@ class SongInfoCard extends StatelessWidget {
       borderRadius: radius,
     );
     if (!_canOpenAlbum) return art;
-    return _HoverableCover(
-      radius: radius,
-      highlightColor: theme.colorScheme.onSurface.withValues(alpha: 0.08),
-      onTap: onOpenAlbum,
-      child: art,
-    );
+    return _HoverableCover(radius: radius, onTap: onOpenAlbum, child: art);
   }
 
   /// 歌手 · 专辑（可点击，横向排列，短文本自适应/长文本省略）。
@@ -376,19 +371,19 @@ class SongInfoCard extends StatelessWidget {
 }
 
 /// 封面悬停/点击反馈：封面是不透明的图片，InkWell 的水波会被盖住，
-/// 这里用一层很淡的遮罩提示「可点开专辑」。
+/// 这里用轻微放大提示「可点开专辑」（叠色在亮色封面上不够明显）。
+const double _kCoverHoverScale = 1.03;
+
 const Duration _kCoverHoverDuration = Duration(milliseconds: 160);
 
 class _HoverableCover extends StatefulWidget {
   const _HoverableCover({
     required this.radius,
-    required this.highlightColor,
     required this.onTap,
     required this.child,
   });
 
   final double radius;
-  final Color highlightColor;
   final VoidCallback onTap;
   final Widget child;
 
@@ -409,25 +404,11 @@ class _HoverableCoverState extends State<_HoverableCover> {
         if (_hovering == hovering) return;
         setState(() => _hovering = hovering);
       },
-      child: Stack(
-        children: [
-          widget.child,
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedOpacity(
-                opacity: _hovering ? 1 : 0,
-                duration: _kCoverHoverDuration,
-                curve: Curves.easeOutCubic,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: widget.highlightColor,
-                    borderRadius: radius,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+      child: AnimatedScale(
+        scale: _hovering ? _kCoverHoverScale : 1,
+        duration: _kCoverHoverDuration,
+        curve: Curves.easeOutCubic,
+        child: widget.child,
       ),
     );
   }
