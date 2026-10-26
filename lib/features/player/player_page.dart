@@ -54,6 +54,18 @@ const double _kMinInfoCardWidth = 500;
 // 宽模式下信息卡最大宽度 = 窗口全宽的 40%。
 const double _kInfoCardFactor = 0.40;
 
+/// 宽模式信息卡外层内边距（内容区计算与 Padding 共用）。
+const EdgeInsets _kWideInfoPadding = EdgeInsets.symmetric(
+  horizontal: 40,
+  vertical: 24,
+);
+
+/// 窄模式信息卡外层内边距。
+const EdgeInsets _kNarrowInfoPadding = EdgeInsets.symmetric(
+  horizontal: 32,
+  vertical: 24,
+);
+
 /// 宽模式下信息卡宽度：最窄 [_kMinInfoCardWidth]，最宽为窗口全宽的
 /// [_kInfoCardFactor]。
 double wideInfoCardWidth(double windowWidth) {
@@ -359,45 +371,32 @@ class _PlayerPageState extends State<PlayerPage> {
 
   // ─── 信息模块构建 / 详情跳转 / 收藏 ─────────────────────
 
-  /// 宽模式信息卡：高度足够 → 宽版纵排；高度不足（放不下封面）→ 窄版横排。
+  /// 宽模式信息卡：形态与封面尺寸由 [resolveSongInfoCardLayout] 统一给出
+  /// （高度不足时先收缩封面，低于下限才切横排）。
   Widget _buildWideInfo(BuildContext context, ThemeData theme, Song song) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cardWidth = constraints.maxWidth;
-        // 估算宽版纵排封面（与 SongInfoCard 内部一致：max(宽×0.8, _kMinCover=380)，
-        // 宽取 padding 后的实际内容宽）。
-        final coverSize = math.max((cardWidth - 80) * 0.8, 380);
-        // 宽版纵排总高 ≈ 封面 + 文本区（间距28+title32+4+歌手24+4+meta16）
-        // + 上下 padding 48。
-        final wideNeeds = coverSize + 156;
-        final useWide = constraints.maxHeight >= wideNeeds;
+        final layout = resolveSongInfoCardLayout(
+          contentWidth: constraints.maxWidth - _kWideInfoPadding.horizontal,
+          contentHeight: constraints.maxHeight - _kWideInfoPadding.vertical,
+        );
 
-        final card = useWide
-            ? _buildSongInfoCard(
-                context,
-                theme,
-                song,
-                isNarrow: false,
-                compact: false,
-              )
-            : _buildSongInfoCard(
-                context,
-                theme,
-                song,
-                isNarrow: true,
-                compact: false,
-              );
+        final card = _buildSongInfoCard(
+          context,
+          theme,
+          song,
+          isNarrow: layout.form == SongInfoCardForm.horizontal,
+          compact: false,
+          coverSize: layout.coverSize,
+        );
 
-        // 高度不足切窄版横排；两种形态都保留滚动兜底（极端矮窗）。
+        // 两种形态都保留滚动兜底（极端矮窗 / 超长标题）。
         return SingleChildScrollView(
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
             child: Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 40,
-                  vertical: 24,
-                ),
+                padding: _kWideInfoPadding,
                 child: card,
               ),
             ),
@@ -408,36 +407,33 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   /// 窄模式播放器：信息卡（高度够 → 竖版封面在上，不够 → 横版封面在左；
-  /// 矮窗可滚动）。底部播放条由 Scaffold.bottomNavigationBar 承载。
+  /// 矮窗可滚动）。形态与尺寸由 [resolveSongInfoCardLayout] 统一给出。
   Widget _buildNarrowPlayer(BuildContext context, ThemeData theme, Song song) {
     return Column(
       children: [
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final cardWidth = constraints.maxWidth;
-              // 估算竖版封面（与 SongInfoCard 纵排一致：max(宽×0.8, _kMinCover=380)，
-              // 宽取 padding 后的实际内容宽）+ 文本区 + padding。
-              final coverSize = math.max((cardWidth - 64) * 0.8, 380);
-              final verticalNeeds = coverSize + 156;
-              // 高度足够 → 竖版；不足 → 横版。
-              final useVertical = constraints.maxHeight >= verticalNeeds;
+              final layout = resolveSongInfoCardLayout(
+                contentWidth:
+                    constraints.maxWidth - _kNarrowInfoPadding.horizontal,
+                contentHeight:
+                    constraints.maxHeight - _kNarrowInfoPadding.vertical,
+              );
               return SingleChildScrollView(
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minHeight: constraints.maxHeight),
                   child: Center(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 24,
-                      ),
+                      padding: _kNarrowInfoPadding,
                       child: _InfoReveal(
                         child: _buildSongInfoCard(
                           context,
                           theme,
                           song,
-                          isNarrow: !useVertical,
+                          isNarrow: layout.form == SongInfoCardForm.horizontal,
                           compact: false,
+                          coverSize: layout.coverSize,
                         ),
                       ),
                     ),
@@ -490,12 +486,15 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   /// 共享 SongInfoCard 构建（like/more/详情回调由页面注入）。
+  ///
+  /// [coverSize] 来自 [resolveSongInfoCardLayout]；迷你条不传（固定 48）。
   Widget _buildSongInfoCard(
     BuildContext context,
     ThemeData theme,
     Song song, {
     required bool isNarrow,
     required bool compact,
+    double? coverSize,
   }) {
     // 封面信息卡自成一合成层：封面绘制/涟漪等不波及播放页其它区域
     // （宽信息卡、窄竖/横版、迷你信息条共用此处）。
@@ -505,6 +504,7 @@ class _PlayerPageState extends State<PlayerPage> {
         theme: theme,
         isNarrow: isNarrow,
         compact: compact,
+        coverSize: coverSize,
         onLike: _toggleLike,
         onOpenArtist: () => _openArtist(context, song),
         onOpenAlbum: () => _openAlbum(context, song),

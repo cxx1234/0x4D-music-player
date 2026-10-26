@@ -8,14 +8,91 @@ import '../l10n/l10n.dart';
 import 'cached_album_art.dart';
 import 'text_link.dart';
 
-/// 宽版纵排封面占信息卡宽度的比例（随信息卡尺寸变化）。
-const double _kCoverFactor = 0.8;
+/// 纵排封面占内容宽度的比例。
+const double kSongInfoCoverFactor = 0.8;
 
-/// 宽版纵排封面最小尺寸（信息卡较窄时封底）。
-const double _kMinCover = 380;
+/// 纵排封面的最小尺寸（沿用原来的 380）：低于该尺寸改用横排。
+///
+/// 纵排所需的最低内容高度 = 本值 + [kSongInfoVerticalTextHeight]（548）。
+const double kSongInfoMinCover = 380;
 
-/// 窄版横排封面占卡片宽度的比例（信息卡填充中间区域时）。
-const double _kNarrowCoverFactor = 0.4;
+/// 横排封面占内容宽度的比例。
+const double kSongInfoHorizontalCoverFactor = 0.4;
+
+/// 横排封面下限（极矮窗口仍保留可辨识尺寸，其余交给外层滚动）。
+const double kSongInfoMinHorizontalCover = 120;
+
+/// 迷你条封面尺寸。
+const double kSongInfoCompactCover = 48;
+
+/// 纵排封面下方文本区的估算高度：
+/// 32（间距）+ 64（标题最多 2 行）+ 4 + 48（操作行）+ 4 + 16（元信息）。
+const double kSongInfoVerticalTextHeight = 168;
+
+/// 信息卡形态。
+enum SongInfoCardForm { vertical, horizontal, compact }
+
+/// 信息卡布局解析结果：形态 + 封面尺寸（逻辑像素，已取整）。
+@immutable
+class SongInfoCardLayout {
+  final SongInfoCardForm form;
+  final double coverSize;
+
+  const SongInfoCardLayout({required this.form, required this.coverSize});
+}
+
+/// 解析信息卡形态与封面尺寸（卡片与播放页共用的唯一出处）。
+///
+/// [contentWidth] / [contentHeight] 是卡片可用的内容区（已扣除页面内边距）。
+/// - 纵排：高度充足时取原来的尺寸（`max(宽度 × 0.8, 380)`，不设上限）；
+///   高度不足时从该尺寸向下收缩，但不再低于 [kSongInfoMinCover] —— 低于它就
+///   改用横排（因此纵排至少需要 `380 + 168` 的内容高度）。
+/// - 横排：封面同样受内容高度钳制，极矮时保底 [kSongInfoMinHorizontalCover]。
+SongInfoCardLayout resolveSongInfoCardLayout({
+  required double contentWidth,
+  required double contentHeight,
+  bool compact = false,
+}) {
+  if (compact) {
+    return const SongInfoCardLayout(
+      form: SongInfoCardForm.compact,
+      coverSize: kSongInfoCompactCover,
+    );
+  }
+
+  final widthDriven = math
+      .min(
+        contentWidth,
+        math.max(contentWidth * kSongInfoCoverFactor, kSongInfoMinCover),
+      )
+      .floorToDouble();
+  final verticalCover = math
+      .min(widthDriven, contentHeight - kSongInfoVerticalTextHeight)
+      .floorToDouble();
+  if (verticalCover >= kSongInfoMinCover) {
+    return SongInfoCardLayout(
+      form: SongInfoCardForm.vertical,
+      coverSize: verticalCover,
+    );
+  }
+
+  final horizontalWidth = math.min(
+    contentWidth,
+    math.max(
+      contentWidth * kSongInfoHorizontalCoverFactor,
+      kSongInfoMinHorizontalCover,
+    ),
+  );
+  return SongInfoCardLayout(
+    form: SongInfoCardForm.horizontal,
+    coverSize: math
+        .min(
+          horizontalWidth,
+          math.max(contentHeight, kSongInfoMinHorizontalCover),
+        )
+        .floorToDouble(),
+  );
+}
 
 /// 从文件名扩展名推导文件类型（如 `song.mp3` → `MP3`；无扩展名返回空串）。
 String fileTypeOf(Song song) {
@@ -32,12 +109,17 @@ String fileTypeOf(Song song) {
 /// - 窄版（[isNarrow]=true）：横排 —— cover 在左、信息在右，`like` `more` 最右垂直居中。
 /// - [compact]：迷你条（cover 48），用于窄窗口歌词/队列模式。
 ///
-/// 点击歌手/专辑与 like/more 的行为由外部通过回调注入（本组件不反向依赖 features/）。
+/// 点击歌手/专辑、封面与 like/more 的行为由外部通过回调注入（本组件不反向依赖
+/// features/）。封面尺寸由 [resolveSongInfoCardLayout] 统一解析，页面可通过
+/// [coverSize] 注入己算好的结果。
 class SongInfoCard extends StatelessWidget {
   final Song song;
   final ThemeData theme;
   final bool isNarrow;
   final bool compact;
+
+  /// 外部解析出的封面尺寸（逻辑像素）；为空时组件按自身宽度回退。
+  final double? coverSize;
 
   final VoidCallback onLike;
   final VoidCallback onOpenArtist;
@@ -51,14 +133,13 @@ class SongInfoCard extends StatelessWidget {
     required this.theme,
     this.isNarrow = false,
     this.compact = false,
+    this.coverSize,
     required this.onLike,
     required this.onOpenArtist,
     required this.onOpenAlbum,
     required this.menuBuilder,
     required this.onMenuSelected,
   });
-
-  double get _coverSize => compact ? 48 : 160;
 
   TextStyle? get _subtitleStyle => theme.textTheme.bodyMedium?.copyWith(
     color: theme.colorScheme.onSurfaceVariant,
@@ -77,13 +158,23 @@ class SongInfoCard extends StatelessWidget {
     return parts.join(' | ');
   }
 
-  Widget _buildCover({double? size}) {
-    final coverSize = size ?? _coverSize;
-    return CachedAlbumArt(
+  bool get _canOpenAlbum =>
+      song.albumId != null || (song.album?.trim().isNotEmpty ?? false);
+
+  Widget _buildCover(double size) {
+    final radius = compact ? 8.0 : 12.0;
+    final art = CachedAlbumArt(
       albumArtFilePath: song.albumArtFilePath,
       hasEmbeddedArt: song.hasEmbeddedArt == 1,
-      size: coverSize,
-      borderRadius: compact ? 8 : 12,
+      size: size,
+      borderRadius: radius,
+    );
+    if (!_canOpenAlbum) return art;
+    return _HoverableCover(
+      radius: radius,
+      highlightColor: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+      onTap: onOpenAlbum,
+      child: art,
     );
   }
 
@@ -144,17 +235,26 @@ class SongInfoCard extends StatelessWidget {
 
   /// 窄/迷你共用：封面左 + 信息右 + 动作最右（垂直居中）。
   ///
-  /// 窄版（非 compact）封面 = 卡片宽 × [_kNarrowCoverFactor]（40%），
-  /// 信息占剩余；迷你条封面固定 48。
+  /// 窄版封面占内容宽 [kSongInfoHorizontalCoverFactor]（40%），迷你条固定 48；
+  /// 页面注入 [coverSize] 时以注入值为准（已含高度钳制）。
   Widget _buildHorizontal(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final coverSize = compact
-            ? 48.0
-            : constraints.maxWidth * _kNarrowCoverFactor;
+        final cover = compact
+            ? kSongInfoCompactCover
+            : (coverSize ??
+                  math
+                      .min(
+                        constraints.maxWidth,
+                        math.max(
+                          constraints.maxWidth * kSongInfoHorizontalCoverFactor,
+                          kSongInfoMinHorizontalCover,
+                        ),
+                      )
+                      .floorToDouble());
         return Row(
           children: [
-            _buildCover(size: coverSize),
+            _buildCover(cover),
             SizedBox(width: compact ? 12 : 20),
             Expanded(child: _buildInfoColumn(context)),
           ],
@@ -222,22 +322,24 @@ class SongInfoCard extends StatelessWidget {
       return _buildHorizontal(context);
     }
 
-    // 宽版纵排：封面与下方文本同宽（coverSize），整体居中；
-    // 封面尺寸随信息卡宽度变化（coverSize = max(cardWidth × 0.8, _kMinCover)）。
+    // 宽版纵排：封面与下方文本同宽，整体居中；尺寸由统一解析函数给出
+    // （宽度主导、受高度钳制并封顶），页面未注入时按卡片宽度回退。
     return LayoutBuilder(
       builder: (context, constraints) {
-        final coverSize = math.max(
-          constraints.maxWidth * _kCoverFactor,
-          _kMinCover,
-        );
+        final cover =
+            coverSize ??
+            resolveSongInfoCardLayout(
+              contentWidth: constraints.maxWidth,
+              contentHeight: double.infinity,
+            ).coverSize;
         return Center(
           child: SizedBox(
-            width: coverSize,
+            width: cover,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildCover(size: coverSize),
+                _buildCover(cover),
                 const SizedBox(height: 32),
                 Text(
                   song.title,
@@ -269,6 +371,64 @@ class SongInfoCard extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// 封面悬停/点击反馈：封面是不透明的图片，InkWell 的水波会被盖住，
+/// 这里用一层很淡的遮罩提示「可点开专辑」。
+const Duration _kCoverHoverDuration = Duration(milliseconds: 160);
+
+class _HoverableCover extends StatefulWidget {
+  const _HoverableCover({
+    required this.radius,
+    required this.highlightColor,
+    required this.onTap,
+    required this.child,
+  });
+
+  final double radius;
+  final Color highlightColor;
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  State<_HoverableCover> createState() => _HoverableCoverState();
+}
+
+class _HoverableCoverState extends State<_HoverableCover> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(widget.radius);
+    return InkWell(
+      borderRadius: radius,
+      onTap: widget.onTap,
+      onHover: (hovering) {
+        if (_hovering == hovering) return;
+        setState(() => _hovering = hovering);
+      },
+      child: Stack(
+        children: [
+          widget.child,
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedOpacity(
+                opacity: _hovering ? 1 : 0,
+                duration: _kCoverHoverDuration,
+                curve: Curves.easeOutCubic,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: widget.highlightColor,
+                    borderRadius: radius,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

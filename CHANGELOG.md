@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- The album art on the now-playing info card is clickable and opens the album
+  (only when the song carries an album), with a subtle hover veil on desktop
 - Hover tooltips on the icon-only entries of the left navigation rail. The rail
   only shows the label of the selected tab, so the other four entries relied on
   icon recognition alone. The selected entry is skipped (its label is already
@@ -15,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   destinations already expose their labels to screen readers
 
 ### Changed
+- The now-playing info card sizes its cover from both the window width and
+  height: it shrinks smoothly as the window gets shorter, but never below the
+  original 380px floor, and switches to the horizontal layout once a vertical card
+  would need more than its share of the height (548px of card content). The
+  width-driven size is uncapped, so normal and large windows keep their previous
+  cover size, and the horizontal cover is height-clamped too. Every size is floored
+  to whole logical pixels, and the layout constants now live in one shared
+  resolver instead of being duplicated by the player page
 - Settings rows now share one `OptionRow` component
   (`lib/features/settings/widgets/option_row.dart`) with a fixed 72px height,
   Material 3 `ListTile` padding (16 start / 24 end), automatically tinted leading
