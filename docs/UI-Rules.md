@@ -489,3 +489,15 @@
   图片，`InkWell` 水波被盖住，靠这层提示可点）。
 - 回归测试：`test/song_info_card_layout_test.dart`（形态 / 大窗不封顶 / 高度收缩 /
   横排钳制 / 取整 / 点封面打开专辑 / 悬停遮罩）。
+
+## 16. 歌词滚动条（2026-10-26）
+
+- **只在鼠标位于歌词卡片上（含工具栏）时显示**。播放跟唱每次换行都会程序化
+  滚动，默认 `Scrollbar` 会跟着淡入淡出，表现为“每换一行闪一下”。
+- 实现：`lib/widgets/hover_scrollbar_area.dart` 的 `HoverScrollbarArea`
+  （`ScrollConfiguration` + `MaterialScrollBehavior` 子类，只替换 `buildScrollbar`）。
+  播放页歌词与设置页歌词预览都套它。
+- **不悬停时不能只关 `thumbVisibility`**：程序化滚动仍会触发淡入。要把
+  `ScrollbarThemeData.thumbColor` 设为透明，才能彻底不闪。
+- 悬停时恢复主题颜色并 `thumbVisibility: true`，保留滑块拖拽；移动端不显示滚动条。
+- 回归测试：`test/lyrics_view_test.dart`「歌词滚动条只在鼠标位于歌词卡片上时显示」。

@@ -271,6 +271,20 @@
 - **复发提示**：写新的列表 / 网格菜单时，`onTap` / `onLongPress` 闭包里用的 context 必须是
   itemBuilder 里再包一层 `Builder` 得到的那个，别把 sliver 的 context 传进菜单。
 
+### C10. 2026-10-26 歌词滚动条在每次跟唱换行时闪一下
+
+- **症状**：播放时每换一行，歌词右侧滚动条淡入再淡出；鼠标根本没碰歌词也会出现。
+- **根因**：桌面端的 `MaterialScrollBehavior.buildScrollbar` 会给每个 `Scrollable` 套一层
+  `Scrollbar`；`LyricView` 跟唱用程序化滚动，每次滚动都会触发 `Scrollbar` 的淡入动画。
+  **只把 `thumbVisibility` 设为 `false` 不阻止这次淡入。**
+- **修法**：`HoverScrollbarArea`（`lib/widgets/hover_scrollbar_area.dart`）把滑块可见性绑到
+  区域悬停；不悬停时同时把 `ScrollbarThemeData.thumbColor` 设成透明，彻底遮掉程序化滚动
+  触发的淡入（悬停时恢复主题色，拖拽不会被隐藏）。
+- **护栏**：`docs/UI-Rules.md` §16；`test/lyrics_view_test.dart`「歌词滚动条只在鼠标位于
+  歌词卡片上时显示」。
+- **复发提示**：再遇到「程序化滚动导致滚动条闪现」，先看是不是只关了 `thumbVisibility`；
+  颜色/透明度也要一起处理。
+
 ## D. 领域事故索引（细节留在原文档）
 
 | 症状 | 出处 |
@@ -283,6 +297,7 @@
 | 睡眠定时到点的反馈只有 SnackBar（HUD 在播放页被禁用） | `UI-Rules.md` §8 |
 | Tab 焦点退不掉、空格激活「看不见的」聚焦按钮 | `UI-Rules.md` §10、本册 C5/B8 |
 | 切歌提前量导致上一首尾部被截断；双实例掩盖间隙 | `AudioEngine-Migration.md` 附录 B/C |
+| 歌词滚动条在跟唱换行时闪一下 | `UI-Rules.md` §16、本册 C10 |
 | 镜像队列（引擎侧与 Dart 侧各持一份队列）必须互斥 | `AudioEngine-Migration.md` §0.4 |
 | 引擎时序问题无法用假引擎单测覆盖 | `AudioEngine-Migration.md` §P2 |
 | 变化检测移后台 isolate 时闭包捕获 UI 回调（unsendable） | `Performance-Optimization.md` §3.2 |

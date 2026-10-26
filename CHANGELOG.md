@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rows instead of sitting 8px further right
 
 ### Fixed
+- The lyrics scrollbar no longer flashes on every line change during playback.
+  On desktop it is now shown only while the pointer is over the lyrics area,
+  keeps its theme colors and drag support, and stays invisible during the
+  programmatic follow scroll
 - Segmented-button rows in Settings › Appearance and in the lyrics settings page
   were 8px right of every other row: their hand-rolled padding was 16/16 while
   Material 3 `ListTile` uses 16/24. Settings rows also had a 1px height mismatch
