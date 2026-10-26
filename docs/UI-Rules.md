@@ -56,6 +56,14 @@
 
 - NavigationRail 宽度：macOS = `layoutConfig.sidebarWidth`（92），顶部外包 `Padding(top: layoutConfig.sidebarTopInset)`。
 - 红绿灯由 unified 工具栏原生定位（中心 ≈26）；侧栏预留 `sidebarTopInset = 52` 使红绿灯在其中垂直居中。
+- **入口 tooltip（2026-10-26）**：侧栏是 `NavigationRailLabelType.selected`，只有选中项
+  显示文字，其余入口只有图标 —— 给**未选中**项在 `icon` 槽位包
+  `Tooltip(message: label, excludeFromSemantics: true)`。
+  - `NavigationRail` **没有**内置 tooltip，必须自己包；
+  - 选中项不包：文字已在图标下方，再弹一次是噪音；
+  - `excludeFromSemantics`：destination 的 `label` 已经交给无障碍层，避免读屏重复播报。
+  - 回归测试：`test/shell_rail_tooltip_test.dart`（未选中 4 项有 tooltip、
+    选中项无、切 tab 后翻转）。
 
 ## 4. 页面工具栏（PageToolbar）
 

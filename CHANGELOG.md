@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Hover tooltips on the icon-only entries of the left navigation rail. The rail
+  only shows the label of the selected tab, so the other four entries relied on
+  icon recognition alone. The selected entry is skipped (its label is already
+  visible), and the tooltips are excluded from semantics because the rail
+  destinations already expose their labels to screen readers
+
 ### Changed
 - Settings rows now share one `OptionRow` component
   (`lib/features/settings/widgets/option_row.dart`) with a fixed 72px height,

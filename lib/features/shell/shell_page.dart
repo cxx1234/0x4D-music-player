@@ -84,6 +84,24 @@ class _ShellPageState extends State<ShellPage> {
     }
   }
 
+  /// 侧栏图标：只给**未选中**的入口包 tooltip。
+  ///
+  /// `NavigationRail` 没有内置 tooltip，而这里用的是
+  /// `NavigationRailLabelType.selected` —— 未选中的 4 个入口只有图标，名字靠
+  /// tooltip 给出；选中项的文字已经显示在图标下方，再弹一次是噪音。
+  ///
+  /// `excludeFromSemantics`：destination 的 `label` 已经交给无障碍层，避免读屏
+  /// 重复播报同一个名字。
+  Widget _railIcon(NavigationItem item) {
+    final icon = Icon(item.icon, size: 26);
+    if (item == _selected) return icon;
+    return Tooltip(
+      message: item.label(context.l10n),
+      excludeFromSemantics: true,
+      child: icon,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -121,7 +139,7 @@ class _ShellPageState extends State<ShellPage> {
                 destinations: [
                   for (final item in NavigationItem.values)
                     NavigationRailDestination(
-                      icon: Icon(item.icon, size: 26),
+                      icon: _railIcon(item),
                       label: Text(item.label(context.l10n)),
                     ),
                 ],
