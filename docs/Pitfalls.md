@@ -285,6 +285,43 @@
 - **复发提示**：再遇到「程序化滚动导致滚动条闪现」，先看是不是只关了 `thumbVisibility`；
   颜色/透明度也要一起处理。
 
+### C11. 2026-10-27 根 Scaffold 的底栏一挂一卸，body 里的页面会跳 64px
+
+- **症状**：播放页展开动画结束的那一帧，整块内容（含底部控制带）往下跳约 64px；
+  收起时反向跳一次。不是缓动问题，是**布局**跳。
+- **根因**：`MaterialApp.builder` 里的 Navigator（所有路由）是根 `Scaffold` 的 `body`
+  的孩子，body 高度 = 窗口高 − `bottomNavigationBar` 高。动画期间为了淡出内容把底栏
+  留着 → 播放页按 `H−64` 布局；动画结束卸掉底栏 → body 长高 64 → 页面重新布局。
+- **修法**：底栏的去留必须在**页面布局之前**定下来 —— 打开播放页时先让底栏内容淡出，
+  再卸载底栏、再 `push`；收起动画跑完（`_playerReveal == 0`）才把底栏挂回。
+- **护栏**：`docs/UI-Rules.md` §17「与迷你底栏的交接」。
+- **复发提示**：任何"根 Scaffold 的底栏/`bottomNavigationBar` 在动画中途变了高度"的
+  改动，都会让 body 里的页面重排；表现为"动画收尾时整体跳一下"，很容易误判成曲线问题。
+
+### C12. 2026-10-27 `pushAndRemoveUntil` 会让新页滑入时露出主界面
+
+- **症状**：从播放页点歌手/专辑/歌词设置，观感是"闪一下，然后目标页从右侧滑入"。
+- **根因**：`pushAndRemoveUntil` 会**立刻**把下面那些路由从 Overlay 里移除；新页才滑到
+  一半，底下已经不是播放页而是 shell 了。
+- **修法**：要"替换但要保持垫底"就用 `pushReplacement`（等新页动画结束才移除旧页）。
+  本项目最终改成**两段式**：先 `pop` 播放页（复用它自己的反向动画把卡片收回底栏），
+  等路由真的销毁后再 `push`/`pushReplacement` 目标页 —— 这样"卡片收回"和"目标页进入"
+  各自都是连续动画，中间不露底。
+- **护栏**：`docs/UI-Rules.md` §17「从播放页跳别的页面 = 两段式」。
+- **复发提示**：`pushReplacement` 与 `pushAndRemoveUntil` 的**移除时机**不同（前者动画后、
+  后者立刻），凡是"替换页面"的动效都要先想清楚这个时机。
+
+### C13. 2026-10-27 在 `initState` 里写被监听的 `ValueNotifier` 会撞 build
+
+- **症状**：Debug 下抛 `setState() or markNeedsBuild() called during build`，指向某个
+  `ValueListenableBuilder`。
+- **根因**：路由在 push 过程中挂载（正处于 build 阶段），`initState` 里同步写一个被
+  `ValueListenableBuilder` 监听着的 notifier，会立刻把那个 builder 标脏。
+- **修法**：初始同步排到帧后（`addPostFrameCallback`），或干脆不写（值本来就对时不写）。
+- **护栏**：`lib/app/router.dart` 的 `_ProgressMirror.initState`。
+- **复发提示**：`didUpdateWidget`/`initState` 里做"同步到外部状态"的动作前，先问一句
+  这个外部状态有没有人正在 build 时监听。
+
 ## D. 领域事故索引（细节留在原文档）
 
 | 症状 | 出处 |
@@ -298,6 +335,8 @@
 | Tab 焦点退不掉、空格激活「看不见的」聚焦按钮 | `UI-Rules.md` §10、本册 C5/B8 |
 | 切歌提前量导致上一首尾部被截断；双实例掩盖间隙 | `AudioEngine-Migration.md` 附录 B/C |
 | 歌词滚动条在跟唱换行时闪一下 | `UI-Rules.md` §16、本册 C10 |
+| 播放页展开/收起收尾时整页跳 64px | `UI-Rules.md` §17、本册 C11 |
+| 从播放页跳转时"闪一下再滑入" | `UI-Rules.md` §17、本册 C12 |
 | 镜像队列（引擎侧与 Dart 侧各持一份队列）必须互斥 | `AudioEngine-Migration.md` §0.4 |
 | 引擎时序问题无法用假引擎单测覆盖 | `AudioEngine-Migration.md` §P2 |
 | 变化检测移后台 isolate 时闭包捕获 UI 回调（unsendable） | `Performance-Optimization.md` §3.2 |

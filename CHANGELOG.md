@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-27
+
 ### Added
 - The album art on the now-playing info card is clickable and opens the album
   (only when the song carries an album), with a subtle hover zoom on desktop
@@ -32,6 +34,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accent-colour, lyric-size, effect-strength, slide-alignment and distance-blur
   rows use it, so their segmented buttons line up with the switch and chevron
   rows instead of sitting 8px further right
+
+### Changed
+- The now-playing page now grows out of the 64px mini bar instead of sliding in as a
+  whole page. One continuous `easeInOutCubic` reveal drives a bottom-up clip (the
+  page is laid out full-height and never re-flows), while the app bar and body lift
+  240px into place and the mini bar's control strip grows into the player's bottom
+  band. During the transition the surface is a card: interpolated 16px top corners,
+  a three-line 0-blur shadow, a 1px `outlineVariant` hairline on the top edge and a
+  0.97 → 1 bottom-anchored scale; all four disappear by the time the card reaches the
+  window top, so the settled page is pixel-identical to before. The bottom band's
+  height is measured at runtime (wide/narrow layouts differ by 20px) instead of being
+  assumed, and the collapse chevron only flips during the last 20% of the progress,
+  where the app bar is actually visible
+- Leaving the now-playing page for the artist, album or lyrics settings page is now
+  two-phase: the card retracts into the mini bar first, then the target page slides
+  in. The previous `pushAndRemoveUntil` removed the player on the first frame, so the
+  shell showed through while the new page was still sliding (a visible flash). The
+  player is popped, the target is pushed only after it is gone, and any page left
+  underneath is replaced so the stack stays flat
+- The lyrics settings page is reached from the player the same way as artist/album
+  (the player route is replaced) and the shell switches to Settings, so going back
+  lands on the settings tab. Navigation to it no longer stacks on top of the player,
+  which left the player in a broken mid-transition state on return
 
 ### Fixed
 - The lyrics scrollbar no longer flashes on every line change during playback.

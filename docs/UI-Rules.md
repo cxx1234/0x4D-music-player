@@ -501,3 +501,70 @@
   `ScrollbarThemeData.thumbColor` 设为透明，才能彻底不闪。
 - 悬停时恢复主题颜色并 `thumbVisibility: true`，保留滑块拖拽；移动端不显示滚动条。
 - 回归测试：`test/lyrics_view_test.dart`「歌词滚动条只在鼠标位于歌词卡片上时显示」。
+
+## 17. 「正在播放」展开 / 收起过渡（2026-10-27）
+
+播放页仍是**一条普通路由**（`AppRouter.bottomUpRoute` → `PlayerPage`），展开/收起由
+`lib/widgets/bottom_bar_reveal.dart` 的 `BottomBarReveal` 单独驱动，进度 = 路由动画。
+
+**几何**
+
+- 页面按**全屏高度**固定布局（`OverflowBox` 底部对齐），可见区是一个自底向上的
+  裁剪窗口 —— 每帧只有裁剪面在动，页面**不重排**（重排会让 `resolveSongInfoCardLayout`
+  在拖动/动画中换形态、歌词重排，抖）。
+- 高度**只用一条 `easeInOutCubic`**：起点 64（迷你底栏高度，第一帧用它页面的带子盖住
+  底栏原位置）→ 终点全屏。带子那 ~80px 由它在距离上的占比自然摊成前 ~30% 时间。
+  ⚠️ 不要拆成「带子一段 + 正文一段」：两段交界处速度归零 = 明显的"顿一下"。
+- **带高要实测**（`bandKey` 指向播放页的 `PlayerBar`）：宽/窄版控制按钮 64/44、字号、
+  睡眠定时入口都会改变带高；量不到才用兜底 140。
+
+**卡片质感**（三样都只在过渡中存在，终点自动移出视野/归零，静止态与改动前逐像素一致）
+
+| 元素 | 规则 |
+|---|---|
+| 顶角圆角 | `maxCornerRadius = 16`，前 40% 进度吃满；收起态必须是 0（要和底栏直边一致） |
+| 上沿投影 | 3 条 `blurRadius: 0` 实线，偏移 `(0,-1/-2/-3)`，alpha `0.10/0.07/0.04 × p`（与 `card_surface.dart` 的 `bottomDropShadow` 同一套，只是朝上） |
+| 顶边细线 | `outlineVariant`，alpha `0.6 × p`，1px，在 `ClipRRect` 内（两端被圆角裁断）。让裁切线读成"边"而不是"被切开" |
+| 整体微缩放 | `0.97 → 1`，锚点 `bottomCenter`（底边固定 → 带子仍严格贴底）；缩放让出的边角由两层同色垫底（`surface` / `surfaceContainerLow`）补上 |
+
+**内容**
+
+- **正文整体上浮**：`appBar` + `body` 从 `+240`（`contentLift`）浮到 0；**底部控制带不参与**
+  （必须贴底）。用 `Transform.translate` + `ValueListenableBuilder(child:)` 透传，
+  否则歌词/信息卡会被每帧重建。
+- **带内内容不透明度**只在进度 `0 → 0.04` 变化，中间恒为 1。窗口一长就变成
+  "控制按钮先淡掉、卡片还没收完"，看起来像底栏先消失了一半。底栏底色要单独兜一层
+  不参与淡出的 `ColoredBox`，否则淡出时会透出后面的列表。
+- **收起箭头**只在 `0.8 → 1` 转半圈（`collapseArrowTurns`）：顶栏是最后才被揭开的，
+  全程线性转头会在没人看得见的时段里转完。
+
+**与迷你底栏的交接**
+
+- 打开前：底栏内容先淡出 70ms（`_barFadeOut`），然后底栏**必须卸载**再 push ——
+  根 Scaffold 的 `bottomNavigationBar` 会改变 body 高度，而播放页就在 body 里
+  （见 `docs/Pitfalls.md` C11）。保留占位会让页面少 64px，动画收尾时整体往下跳。
+- 收起结束：底栏重新挂上时淡入 120ms（`TweenAnimationBuilder`），避免整块突然出现。
+
+**从播放页跳别的页面 = 两段式**
+
+`_openFromPlayer`：① 先切 Shell 的 tab（被播放页盖着）② `pop` 播放页（用它的反向动画
+收回卡片）③ 等它真的销毁，再 `push` 目标页；栈顶不是 shell 时用 `pushReplacement`
+顶掉旧页（否则「详情 → 播放页 → 详情」会一层层堆起来）。两段之间用 `AbsorbPointer`
+挡住点击（底栏已挂回，点到会在目标页推入后被 replace 顶掉）。
+为什么不能一步完成：路由"后压的盖前面的"，要让卡片收回时露出新页，新页必须在播放页
+**下面**（见 `docs/Pitfalls.md` C12）。
+
+**旋钮**（都在 `BottomBarReveal` / `AppRouter`）
+
+| 常量 | 值 | 作用 |
+|---|---|---|
+| `AppRouter.transitionDuration` | 380ms | 单程时长 |
+| `bandPhase` / `bandFadePhase` | 0.32 / 0.04 | 带内内容淡入完成点、淡入淡出窗口 |
+| `contentLift` | 240 | 正文上浮幅度 |
+| `maxCornerRadius` / `hairlineAlpha` | 16 / 0.6 | 卡片顶角与顶边线 |
+| `pageScaleFor` | 0.97 → 1 | 整体微缩放 |
+
+逐帧检查：`flutter run -d macos --dart-define=PLAYER_REVEAL_SLOW=true`（时长 ×4）。
+
+**别踩过的坑**：上沿做过"向底色渐隐"（`ShaderMask` + `dstIn`）—— 下层列表会从页面里
+双重曝光出来，且每帧一个全屏 `saveLayer`，已改成叠一层渐变/细线。

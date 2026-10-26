@@ -12,6 +12,7 @@ import '../../core/models/lyric_text_size.dart';
 import '../../core/services/lyrics_view_model.dart';
 import '../../core/services/service_locator.dart';
 import '../../l10n/l10n.dart';
+import '../../widgets/bottom_bar_reveal.dart';
 import '../../widgets/player_bar.dart';
 import '../../widgets/song_info_card.dart';
 import '../album/album_page.dart';
@@ -31,13 +32,26 @@ class PlayerPage extends StatefulWidget {
   /// 跨会话保留的播放器界面状态（App 持有，pop 不销毁）。
   final PlayerUiState uiState;
 
-  /// 点歌手/专辑：用详情页替换播放器路由并切到对应 shell tab。
+  /// 从播放页进二级页：**替换**掉播放器路由，并让 Shell 切到对应 tab
+  /// （返回时落在那个 tab 上，而不是播放页）。
+  ///
+  /// 播放页不能长期压在别的路由下面：它的展开进度由自身路由动画驱动，被遮住再
+  /// 返回会留下错位的中间态。凡是从播放页进二级页，一律走这条。
   final void Function(Widget page, NavigationItem tab) onOpenDetail;
+
+  /// 底部控制带的 key：交给展开动画量真实高度（宽窄/字号变化都能跟上）。
+  final GlobalKey? bottomBarKey;
+
+  /// 展开进度（0 = 收起）：底部控制带的内容随之淡入/淡出，避免带子还在长高时
+  /// 里面的进度条与控制按钮被裁掉半截。
+  final ValueListenable<double>? reveal;
 
   const PlayerPage({
     super.key,
     required this.uiState,
     required this.onOpenDetail,
+    this.bottomBarKey,
+    this.reveal,
   });
 
   @override
@@ -107,15 +121,13 @@ class _PlayerPageState extends State<PlayerPage> {
     ui.lyricCountdown = settings.lyricCountdown;
   }
 
-  /// 歌词菜单栏的设置入口：打开歌词显示页，返回后立即应用改动。
-  Future<void> _openLyricsSettings() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const LyricsSettingsPage()));
-    if (!mounted) return;
-    setState(_syncLyricSettings);
-    // 设置页已同步常驻 VM；这里兜一次，独立构建场景也保持一致。
-    _lyrics.setShowTranslation(widget.uiState.showTranslation);
+  /// 歌词显示设置：与「歌手/专辑」同一套跳转 —— 替换播放器路由，并先把 Shell
+  /// 切到「设置」tab，返回时落在设置页（可继续调外观/歌词）。
+  ///
+  /// 设置页改动会直接写常驻的 [LyricsViewModel]（见设置页内注释），所以不需要
+  /// 这里再回写；播放页被替换掉后也不会留下"压在播放页上面"的状态。
+  void _openLyricsSettings() {
+    widget.onOpenDetail(const LyricsSettingsPage(), NavigationItem.settings);
   }
 
   @override
@@ -168,7 +180,7 @@ class _PlayerPageState extends State<PlayerPage> {
       preferredSize: Size.fromHeight(
         kToolbarHeight + layoutConfig.playerTopBarTopReserve,
       ),
-      child: Column(
+      child: _lift(Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // 顶部红绿灯预留区（macOS 45，其余 0）。
@@ -176,7 +188,7 @@ class _PlayerPageState extends State<PlayerPage> {
           AppBar(
             toolbarHeight: kToolbarHeight,
             leading: IconButton(
-              icon: const Icon(Icons.keyboard_arrow_down),
+              icon: _CollapseArrow(reveal: widget.reveal),
               tooltip: context.l10n.playerCollapse,
               onPressed: () => Navigator.of(context).pop(),
             ),
@@ -251,7 +263,7 @@ class _PlayerPageState extends State<PlayerPage> {
             ],
           ),
         ],
-      ),
+      )),
     );
   }
 
@@ -272,7 +284,7 @@ class _PlayerPageState extends State<PlayerPage> {
 
               // ── Empty state ────────────────────────────
               if (song == null) {
-                return Center(
+                return _lift(Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -295,12 +307,12 @@ class _PlayerPageState extends State<PlayerPage> {
                       ),
                     ],
                   ),
-                );
+                ));
               }
 
               // ── 窄模式：播放器 / 歌词·队列（整体淡入淡出过渡）──
               if (narrow) {
-                return AnimatedSwitcher(
+                return _lift(AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
                   switchInCurve: Curves.easeOutCubic,
                   switchOutCurve: Curves.easeInCubic,
@@ -313,12 +325,12 @@ class _PlayerPageState extends State<PlayerPage> {
                           key: const ValueKey('lyricsqueue'),
                           child: _buildNarrowLyricsQueue(context, theme, song),
                         ),
-                );
+                ));
               }
 
               // ── 宽模式：信息卡（纵排）| 队列/歌词。底部全宽播放条已抽到
               //    Scaffold.bottomNavigationBar（SnackBar 会自动顶到其上方）。──
-              return Row(
+              return _lift(Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   SizedBox(
@@ -342,7 +354,7 @@ class _PlayerPageState extends State<PlayerPage> {
                     ),
                   ),
                 ],
-              );
+              ));
             },
           ),
           // 底部全宽播放条挂在 Scaffold.bottomNavigationBar：SnackBar(fixed)
@@ -354,13 +366,29 @@ class _PlayerPageState extends State<PlayerPage> {
               if (_viewModel.currentSong == null) {
                 return const SizedBox.shrink();
               }
-              return PlayerBar(
-                player: ServiceLocator.player,
-                theme: theme,
-                onSeek: _viewModel.seek,
-                compact: narrow,
-                // 快捷键/媒体键切歌、播放暂停时让对应按钮也亮一下。
-                pulses: ServiceLocator.feedback.pulses,
+              // 底色单独兜一层不参与淡出：`PlayerBar` 自己的 Material 也会被
+              // 一起淡掉，露出后面列表（收起时特别明显）。两层同色，视觉一致。
+              final surface = ColoredBox(
+                color: theme.colorScheme.surfaceContainerLow,
+                child: PlayerBar(
+                  key: widget.bottomBarKey,
+                  player: ServiceLocator.player,
+                  theme: theme,
+                  onSeek: _viewModel.seek,
+                  compact: narrow,
+                  // 快捷键/媒体键切歌、播放暂停时让对应按钮也亮一下。
+                  pulses: ServiceLocator.feedback.pulses,
+                ),
+              );
+              final reveal = widget.reveal;
+              if (reveal == null) return surface;
+              return ValueListenableBuilder<double>(
+                valueListenable: reveal,
+                child: surface,
+                builder: (context, value, child) => Opacity(
+                  opacity: BottomBarReveal.bandContentOpacity(value),
+                  child: child,
+                ),
               );
             },
           ),
@@ -560,9 +588,51 @@ class _PlayerPageState extends State<PlayerPage> {
       NavigationItem.albums,
     );
   }
+
+  /// 正文（appBar + body）整体上浮；底部控制带不参与，始终贴底。
+  ///
+  /// 只改绘制不改布局：`child` 透传给 [ValueListenableBuilder]，逐帧只重建这层
+  /// 包装，歌词/信息卡不会被每帧重建。
+  Widget _lift(Widget child) {
+    final reveal = widget.reveal;
+    if (reveal == null) return child;
+    return ValueListenableBuilder<double>(
+      valueListenable: reveal,
+      child: child,
+      builder: (context, value, child) => Transform.translate(
+        offset: Offset(0, BottomBarReveal.contentLiftFor(value)),
+        child: child,
+      ),
+    );
+  }
 }
 
 // ─── 共享切换过渡：歌词 ↔ 播放列表（淡入 + 朝标签方向轻滑）────
+
+/// 收起箭头：随展开进度翻面 —— 但只在**收尾段**（0.8 → 1）转。
+///
+/// 顶栏是最后才被揭开的部分，全程线性转头会在没人看得见的时段转完；收进收尾段
+/// 之后，箭头出现的同时正好转到位。用进度驱动而不是"点击时放一次动画"：不需要
+/// 额外状态机，半路被打断（反向 pop）也不会错位。
+class _CollapseArrow extends StatelessWidget {
+  const _CollapseArrow({required this.reveal});
+
+  /// 展开进度（0 = 收起）。为 null 时退化为静态图标（独立构建场景/测试）。
+  final ValueListenable<double>? reveal;
+
+  @override
+  Widget build(BuildContext context) {
+    final reveal = this.reveal;
+    if (reveal == null) return const Icon(Icons.keyboard_arrow_down);
+    return ValueListenableBuilder<double>(
+      valueListenable: reveal,
+      builder: (context, value, _) => Transform.rotate(
+        angle: BottomBarReveal.collapseArrowTurns(value) * 2 * math.pi,
+        child: const Icon(Icons.keyboard_arrow_down),
+      ),
+    );
+  }
+}
 
 class _FadeSlideTransition extends StatelessWidget {
   /// 滑动方向：+1 向右（切到播放列表），-1 向左（切到歌词）。
