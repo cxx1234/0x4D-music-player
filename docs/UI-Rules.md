@@ -249,7 +249,8 @@
   `playlist_page.dart` / `playlist_detail_page.dart`）。
 - **「不染色」的含义是不跟随 accent 色，不是不设颜色**——`onSurfaceVariant` 本身就是
   中性灰。已按此法修：设置 › 外观的「主题模式」（太阳 / 月亮，仍随明暗切换图标）
-  与「主题色」（`palette_outlined`）两行。
+  与「主题色」（`palette_outlined`）两行。2026-10-26 起这两行改用 `OptionRow`，
+  着色由组件统一注入（见 §14），但在别处自拼 `Row` 时仍须照本条手写 `color`。
 - 回归测试：`test/settings_leading_icon_color_test.dart`（2 例，明暗各一）——用
   `Icon.color ?? IconTheme.of(context).color` 取实际渲染色，与同页 `ListTile`
   leading 图标（`Icons.replay_rounded`）对比，日后新增自拼行忘上色会直接失败。
@@ -409,3 +410,50 @@
 - ⚠️ 预览会持续排帧，**相关 widget 测试不能用 `pumpAndSettle()`**，改用固定
   `pump(Duration)`；`LyricView` 是 Canvas 渲染，断言走 `controller.document` / `preset`，
   不要用 `find.text` 找歌词内容。
+
+## 14. 设置行组件（OptionRow，2026-10-26）
+
+- 组件：`lib/features/settings/widgets/option_row.dart`
+  - `OptionRow`：「leading 图标 + 标题/副标题 + 右槽」的三段式行；
+  - `OptionRowText`：标题 + 副标题文本块（ListTile 行的 `title` 也用它）；
+  - `ShrinkableTrailing`：右槽「宽度上限 + 等比缩小」（分段按钮用）；
+  - `optionRowSubtitleStyle`：副标题样式（11px、`onSurfaceVariant`）。
+- **何时用 `OptionRow`**：右槽是分段按钮、横向色板等「要占剩余宽度」的控件时。
+  `ListTile.trailing` 只按内容固有宽度摆放，装不下这类弹性控件。
+  **其余设置行继续用 `ListTile`**（M3 默认的内边距、icon 注入、水波 / hover / 焦点
+  白送），但：
+  - `title` 传 `OptionRowText`，不要在页面里再抄一份标题/副标题排版；
+  - 必须写 `minTileHeight: OptionRow.kHeight`（72），否则 ListTile 自然高度是 71，
+    与 `OptionRow` 差 1px。
+- **`OptionRow` 固化的三条默认值**（每条都对应一次踩过的坑）：
+  1. 内边距 `start: 16, end: 24` —— M3 `ListTile` 就是**非对称**的
+     （`_LisTileDefaultsM3` = `EdgeInsetsDirectional.only(start: 16, end: 24)`）；
+     自拼行写成 `symmetric(horizontal: 16)` 会让右缘比所有 ListTile 行凸出 8px。
+  2. leading 图标自动 `onSurfaceVariant` —— 自拼 `Row` 里的裸 `Icon` 拿不到
+     ListTile 注入的 `IconTheme`，会退回 M2 的固定纯黑 / 纯白（见 §9）。
+  3. 行高固定 72（与列表行 `SongTile.kRowHeight` 一致）。
+- **右槽契约**：`trailing` 右对齐，**优先拿自己的固有宽度**，剩下的留给文字区；
+  右槽可用上限 = `行内宽度 - 48（图标 24 + 间距 24）- kMinTextWidth（160）`。
+  - 需要「放不下时等比缩小」→ 套 `ShrinkableTrailing`（**默认不设宽度上限**；
+    别再硬写 360 —— 英文三按钮固有宽度就有 ~450，写死会让整个按钮连同字号
+    缩到 ~0.8，2026-10-26 修的就是这个）；
+  - 需要按可用宽度自适应（主题色圆点大小）→ 直接在 `trailing` 里用 `LayoutBuilder`
+    读 `constraints.maxWidth`（拿到的是「分给右槽的宽度」；注意
+    `ShrinkableTrailing` 内部的 `FittedBox` 会给子级无界约束，这类自适应控件
+    **不能**套它）。
+- ⚠️ 不要把右槽改成 `Flexible`/`Expanded`：那是按「剩余宽度的份额」平分，
+  中英文标签宽度差很多，宽窗口下英文也会被缩一号（曾用 1:1 平分 + 360 上限，
+  英文胶囊按钮文字只有 ~11px）。
+- ⚠️ 也不要把右槽塞进裸 `Flexible` 或自己再拼一层 `Row`：`Flexible` 只给「剩余
+  宽度的份额」且默认左对齐，控件会贴份额左缘、右侧留一大块空白。
+- **整行可点**：凡是能点出结果的行（进二级页 / 开关 / 弹菜单），点击区必须是整行：
+  `ListTile.onTap`，或把 `PopupMenuButton` 包在 `ListTile` 外层
+  （`PopupMenuButton(child: ListTile(...))`，同歌词页「行间过渡」行）。
+  ⚠️ 把 `PopupMenuButton` 塞进 `trailing` 会让行体变成死的，只剩右侧一点点可点
+  （「语言」行 2026-10-26 已改成整行）。写盘类动作在 setter 里
+  `if (!ServiceLocator.isReady) return;` 守卫，不要用 `enabled` 把控件关掉。
+- 回归测试：`test/option_row_test.dart`（行高 / 内边距 / 右缘 / 右槽优先 /
+  文字区保底 / 文案样式）、`test/settings_theme_segment_size_test.dart`（英文宽窗口下
+  分段按钮不被缩小）、`test/settings_appearance_alignment_test.dart` 与
+  `test/lyrics_settings_alignment_test.dart`（分段按钮与 ListTile 行 trailing 同处
+  一条内缘，0.5px 内）。

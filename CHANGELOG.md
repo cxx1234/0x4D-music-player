@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Settings rows now share one `OptionRow` component
+  (`lib/features/settings/widgets/option_row.dart`) with a fixed 72px height,
+  Material 3 `ListTile` padding (16 start / 24 end), automatically tinted leading
+  icons and a right-aligned trailing slot that can shrink to fit. The theme-mode,
+  accent-colour, lyric-size, effect-strength, slide-alignment and distance-blur
+  rows use it, so their segmented buttons line up with the switch and chevron
+  rows instead of sitting 8px further right
+
+### Fixed
+- Segmented-button rows in Settings › Appearance and in the lyrics settings page
+  were 8px right of every other row: their hand-rolled padding was 16/16 while
+  Material 3 `ListTile` uses 16/24. Settings rows also had a 1px height mismatch
+  (71 vs 72)
+- The Settings › General › Language row is clickable across the whole row now;
+  its popup menu used to open only from the small arrow on the right
+- The Settings › cover-cache “Clear” action now carries a hairline outline
+  (`outlineVariant`) so it reads as a button instead of plain text
+- The theme-mode segmented button no longer shrinks its labels: it used to be
+  capped at 360px while the English labels need ~450px, so `FittedBox` scaled the
+  whole control (font included) to about 0.8. Settings rows now give the trailing
+  control its natural width first and only shrink it when the text column would
+  drop below 160px
+
 ## [0.4.0] - 2026-10-24
 
 ### Added
