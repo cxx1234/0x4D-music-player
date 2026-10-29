@@ -59,6 +59,20 @@
 - **修法**：按上述字段补齐，勿只加 PBXFileReference。
 - **护栏**：新增本地化语言时照此清单核对。
 
+### A4. 2026-10-30 `flutter pub get` 会往 `analysis_options.yaml` 里塞平台 exclude
+
+- **症状**：删掉 `android/`、`ios/`、`web/` 三个目录后，手工把 `analysis_options.yaml`
+  `analyzer.exclude` 里对应的三条删掉，再跑 `flutter pub get` 又冒出来（打印
+  `Upgrading analysis_options.yaml to exclude build and platform directories.`）。
+- **根因**：flutter 工具在 `pub get` 时按**磁盘上实际存在的平台目录**重写这段 exclude。
+  目录还在时它就会加回去 —— 本次排查中 `git stash` 一度把删掉的目录复原，工具随即把
+  `android/**`、`ios/**` 又写了进去，git 里就出现了「刚删的规则又回来」的假象。
+- **修法**：先让目录真正消失（含残留的生成物），再跑 `flutter pub get`；确认目录不存在后
+  工具不会再写回。若已写回，删掉再 `pub get` 一次即可。
+- **护栏**：改 `analysis_options.yaml` 的平台 exclude 前，先 `ls -d */` 确认真实目录；
+  `pub get` 输出里出现 `Upgrading ...` 就跑一次 `git diff` 复核，别直接提交。
+- **复发提示**：`analysis_options.yaml` 不是纯静态配置，flutter 工具会改它。
+
 ## B. macOS 原生层
 
 ### B1. 2026-08-30 顶栏双击缩放拦截（DetailTopBar 按钮区）

@@ -22,6 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   frame because `flutter_lyric` lays out every lyric line eagerly; that is
   tracked in `docs/Performance-Optimization.md` §1.7
 
+### Removed
+- The `android/`, `ios/` and `web/` platform folders. None of them was ever more than
+  template scaffolding: the library model scans arbitrary folders through the OS file
+  picker (security-scoped bookmarks) and the UI assumes a desktop layout and a resizable
+  window, so Android scoped storage, the iOS document picker and the browser would each
+  need a separate data layer rather than a port. This only drops untested surface; the
+  macOS app is untouched. `flutter create --platforms=<name> .` regenerates a platform
+  folder if that decision ever changes, and `README.md` / `docs/Architecture.md` now
+  state the supported platforms explicitly.
+
 ## [0.4.1] - 2026-10-27
 
 ### Added

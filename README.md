@@ -43,12 +43,19 @@ is set in a 9×9 dot-matrix font, one circle per pixel, with a flat eighth note 
 - DSD support
 - Windows / Linux support (maybe?)
 
+The `android/`, `ios/` and `web/` folders were removed in 0.4.x: none of them was ever
+more than template scaffolding. Regenerate one on demand with
+`flutter create --platforms=<name> .` if that ever changes.
+
 ## Getting Started
 
 ### Prerequisites
 
 - Flutter SDK (Dart `^3.12`) — see [flutter.dev](https://flutter.dev)
-- macOS is currently the primary target (full media-control integration)
+- macOS is currently the primary target (full media-control integration). Windows and
+  Linux are planned; **iOS, Android and the web are out of scope** — the player assumes
+  desktop file-system access (scanning arbitrary folders via security-scoped bookmarks)
+  and a desktop layout.
 
 ### Build & Run
 

@@ -9,7 +9,7 @@
 * Local music library
 * Clean architecture
 * Maintainable codebase
-* Cross-platform support
+* Desktop cross-platform support (macOS today; Windows / Linux planned)
 * Hi-Res audio support
 * Future DSD support
 
@@ -19,6 +19,13 @@
 * User accounts
 * Cloud synchronization
 * Social features
+* Mobile (iOS / Android) and web clients
+
+The mobile and web targets were dropped in 0.4.x — the library model is built on
+scanning arbitrary folders through the OS file picker (security-scoped bookmarks) and on
+a desktop layout, neither of which maps onto Android scoped storage, the iOS document
+picker or the browser. Their platform folders were template scaffolding only and have
+been removed; `flutter create --platforms=<name> .` restores one on demand.
 
 ⸻
 
