@@ -28,10 +28,12 @@ class AppRouter {
     Widget page, {
     String? name,
     ValueNotifier<double>? progress,
+    ValueNotifier<bool>? revealed,
     GlobalKey? bandKey,
     VoidCallback? onDisposed,
   }) {
-    return PageRouteBuilder<void>(
+    return _DeferredStartRoute<void>(
+      revealed: revealed,
       settings: name != null ? RouteSettings(name: name) : null,
       transitionDuration: _transitionDuration,
       reverseTransitionDuration: _transitionDuration,
@@ -62,6 +64,63 @@ class AppRouter {
 
   static Duration get _transitionDuration =>
       _slowMotion ? _duration * 4 : _duration;
+}
+
+/// 首帧之后再启动转场动画。
+///
+/// 页面 build + first layout 很贵（冷启动实测 40~90ms，约 5 个 vsync）。
+/// `TransitionRoute.didPush` 会在同一帧就 `forward()`，`AnimationController` 按
+/// 真实时间推进 —— 等这一帧画完，进度已经跳到 20% 上下，用户看到的是「卡一下
+/// 然后动画从中间开始」，前半段被整段吞掉。
+///
+/// 这里把启动推迟到首帧结束（页面已按 progress=0 完成布局），进度从 0 连续走。
+class _DeferredStartRoute<T> extends PageRouteBuilder<T> {
+  _DeferredStartRoute({
+    super.settings,
+    required super.pageBuilder,
+    required super.transitionsBuilder,
+    required super.transitionDuration,
+    required super.reverseTransitionDuration,
+    this.revealed,
+  });
+
+  /// 展开动画走完时置 true（页面据此挂上延迟构建的内容）。
+  final ValueNotifier<bool>? revealed;
+
+  /// `TransitionRoute.animation` 暴露的是 `_controller.view`（不是控制器），
+  /// 所以必须在创建时把控制器本身留下来。
+  AnimationController? _controller;
+
+  @override
+  AnimationController createAnimationController() {
+    final controller = super.createAnimationController();
+    _controller = controller;
+    return controller;
+  }
+
+  @override
+  TickerFuture didPush() {
+    final ticker = super.didPush();
+    final controller = _controller;
+    if (controller == null) return ticker;
+    // super.didPush() 已经 forward()：同一帧内先停住（还没 tick 过，仍在 0），
+    // 等页面首帧布局完成后再放行。canceled: false —— 让 didPush 返回的
+    // TickerFuture 正常完成，`Navigator` 的 whenCompleteOrCancel 才会把
+    // 路由状态从 pushing 收回 idle。
+    controller.stop(canceled: false);
+    final revealed = this.revealed;
+    if (revealed != null) {
+      controller.addStatusListener((status) {
+        if (status == AnimationStatus.completed) revealed.value = true;
+      });
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // value >= 1：动画已经走完（不该再启动）；isAnimating：已经被放行过。
+      if (!isActive || controller.isAnimating || controller.value >= 1) return;
+      controller.forward();
+    });
+    return ticker;
+  }
 }
 
 /// 把路由动画进度镜像到外部 notifier；路由销毁时通知调用方复位。

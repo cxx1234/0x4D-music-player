@@ -39,6 +39,9 @@ class _AppState extends State<App>
   /// 「正在播放」展开进度（0 = 收起，1 = 完全展开），由播放页路由的过渡动画写入。
   final _playerReveal = ValueNotifier<double>(0);
 
+  /// 展开动画是否已走完（播放页据此挂上推迟构建的右栏）。
+  final _playerRevealed = ValueNotifier<bool>(false);
+
   /// 底栏内容的淡出进度（0 = 不透明）——在 push 播放页**之前**跑完，见 [_openPlayer]。
   late final AnimationController _barFadeOut = AnimationController(
     vsync: this,
@@ -89,6 +92,7 @@ class _AppState extends State<App>
         return;
       }
       if (_playerReveal.value != 0) _playerReveal.value = 0;
+      if (_playerRevealed.value) _playerRevealed.value = false;
       if (retracted != null && !retracted.isCompleted) retracted.complete();
     });
   }
@@ -188,6 +192,7 @@ class _AppState extends State<App>
     _barFadeOut.dispose();
     _showBar.dispose();
     _playerReveal.dispose();
+    _playerRevealed.dispose();
     _shellController.dispose();
     super.dispose();
   }
@@ -270,9 +275,11 @@ class _AppState extends State<App>
             onOpenDetail: _openDetailFromPlayer,
             bottomBarKey: bandKey,
             reveal: _playerReveal,
+            revealed: _playerRevealed,
           ),
           name: PlayerPage.routeName,
           progress: _playerReveal,
+          revealed: _playerRevealed,
           bandKey: bandKey,
           onDisposed: _resetPlayerReveal,
         ),

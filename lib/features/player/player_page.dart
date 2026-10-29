@@ -46,12 +46,16 @@ class PlayerPage extends StatefulWidget {
   /// 里面的进度条与控制按钮被裁掉半截。
   final ValueListenable<double>? reveal;
 
+  /// 展开动画是否已走完：右栏（歌词/队列）等重内容推迟到这一刻才挂。
+  final ValueListenable<bool>? revealed;
+
   const PlayerPage({
     super.key,
     required this.uiState,
     required this.onOpenDetail,
     this.bottomBarKey,
     this.reveal,
+    this.revealed,
   });
 
   @override
@@ -93,6 +97,12 @@ class _PlayerPageState extends State<PlayerPage> {
   /// 播放页关闭再打开不重新读盘/解析；播放页外切歌也持续跟踪）。
   /// 页面只消费 controller / hasTranslationNotifier / 翻译开关，不负责销毁。
   LyricsViewModel get _lyrics => ServiceLocator.lyrics;
+
+  /// [PlayerPage._deferUntilRevealed] 的额外就绪信号（文档 / 加载状态）。
+  late final Listenable _panelReadiness = Listenable.merge([
+    _lyrics.controller,
+    _lyrics.loadStateNotifier,
+  ]);
 
   // 宽模式下右栏显示队列(true)还是歌词(false)（外置于 uiState，重开保留）。
   bool get _showQueue => widget.uiState.showQueue;
@@ -338,19 +348,21 @@ class _PlayerPageState extends State<PlayerPage> {
                     child: _buildWideInfo(context, theme, song),
                   ),
                   Expanded(
-                    child: _RightPanel(
-                      viewModel: _viewModel,
-                      theme: theme,
-                      showQueue: _showQueue,
-                      uiState: widget.uiState,
-                      locateOnOpen: _locateOnQueueOpen,
-                      lyricsController: _lyrics.controller,
-                      hasTranslation: _lyrics.hasTranslationNotifier,
-                      lyricsLoadState: _lyrics.loadStateNotifier,
-                      onToggleTranslation: _toggleTranslation,
-                      onTextSizeChanged: _onTextSizeChanged,
-                      onLineTap: _handleLyricLineTap,
-                      onOpenSettings: _openLyricsSettings,
+                    child: _deferUntilRevealed(
+                      _RightPanel(
+                        viewModel: _viewModel,
+                        theme: theme,
+                        showQueue: _showQueue,
+                        uiState: widget.uiState,
+                        locateOnOpen: _locateOnQueueOpen,
+                        lyricsController: _lyrics.controller,
+                        hasTranslation: _lyrics.hasTranslationNotifier,
+                        lyricsLoadState: _lyrics.loadStateNotifier,
+                        onToggleTranslation: _toggleTranslation,
+                        onTextSizeChanged: _onTextSizeChanged,
+                        onLineTap: _handleLyricLineTap,
+                        onOpenSettings: _openLyricsSettings,
+                      ),
                     ),
                   ),
                 ],
@@ -589,6 +601,43 @@ class _PlayerPageState extends State<PlayerPage> {
     );
   }
 
+  /// 歌词就绪后才允许挂右栏。
+  ///
+  /// 除了「界面已就位」，还得等**文档到齐**：加载窗口里挂上去只会先显示一个
+  /// 转圈，文档到达后 `LyricView` 又因 `ObjectKey(document)` 变化整体重建一次
+  /// （又一次全量排版）。等 ready 再挂，只付一次成本。
+  ///
+  /// 前奏期（还没到第一行时间戳）没有「当前行」，此时顶部就是正确位置，不能
+  /// 因此一直不挂。
+  bool _panelCanShow() {
+    if (_showQueue) return true;
+    final lyrics = _lyrics;
+    if (lyrics.loadStateNotifier.value == LyricLoadState.loading) return false;
+    final document = lyrics.controller.document;
+    if (document == null || document.lines.isEmpty) return true;
+    if (lyrics.controller.activeLineIndex != null) return true;
+    return lyrics.controller.position < document.lines.first.start;
+  }
+
+  /// 展开动画期间不挂右侧面板（歌词/队列）。
+  ///
+  /// 那棵树 build 一次要几十 ms（歌词排版 + 列表），而动画这 380ms 里它大半还被
+  /// 裁剪窗口挡在屏幕外。挂真内容的时机放在动画走完（progress 到 1）之后，这样
+  /// 首帧与逐帧光栅化都不含它，收尾那一帧也没有动画重叠。
+  ///
+  /// 只拦**第一次揭开**：一旦显示过就常驻，否则收起（progress 反向回到 0）时
+  /// 面板会瞬间消失，收卡片的过程右半边变空白。
+  Widget _deferUntilRevealed(Widget child) {
+    final revealed = widget.revealed;
+    if (revealed == null) return child;
+    return _RevealGate(
+      revealed: revealed,
+      pending: _panelReadiness,
+      canShow: _panelCanShow,
+      child: child,
+    );
+  }
+
   /// 正文（appBar + body）整体上浮；底部控制带不参与，始终贴底。
   ///
   /// 只改绘制不改布局：`child` 透传给 [ValueListenableBuilder]，逐帧只重建这层
@@ -599,9 +648,11 @@ class _PlayerPageState extends State<PlayerPage> {
     return ValueListenableBuilder<double>(
       valueListenable: reveal,
       child: child,
+      // 内层 RepaintBoundary 不能省：位移每帧变，若它直接挂着页面子树，
+      // markNeedsPaint 会一路冒到外层边界，整页又要重录一次（外层边界就白加了）。
       builder: (context, value, child) => Transform.translate(
         offset: Offset(0, BottomBarReveal.contentLiftFor(value)),
-        child: child,
+        child: RepaintBoundary(child: child),
       ),
     );
   }
@@ -985,4 +1036,66 @@ class _AppBarTab extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 揭开幕布 **且** 内容就绪之后才挂上 [child]，之后一直保留。
+///
+/// 注意别在这里加整块淡入：`FadeTransition` 在 opacity < 1 时是 saveLayer，
+/// 面板（Retina 约 1400×1200）每帧重合成要 20~25ms，实测反而比"直接出现"
+/// 多掉十几帧。
+class _RevealGate extends StatefulWidget {
+  const _RevealGate({
+    required this.revealed,
+    required this.canShow,
+    required this.child,
+    this.pending,
+  });
+
+  /// 展开动画是否已走完。
+  final ValueListenable<bool> revealed;
+
+  /// [revealed] 之外的额外条件（如歌词文档是否就绪）。
+  final bool Function() canShow;
+
+  /// [canShow] 依赖的通知源；变化时重新判断一次。
+  final Listenable? pending;
+
+  final Widget child;
+
+  @override
+  State<_RevealGate> createState() => _RevealGateState();
+}
+
+class _RevealGateState extends State<_RevealGate> {
+  bool _shown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _shown = widget.revealed.value && widget.canShow();
+    if (!_shown) {
+      widget.revealed.addListener(_maybeShow);
+      widget.pending?.addListener(_maybeShow);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.revealed.removeListener(_maybeShow);
+    widget.pending?.removeListener(_maybeShow);
+    super.dispose();
+  }
+
+  void _maybeShow() {
+    if (_shown) return;
+    if (!widget.revealed.value || !widget.canShow()) return;
+    // 显示过之后不再关心：拆掉监听，逐帧零开销。
+    widget.revealed.removeListener(_maybeShow);
+    widget.pending?.removeListener(_maybeShow);
+    setState(() => _shown = true);
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      _shown ? widget.child : const SizedBox.expand();
 }

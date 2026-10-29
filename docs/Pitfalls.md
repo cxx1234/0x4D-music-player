@@ -322,6 +322,40 @@
 - **复发提示**：`didUpdateWidget`/`initState` 里做"同步到外部状态"的动作前，先问一句
   这个外部状态有没有人正在 build 时监听。
 
+### C14. 2026-10-29 想「延后启动路由动画」时踩的两个 API 坑
+
+- **症状**：写了个 `PageRoute` 子类，在 `didPush()` 里 `animation.stop()` 想把动画
+  推迟到下一页首帧之后再 `forward()` —— 结果**静默无效**，动画照旧立刻开跑，日志里
+  连一行都没打出来。
+- **根因 1**：`TransitionRoute.animation` 返回的是 `_controller.view`（`Animation<double>`
+  的视图），**不是** `AnimationController`。`animation is! AnimationController` 成立 →
+  早退。正解是重写 `createAnimationController()`，在创建时把控制器本身存下来
+  （`@protected`，正是给子类用的）。
+- **根因 2**：`AnimationController.stop()` **不修改 status**，值停在中途但
+  `isDismissed == false`。所以"要不要放行"的判断只能用 `value >= 1 || isAnimating`，
+  用 `isDismissed` 会永远跳过。
+- **另一个陷阱**：`ModalRoute.animation` 是 `ProxyAnimation(super.animation)`，路由处于
+  offstage 时它的 parent 是 `kAlwaysCompleteAnimation` —— 在页面首帧读
+  `animation.value` 可能读到 **1.0 / status=completed**。所以别用它当"动画是否走完"
+  的信号，改用控制器自己的 `addStatusListener(completed)`。
+- **护栏**：`lib/app/router.dart` 的 `_DeferredStartRoute`；`docs/Performance-Optimization.md`
+  §1.7。
+- **复发提示**：动 `TransitionRoute`/`PageRoute` 的动画时序前，先把 `routes.dart` 里
+  `didPush` / `createAnimation` / `createAnimationController` 读一遍。
+
+### C15. 2026-10-29 大面板上的 `FadeTransition`/`Opacity` 是 saveLayer，很贵
+
+- **症状**：给播放页右侧歌词面板（约 1400×1200 物理像素）加 120ms 淡入，主观上"更
+  顺"，实测**每帧 raster 20–25ms，挂载后多掉 8–13 帧**，比直接出现更卡。
+- **根因**：`Opacity` 在 alpha < 1 时走 `saveLayer`（整块离屏合成）。面积越大越贵；
+  本机（Skia + Intel iGPU）单次约 20ms。而且它掩盖不了前置的冻结帧 —— 冻结发生在
+  opacity 还是 0 的时候，那时根本还没开始淡。
+- **修法**：别用整块淡入。要柔和就用"纯色遮罩淡出"（一个 rect 的 alpha，成本可忽略），
+  或者干脆不做过渡。
+- **护栏**：`_RevealGate` 顶部的注释（`player_page.dart`）。
+- **复发提示**：任何"给大子树加淡入来掩盖卡顿"的想法，先估一下
+  `面积 × saveLayer` 的单价（本机 ≈ 20ms/1400×1200）。
+
 ## D. 领域事故索引（细节留在原文档）
 
 | 症状 | 出处 |
@@ -336,6 +370,7 @@
 | 切歌提前量导致上一首尾部被截断；双实例掩盖间隙 | `AudioEngine-Migration.md` 附录 B/C |
 | 歌词滚动条在跟唱换行时闪一下 | `UI-Rules.md` §16、本册 C10 |
 | 播放页展开/收起收尾时整页跳 64px | `UI-Rules.md` §17、本册 C11 |
+| 播放页展开动画第一次打开会顿（掉帧 14–16 帧） | `Performance-Optimization.md` §1.7、本册 C14/C15 |
 | 从播放页跳转时"闪一下再滑入" | `UI-Rules.md` §17、本册 C12 |
 | 镜像队列（引擎侧与 Dart 侧各持一份队列）必须互斥 | `AudioEngine-Migration.md` §0.4 |
 | 引擎时序问题无法用假引擎单测覆盖 | `AudioEngine-Migration.md` §P2 |

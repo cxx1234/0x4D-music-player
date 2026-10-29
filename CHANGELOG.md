@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Opening the now-playing page no longer drops frames. The reveal transition used
+  to start on the same frame that built the page, so an 80ms build consumed the
+  first fifth of the animation; it now starts one frame later, with the page
+  already laid out, so the motion plays from 0 to 1 continuously. The page and
+  its body were also given their own repaint boundaries, which keeps the
+  per-frame scale/clip from re-rasterising the whole window (raster median
+  28.6ms → 19.9ms), and the lyrics/queue panel is now mounted only after the
+  reveal has finished *and* the lyric document is ready — it used to be built
+  inside the scaled subtree and re-laid out on every open. Measured on a 2018
+  Intel MacBook Pro (Skia): first frame 78–88ms → 22–23ms, frames over budget
+  during the reveal 14–16 → 0. The panel mount itself still costs one ~105ms
+  frame because `flutter_lyric` lays out every lyric line eagerly; that is
+  tracked in `docs/Performance-Optimization.md` §1.7
+
 ## [0.4.1] - 2026-10-27
 
 ### Added

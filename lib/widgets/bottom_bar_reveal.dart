@@ -318,7 +318,9 @@ class _BottomBarRevealState extends State<BottomBarReveal> {
                               child: Transform.scale(
                                 scale: scale,
                                 alignment: Alignment.bottomCenter,
-                                child: child,
+                                // 页面自成合成层：缩放只改变换矩阵，页面内容按原
+                                // 尺寸光栅化一次，避免逐帧重画整窗口。
+                                child: RepaintBoundary(child: child),
                               ),
                             ),
                           ),
