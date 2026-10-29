@@ -7,6 +7,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Opening the now-playing page no longer drops frames. The reveal transition used
+  to start on the same frame that built the page, so an 80ms build consumed the
+  first fifth of the animation; it now starts one frame later, with the page
+  already laid out, so the motion plays from 0 to 1 continuously. The page and
+  its body were also given their own repaint boundaries, which keeps the
+  per-frame scale/clip from re-rasterising the whole window (raster median
+  28.6ms → 19.9ms), and the lyrics/queue panel is now mounted only after the
+  reveal has finished *and* the lyric document is ready — it used to be built
+  inside the scaled subtree and re-laid out on every open. Measured on a 2018
+  Intel MacBook Pro (Skia): first frame 78–88ms → 22–23ms, frames over budget
+  during the reveal 14–16 → 0. The panel mount itself still costs one ~105ms
+  frame because `flutter_lyric` lays out every lyric line eagerly; that is
+  tracked in `docs/Performance-Optimization.md` §1.7
+
+### Removed
+- The `android/`, `ios/` and `web/` platform folders. None of them was ever more than
+  template scaffolding: the library model scans arbitrary folders through the OS file
+  picker (security-scoped bookmarks) and the UI assumes a desktop layout and a resizable
+  window, so Android scoped storage, the iOS document picker and the browser would each
+  need a separate data layer rather than a port. This only drops untested surface; the
+  macOS app is untouched. `flutter create --platforms=<name> .` regenerates a platform
+  folder if that decision ever changes, and `README.md` / `docs/Architecture.md` now
+  state the supported platforms explicitly.
+
+## [0.4.1] - 2026-10-27
+
+### Added
+- The album art on the now-playing info card is clickable and opens the album
+  (only when the song carries an album), with a subtle hover zoom on desktop
+- Hover tooltips on the icon-only entries of the left navigation rail. The rail
+  only shows the label of the selected tab, so the other four entries relied on
+  icon recognition alone. The selected entry is skipped (its label is already
+  visible), and the tooltips are excluded from semantics because the rail
+  destinations already expose their labels to screen readers
+
+### Changed
+- The now-playing info card sizes its cover from both the window width and
+  height: it shrinks smoothly as the window gets shorter, but never below the
+  original 380px floor, and switches to the horizontal layout once a vertical card
+  would need more than its share of the height (548px of card content). The
+  width-driven size is uncapped, so normal and large windows keep their previous
+  cover size, and the horizontal cover is height-clamped too. Every size is floored
+  to whole logical pixels, and the layout constants now live in one shared
+  resolver instead of being duplicated by the player page
+- Settings rows now share one `OptionRow` component
+  (`lib/features/settings/widgets/option_row.dart`) with a fixed 72px height,
+  Material 3 `ListTile` padding (16 start / 24 end), automatically tinted leading
+  icons and a right-aligned trailing slot that can shrink to fit. The theme-mode,
+  accent-colour, lyric-size, effect-strength, slide-alignment and distance-blur
+  rows use it, so their segmented buttons line up with the switch and chevron
+  rows instead of sitting 8px further right
+
+### Changed
+- The now-playing page now grows out of the 64px mini bar instead of sliding in as a
+  whole page. One continuous `easeInOutCubic` reveal drives a bottom-up clip (the
+  page is laid out full-height and never re-flows), while the app bar and body lift
+  240px into place and the mini bar's control strip grows into the player's bottom
+  band. During the transition the surface is a card: interpolated 16px top corners,
+  a three-line 0-blur shadow, a 1px `outlineVariant` hairline on the top edge and a
+  0.97 → 1 bottom-anchored scale; all four disappear by the time the card reaches the
+  window top, so the settled page is pixel-identical to before. The bottom band's
+  height is measured at runtime (wide/narrow layouts differ by 20px) instead of being
+  assumed, and the collapse chevron only flips during the last 20% of the progress,
+  where the app bar is actually visible
+- Leaving the now-playing page for the artist, album or lyrics settings page is now
+  two-phase: the card retracts into the mini bar first, then the target page slides
+  in. The previous `pushAndRemoveUntil` removed the player on the first frame, so the
+  shell showed through while the new page was still sliding (a visible flash). The
+  player is popped, the target is pushed only after it is gone, and any page left
+  underneath is replaced so the stack stays flat
+- The lyrics settings page is reached from the player the same way as artist/album
+  (the player route is replaced) and the shell switches to Settings, so going back
+  lands on the settings tab. Navigation to it no longer stacks on top of the player,
+  which left the player in a broken mid-transition state on return
+
+### Fixed
+- The lyrics scrollbar no longer flashes on every line change during playback.
+  On desktop it is now shown only while the pointer is over the lyrics area,
+  keeps its theme colors and drag support, and stays invisible during the
+  programmatic follow scroll
+- Segmented-button rows in Settings › Appearance and in the lyrics settings page
+  were 8px right of every other row: their hand-rolled padding was 16/16 while
+  Material 3 `ListTile` uses 16/24. Settings rows also had a 1px height mismatch
+  (71 vs 72)
+- The Settings › General › Language row is clickable across the whole row now;
+  its popup menu used to open only from the small arrow on the right
+- The Settings › cover-cache “Clear” action now carries a hairline outline
+  (`outlineVariant`) so it reads as a button instead of plain text
+- The theme-mode segmented button no longer shrinks its labels: it used to be
+  capped at 360px while the English labels need ~450px, so `FittedBox` scaled the
+  whole control (font included) to about 0.8. Settings rows now give the trailing
+  control its natural width first and only shrink it when the text column would
+  drop below 160px
+
 ## [0.4.0] - 2026-10-24
 
 ### Added

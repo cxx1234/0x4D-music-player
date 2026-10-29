@@ -12,6 +12,7 @@ import '../../core/models/lyric_text_size.dart';
 import '../../core/utils/lyric_preset.dart';
 import '../../l10n/enum_labels.dart';
 import '../../l10n/l10n.dart';
+import '../../widgets/hover_scrollbar_area.dart';
 import 'player_ui_state.dart';
 
 /// 歌词视图：上方菜单栏（文本大小）+ 歌词内容区。
@@ -343,24 +344,27 @@ class _LyricsViewState extends State<LyricsView> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     // 歌词区自成一合成层：当前行高亮/滚动刷新不波及相邻面板。
-    return RepaintBoundary(
-      child: Column(
-        children: [
-          _buildToolbar(),
-          Expanded(
-            // 宽模式仅内容区右侧留白 10（顶栏保持与队列一致，窄模式不额外加）。
-            child: Padding(
-              padding: EdgeInsets.only(right: widget.isNarrow ? 0 : 20),
-              child: widget.loadState == null
-                  ? _buildLyricsBody(null)
-                  : ValueListenableBuilder<LyricLoadState>(
-                      valueListenable: widget.loadState!,
-                      builder: (context, loadState, _) =>
-                          _buildLyricsBody(loadState),
-                    ),
+    // 滚动条只在鼠标位于整张歌词卡片上时才显示（跟唱换行不闪）。
+    return HoverScrollbarArea(
+      child: RepaintBoundary(
+        child: Column(
+          children: [
+            _buildToolbar(),
+            Expanded(
+              // 宽模式仅内容区右侧留白 10（顶栏保持与队列一致，窄模式不额外加）。
+              child: Padding(
+                padding: EdgeInsets.only(right: widget.isNarrow ? 0 : 20),
+                child: widget.loadState == null
+                    ? _buildLyricsBody(null)
+                    : ValueListenableBuilder<LyricLoadState>(
+                        valueListenable: widget.loadState!,
+                        builder: (context, loadState, _) =>
+                            _buildLyricsBody(loadState),
+                      ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

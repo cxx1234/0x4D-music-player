@@ -42,12 +42,17 @@
 - DSD 支持
 - Windows / Linux 支持（可能？）
 
+`android/`、`ios/`、`web/` 三个目录已在 0.4.x 移除：它们从来都只是模板脚手架，
+没有针对性的实现。若日后需要，用 `flutter create --platforms=<name> .` 按需重建。
+
 ## 开始使用
 
 ### 环境要求
 
 - Flutter SDK（Dart `^3.12`）—— 见 [flutter.dev](https://flutter.dev)
-- 目前以 macOS 为主要目标平台（系统媒体控制集成最完整）
+- 目前以 macOS 为主要目标平台（系统媒体控制集成最完整）。Windows / Linux 在计划中；
+  **iOS、Android 与 Web 不在目标范围内** —— 播放器依赖桌面文件系统访问（通过
+  security-scoped bookmark 扫描任意文件夹）与桌面布局。
 
 ### 构建与运行
 

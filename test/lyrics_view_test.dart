@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_lyric/flutter_lyric.dart';
@@ -174,5 +176,56 @@ void main() {
     expect(find.byTooltip('歌词显示设置'), findsOneWidget);
     await tester.tap(find.byTooltip('歌词显示设置'));
     expect(opened, isTrue);
+  });
+
+  testWidgets('歌词滚动条只在鼠标位于歌词卡片上时显示', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      final controller = LyricController()
+        ..load('[00:01.00]第一行\n[00:05.00]第二行');
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        _wrap(
+          LyricsView(
+            controller: controller,
+            theme: ThemeData(),
+            uiState: PlayerUiState(),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      Scrollbar scrollbar() => tester.widget<Scrollbar>(find.byType(Scrollbar));
+      ScrollbarTheme scrollbarTheme() =>
+          tester.widget<ScrollbarTheme>(find.byType(ScrollbarTheme));
+      // 不悬停：滑块不可见且透明（程序化滚动淡入也不会闪）。
+      expect(scrollbar().thumbVisibility, isFalse);
+      expect(
+        scrollbarTheme().data.thumbColor?.resolve(const {}),
+        Colors.transparent,
+      );
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: Offset.zero);
+      addTearDown(gesture.removePointer);
+      await tester.pump();
+
+      await gesture.moveTo(tester.getCenter(find.byType(LyricView)));
+      await tester.pump();
+      // 悬停：恢复主题色并常显。
+      expect(scrollbar().thumbVisibility, isTrue);
+      expect(scrollbarTheme().data.thumbColor, isNull);
+
+      // 移出 400×400 的歌词卡片（Scaffold 默认 800×600）。
+      await gesture.moveTo(const Offset(600, 500));
+      await tester.pump();
+      expect(scrollbar().thumbVisibility, isFalse);
+      expect(
+        scrollbarTheme().data.thumbColor?.resolve(const {}),
+        Colors.transparent,
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }

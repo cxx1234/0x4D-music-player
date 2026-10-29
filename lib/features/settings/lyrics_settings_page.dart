@@ -10,6 +10,7 @@ import '../../l10n/enum_labels.dart';
 import '../../l10n/l10n.dart';
 import '../../widgets/detail_top_bar.dart';
 import 'lyrics_preview.dart';
+import 'widgets/option_row.dart';
 
 /// 歌词显示设置：字号、翻译副行（后续的样式 / 动效 / 倒计时也归在这里）。
 class LyricsSettingsPage extends StatefulWidget {
@@ -139,27 +140,6 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
     }
   }
 
-  /// 选项副标题样式：比 bodySmall 再小一档、偏灰（与设置页/SongTile 一致）。
-  TextStyle _subtitleStyle(ThemeData theme) => theme.textTheme.bodySmall!
-      .copyWith(fontSize: 11, color: theme.colorScheme.onSurfaceVariant);
-
-  /// 选项行的标题+副标题组合块（两行整体垂直居中，与设置页一致）。
-  Widget _buildOptionText(ThemeData theme, String title, String subtitle) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: theme.textTheme.titleMedium),
-        Text(
-          subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: _subtitleStyle(theme),
-        ),
-      ],
-    );
-  }
-
   /// 44×26 紧凑开关：M3 Switch 默认 52×32，非等比缩放（视觉+命中区同步）。
   Widget _buildCompactSwitch({
     required bool value,
@@ -194,7 +174,7 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
     );
   }
 
-  Widget _buildTextCard(ThemeData theme) {
+  Widget _buildTextCard() {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 24),
       elevation: 0,
@@ -204,63 +184,34 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          SizedBox(
-            height: 72,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  // 本行不是 ListTile，裸 Icon 需显式跟随主题着色。
-                  Icon(
-                    Icons.format_size_rounded,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.l10n.lyricsTextSizeTitle,
-                          style: theme.textTheme.titleMedium,
-                        ),
-                        Text(
-                          context.l10n.lyricsTextSizeSubtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: _subtitleStyle(theme),
-                        ),
-                      ],
+          OptionRow(
+            icon: Icons.format_size_rounded,
+            title: context.l10n.lyricsTextSizeTitle,
+            subtitle: context.l10n.lyricsTextSizeSubtitle,
+            trailing: ShrinkableTrailing(
+              maxWidth: 320,
+              child: SegmentedButton<LyricTextSize>(
+                showSelectedIcon: false,
+                segments: [
+                  for (final size in LyricTextSize.values)
+                    ButtonSegment(
+                      value: size,
+                      label: Text(size.label(context.l10n)),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  _shrinkableSegmented(
-                    SegmentedButton<LyricTextSize>(
-                      showSelectedIcon: false,
-                      segments: [
-                        for (final size in LyricTextSize.values)
-                          ButtonSegment(
-                            value: size,
-                            label: Text(size.label(context.l10n)),
-                          ),
-                      ],
-                      selected: {_textSize},
-                      onSelectionChanged: (selection) =>
-                          _setTextSize(selection.first),
-                    ),
-                  ),
                 ],
+                selected: {_textSize},
+                onSelectionChanged: (selection) =>
+                    _setTextSize(selection.first),
               ),
             ),
           ),
           ListTile(
+            minTileHeight: OptionRow.kHeight,
             minVerticalPadding: 16,
             leading: const Icon(Icons.translate_rounded),
-            title: _buildOptionText(
-              theme,
-              context.l10n.lyricsTranslationTitle,
-              context.l10n.lyricsTranslationSubtitle,
+            title: OptionRowText(
+              title: context.l10n.lyricsTranslationTitle,
+              subtitle: context.l10n.lyricsTranslationSubtitle,
             ),
             subtitle: null,
             trailing: _buildCompactSwitch(
@@ -274,24 +225,10 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
     );
   }
 
-  /// 可收缩的分段按钮：英文标签比中文长，窄行里允许等比缩小而不是溢出。
-  Widget _shrinkableSegmented<T>(SegmentedButton<T> child) {
-    return Flexible(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 320),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerRight,
-          child: child,
-        ),
-      ),
-    );
-  }
-
   Widget _buildHint(ThemeData theme, String text) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(40, 6, 40, 0),
-      child: Text(text, style: _subtitleStyle(theme)),
+      child: Text(text, style: optionRowSubtitleStyle(theme)),
     );
   }
 
@@ -309,12 +246,12 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
           child: Column(
             children: [
               ListTile(
+                minTileHeight: OptionRow.kHeight,
                 minVerticalPadding: 16,
                 leading: const Icon(Icons.format_color_fill_rounded),
-                title: _buildOptionText(
-                  theme,
-                  context.l10n.lyricsWordFillTitle,
-                  context.l10n.lyricsWordFillSubtitle,
+                title: OptionRowText(
+                  title: context.l10n.lyricsWordFillTitle,
+                  subtitle: context.l10n.lyricsWordFillSubtitle,
                 ),
                 subtitle: null,
                 trailing: _buildCompactSwitch(
@@ -324,12 +261,12 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
                 onTap: () => _setWordHighlight(!_wordHighlight),
               ),
               ListTile(
+                minTileHeight: OptionRow.kHeight,
                 minVerticalPadding: 16,
                 leading: const Icon(Icons.arrow_upward_rounded),
-                title: _buildOptionText(
-                  theme,
-                  context.l10n.lyricsWordLiftTitle,
-                  context.l10n.lyricsWordLiftSubtitle,
+                title: OptionRowText(
+                  title: context.l10n.lyricsWordLiftTitle,
+                  subtitle: context.l10n.lyricsWordLiftSubtitle,
                 ),
                 subtitle: null,
                 trailing: _buildCompactSwitch(
@@ -339,53 +276,24 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
                 onTap: () => _setWordLift(!_wordLift),
               ),
               if (_wordLift)
-                SizedBox(
-                  height: 72,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        // 本行不是 ListTile，裸 Icon 需显式跟随主题着色。
-                        Icon(
-                          Icons.tune_rounded,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                context.l10n.lyricsEffectStrengthTitle,
-                                style: theme.textTheme.titleMedium,
-                              ),
-                              Text(
-                                context.l10n.lyricsEffectStrengthSubtitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: _subtitleStyle(theme),
-                              ),
-                            ],
+                OptionRow(
+                  icon: Icons.tune_rounded,
+                  title: context.l10n.lyricsEffectStrengthTitle,
+                  subtitle: context.l10n.lyricsEffectStrengthSubtitle,
+                  trailing: ShrinkableTrailing(
+                    maxWidth: 320,
+                    child: SegmentedButton<LyricEffectStrength>(
+                      showSelectedIcon: false,
+                      segments: [
+                        for (final strength in LyricEffectStrength.values)
+                          ButtonSegment(
+                            value: strength,
+                            label: Text(strength.label(context.l10n)),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        _shrinkableSegmented(
-                          SegmentedButton<LyricEffectStrength>(
-                            showSelectedIcon: false,
-                            segments: [
-                              for (final strength in LyricEffectStrength.values)
-                                ButtonSegment(
-                                  value: strength,
-                                  label: Text(strength.label(context.l10n)),
-                                ),
-                            ],
-                            selected: {_effectStrength},
-                            onSelectionChanged: (selection) =>
-                                _setEffectStrength(selection.first),
-                          ),
-                        ),
                       ],
+                      selected: {_effectStrength},
+                      onSelectionChanged: (selection) =>
+                          _setEffectStrength(selection.first),
                     ),
                   ),
                 ),
@@ -422,12 +330,12 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
                 ),
             ],
             child: ListTile(
+              minTileHeight: OptionRow.kHeight,
               minVerticalPadding: 16,
               leading: const Icon(Icons.animation_rounded),
-              title: _buildOptionText(
-                theme,
-                context.l10n.lyricsTransitionTitle,
-                _lineTransition.description(context.l10n),
+              title: OptionRowText(
+                title: context.l10n.lyricsTransitionTitle,
+                subtitle: _lineTransition.description(context.l10n),
               ),
               subtitle: null,
               trailing: Row(
@@ -445,54 +353,26 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
           ),
           // 「滑入」才需要选对齐边；其余预设保持居中。
           if (_lineTransition == LyricLineTransitionStyle.slide)
-            SizedBox(
-              height: 72,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Icon(
-                      _slideAlignment == LyricSlideAlignment.left
-                          ? Icons.format_align_left_rounded
-                          : Icons.format_align_right_rounded,
-                      color: muted,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            context.l10n.lyricsAlignmentTitle,
-                            style: theme.textTheme.titleMedium,
-                          ),
-                          Text(
-                            context.l10n.lyricsAlignmentSubtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: _subtitleStyle(theme),
-                          ),
-                        ],
+            OptionRow(
+              icon: _slideAlignment == LyricSlideAlignment.left
+                  ? Icons.format_align_left_rounded
+                  : Icons.format_align_right_rounded,
+              title: context.l10n.lyricsAlignmentTitle,
+              subtitle: context.l10n.lyricsAlignmentSubtitle,
+              trailing: ShrinkableTrailing(
+                maxWidth: 320,
+                child: SegmentedButton<LyricSlideAlignment>(
+                  showSelectedIcon: false,
+                  segments: [
+                    for (final alignment in LyricSlideAlignment.values)
+                      ButtonSegment(
+                        value: alignment,
+                        label: Text(alignment.label(context.l10n)),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    _shrinkableSegmented(
-                      SegmentedButton<LyricSlideAlignment>(
-                        showSelectedIcon: false,
-                        segments: [
-                          for (final alignment in LyricSlideAlignment.values)
-                            ButtonSegment(
-                              value: alignment,
-                              label: Text(alignment.label(context.l10n)),
-                            ),
-                        ],
-                        selected: {_slideAlignment},
-                        onSelectionChanged: (selection) =>
-                            _setSlideAlignment(selection.first),
-                      ),
-                    ),
                   ],
+                  selected: {_slideAlignment},
+                  onSelectionChanged: (selection) =>
+                      _setSlideAlignment(selection.first),
                 ),
               ),
             ),
@@ -513,12 +393,12 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
           shadowColor: Colors.transparent,
           clipBehavior: Clip.antiAlias,
           child: ListTile(
+            minTileHeight: OptionRow.kHeight,
             minVerticalPadding: 16,
             leading: const Icon(Icons.waves_rounded),
-            title: _buildOptionText(
-              theme,
-              context.l10n.lyricsLineWaveTitle,
-              context.l10n.lyricsLineWaveSubtitle,
+            title: OptionRowText(
+              title: context.l10n.lyricsLineWaveTitle,
+              subtitle: context.l10n.lyricsLineWaveSubtitle,
             ),
             subtitle: null,
             trailing: _buildCompactSwitch(
@@ -534,7 +414,6 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
   }
 
   Widget _buildBlurCard(ThemeData theme) {
-    final muted = theme.colorScheme.onSurfaceVariant;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -545,49 +424,24 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
           surfaceTintColor: Colors.transparent,
           shadowColor: Colors.transparent,
           clipBehavior: Clip.antiAlias,
-          child: SizedBox(
-            height: 72,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Icon(Icons.blur_on_rounded, color: muted),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.l10n.lyricsBlurTitle,
-                          style: theme.textTheme.titleMedium,
-                        ),
-                        Text(
-                          context.l10n.lyricsBlurSubtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: _subtitleStyle(theme),
-                        ),
-                      ],
+          child: OptionRow(
+            icon: Icons.blur_on_rounded,
+            title: context.l10n.lyricsBlurTitle,
+            subtitle: context.l10n.lyricsBlurSubtitle,
+            trailing: ShrinkableTrailing(
+              maxWidth: 320,
+              child: SegmentedButton<LyricDistanceBlurLevel>(
+                showSelectedIcon: false,
+                segments: [
+                  for (final level in LyricDistanceBlurLevel.values)
+                    ButtonSegment(
+                      value: level,
+                      label: Text(level.label(context.l10n)),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  _shrinkableSegmented(
-                    SegmentedButton<LyricDistanceBlurLevel>(
-                      showSelectedIcon: false,
-                      segments: [
-                        for (final level in LyricDistanceBlurLevel.values)
-                          ButtonSegment(
-                            value: level,
-                            label: Text(level.label(context.l10n)),
-                          ),
-                      ],
-                      selected: {_distanceBlur},
-                      onSelectionChanged: (selection) =>
-                          _setDistanceBlur(selection.first),
-                    ),
-                  ),
                 ],
+                selected: {_distanceBlur},
+                onSelectionChanged: (selection) =>
+                    _setDistanceBlur(selection.first),
               ),
             ),
           ),
@@ -609,12 +463,12 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
           shadowColor: Colors.transparent,
           clipBehavior: Clip.antiAlias,
           child: ListTile(
+            minTileHeight: OptionRow.kHeight,
             minVerticalPadding: 16,
             leading: const Icon(Icons.more_horiz_rounded),
-            title: _buildOptionText(
-              theme,
-              context.l10n.lyricsCountdownTitle,
-              context.l10n.lyricsCountdownSubtitle,
+            title: OptionRowText(
+              title: context.l10n.lyricsCountdownTitle,
+              subtitle: context.l10n.lyricsCountdownSubtitle,
             ),
             subtitle: null,
             trailing: _buildCompactSwitch(
@@ -641,7 +495,7 @@ class _LyricsSettingsPageState extends State<LyricsSettingsPage> {
         padding: const EdgeInsets.only(bottom: 24),
         children: [
           _buildSectionHeader(theme, context.l10n.lyricsSectionText),
-          _buildTextCard(theme),
+          _buildTextCard(),
           _buildSectionHeader(theme, context.l10n.lyricsSectionEffects),
           _buildEffectsCard(theme),
           _buildSectionHeader(theme, context.l10n.lyricsTransitionTitle),

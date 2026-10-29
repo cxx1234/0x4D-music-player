@@ -3688,7 +3688,16 @@ class $$SongsTableTableManager
                 titleSortKey: titleSortKey,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$SongsTable, Song>(table),
+                  BaseReferences<_$AppDatabase, $SongsTable, Song>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -3958,7 +3967,16 @@ class $$AlbumsTableTableManager
                 nameSortKey: nameSortKey,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$AlbumsTable, Album>(table),
+                  BaseReferences<_$AppDatabase, $AlbumsTable, Album>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -4150,7 +4168,16 @@ class $$ArtistsTableTableManager
                 nameSortKey: nameSortKey,
               ),
           withReferenceMapper: (p0) => p0
-              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .map(
+                (e) => (
+                  e.readTable<$ArtistsTable, Artist>(table),
+                  BaseReferences<_$AppDatabase, $ArtistsTable, Artist>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
               .toList(),
           prefetchHooksCallback: null,
         ),
@@ -4413,7 +4440,7 @@ class $$PlaylistsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$PlaylistsTable, Playlist>(table),
                   $$PlaylistsTableReferences(db, table, e),
                 ),
               )
@@ -4428,10 +4455,11 @@ class $$PlaylistsTableTableManager
               getPrefetchedDataCallback: (items) async {
                 return [
                   if (playlistSongsRefs)
-                    await $_getPrefetchedData<
+                    await $_getPrefetchedDataByColumns<
                       Playlist,
                       $PlaylistsTable,
-                      PlaylistSong
+                      PlaylistSong,
+                      $PlaylistSongsTable
                     >(
                       currentTable: table,
                       referencedTable: $$PlaylistsTableReferences
@@ -4442,8 +4470,8 @@ class $$PlaylistsTableTableManager
                             table,
                             p0,
                           ).playlistSongsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.playlistId == item.id),
+                      currentColumn: 'id',
+                      referencedColumn: 'playlist_id',
                       typedResults: items,
                     ),
                 ];
@@ -4700,7 +4728,7 @@ class $$PlaylistSongsTableTableManager
           withReferenceMapper: (p0) => p0
               .map(
                 (e) => (
-                  e.readTable(table),
+                  e.readTable<$PlaylistSongsTable, PlaylistSong>(table),
                   $$PlaylistSongsTableReferences(db, table, e),
                 ),
               )

@@ -59,6 +59,20 @@
 - **修法**：按上述字段补齐，勿只加 PBXFileReference。
 - **护栏**：新增本地化语言时照此清单核对。
 
+### A4. 2026-10-30 `flutter pub get` 会往 `analysis_options.yaml` 里塞平台 exclude
+
+- **症状**：删掉 `android/`、`ios/`、`web/` 三个目录后，手工把 `analysis_options.yaml`
+  `analyzer.exclude` 里对应的三条删掉，再跑 `flutter pub get` 又冒出来（打印
+  `Upgrading analysis_options.yaml to exclude build and platform directories.`）。
+- **根因**：flutter 工具在 `pub get` 时按**磁盘上实际存在的平台目录**重写这段 exclude。
+  目录还在时它就会加回去 —— 本次排查中 `git stash` 一度把删掉的目录复原，工具随即把
+  `android/**`、`ios/**` 又写了进去，git 里就出现了「刚删的规则又回来」的假象。
+- **修法**：先让目录真正消失（含残留的生成物），再跑 `flutter pub get`；确认目录不存在后
+  工具不会再写回。若已写回，删掉再 `pub get` 一次即可。
+- **护栏**：改 `analysis_options.yaml` 的平台 exclude 前，先 `ls -d */` 确认真实目录；
+  `pub get` 输出里出现 `Upgrading ...` 就跑一次 `git diff` 复核，别直接提交。
+- **复发提示**：`analysis_options.yaml` 不是纯静态配置，flutter 工具会改它。
+
 ## B. macOS 原生层
 
 ### B1. 2026-08-30 顶栏双击缩放拦截（DetailTopBar 按钮区）
@@ -271,6 +285,91 @@
 - **复发提示**：写新的列表 / 网格菜单时，`onTap` / `onLongPress` 闭包里用的 context 必须是
   itemBuilder 里再包一层 `Builder` 得到的那个，别把 sliver 的 context 传进菜单。
 
+### C10. 2026-10-26 歌词滚动条在每次跟唱换行时闪一下
+
+- **症状**：播放时每换一行，歌词右侧滚动条淡入再淡出；鼠标根本没碰歌词也会出现。
+- **根因**：桌面端的 `MaterialScrollBehavior.buildScrollbar` 会给每个 `Scrollable` 套一层
+  `Scrollbar`；`LyricView` 跟唱用程序化滚动，每次滚动都会触发 `Scrollbar` 的淡入动画。
+  **只把 `thumbVisibility` 设为 `false` 不阻止这次淡入。**
+- **修法**：`HoverScrollbarArea`（`lib/widgets/hover_scrollbar_area.dart`）把滑块可见性绑到
+  区域悬停；不悬停时同时把 `ScrollbarThemeData.thumbColor` 设成透明，彻底遮掉程序化滚动
+  触发的淡入（悬停时恢复主题色，拖拽不会被隐藏）。
+- **护栏**：`docs/UI-Rules.md` §16；`test/lyrics_view_test.dart`「歌词滚动条只在鼠标位于
+  歌词卡片上时显示」。
+- **复发提示**：再遇到「程序化滚动导致滚动条闪现」，先看是不是只关了 `thumbVisibility`；
+  颜色/透明度也要一起处理。
+
+### C11. 2026-10-27 根 Scaffold 的底栏一挂一卸，body 里的页面会跳 64px
+
+- **症状**：播放页展开动画结束的那一帧，整块内容（含底部控制带）往下跳约 64px；
+  收起时反向跳一次。不是缓动问题，是**布局**跳。
+- **根因**：`MaterialApp.builder` 里的 Navigator（所有路由）是根 `Scaffold` 的 `body`
+  的孩子，body 高度 = 窗口高 − `bottomNavigationBar` 高。动画期间为了淡出内容把底栏
+  留着 → 播放页按 `H−64` 布局；动画结束卸掉底栏 → body 长高 64 → 页面重新布局。
+- **修法**：底栏的去留必须在**页面布局之前**定下来 —— 打开播放页时先让底栏内容淡出，
+  再卸载底栏、再 `push`；收起动画跑完（`_playerReveal == 0`）才把底栏挂回。
+- **护栏**：`docs/UI-Rules.md` §17「与迷你底栏的交接」。
+- **复发提示**：任何"根 Scaffold 的底栏/`bottomNavigationBar` 在动画中途变了高度"的
+  改动，都会让 body 里的页面重排；表现为"动画收尾时整体跳一下"，很容易误判成曲线问题。
+
+### C12. 2026-10-27 `pushAndRemoveUntil` 会让新页滑入时露出主界面
+
+- **症状**：从播放页点歌手/专辑/歌词设置，观感是"闪一下，然后目标页从右侧滑入"。
+- **根因**：`pushAndRemoveUntil` 会**立刻**把下面那些路由从 Overlay 里移除；新页才滑到
+  一半，底下已经不是播放页而是 shell 了。
+- **修法**：要"替换但要保持垫底"就用 `pushReplacement`（等新页动画结束才移除旧页）。
+  本项目最终改成**两段式**：先 `pop` 播放页（复用它自己的反向动画把卡片收回底栏），
+  等路由真的销毁后再 `push`/`pushReplacement` 目标页 —— 这样"卡片收回"和"目标页进入"
+  各自都是连续动画，中间不露底。
+- **护栏**：`docs/UI-Rules.md` §17「从播放页跳别的页面 = 两段式」。
+- **复发提示**：`pushReplacement` 与 `pushAndRemoveUntil` 的**移除时机**不同（前者动画后、
+  后者立刻），凡是"替换页面"的动效都要先想清楚这个时机。
+
+### C13. 2026-10-27 在 `initState` 里写被监听的 `ValueNotifier` 会撞 build
+
+- **症状**：Debug 下抛 `setState() or markNeedsBuild() called during build`，指向某个
+  `ValueListenableBuilder`。
+- **根因**：路由在 push 过程中挂载（正处于 build 阶段），`initState` 里同步写一个被
+  `ValueListenableBuilder` 监听着的 notifier，会立刻把那个 builder 标脏。
+- **修法**：初始同步排到帧后（`addPostFrameCallback`），或干脆不写（值本来就对时不写）。
+- **护栏**：`lib/app/router.dart` 的 `_ProgressMirror.initState`。
+- **复发提示**：`didUpdateWidget`/`initState` 里做"同步到外部状态"的动作前，先问一句
+  这个外部状态有没有人正在 build 时监听。
+
+### C14. 2026-10-29 想「延后启动路由动画」时踩的两个 API 坑
+
+- **症状**：写了个 `PageRoute` 子类，在 `didPush()` 里 `animation.stop()` 想把动画
+  推迟到下一页首帧之后再 `forward()` —— 结果**静默无效**，动画照旧立刻开跑，日志里
+  连一行都没打出来。
+- **根因 1**：`TransitionRoute.animation` 返回的是 `_controller.view`（`Animation<double>`
+  的视图），**不是** `AnimationController`。`animation is! AnimationController` 成立 →
+  早退。正解是重写 `createAnimationController()`，在创建时把控制器本身存下来
+  （`@protected`，正是给子类用的）。
+- **根因 2**：`AnimationController.stop()` **不修改 status**，值停在中途但
+  `isDismissed == false`。所以"要不要放行"的判断只能用 `value >= 1 || isAnimating`，
+  用 `isDismissed` 会永远跳过。
+- **另一个陷阱**：`ModalRoute.animation` 是 `ProxyAnimation(super.animation)`，路由处于
+  offstage 时它的 parent 是 `kAlwaysCompleteAnimation` —— 在页面首帧读
+  `animation.value` 可能读到 **1.0 / status=completed**。所以别用它当"动画是否走完"
+  的信号，改用控制器自己的 `addStatusListener(completed)`。
+- **护栏**：`lib/app/router.dart` 的 `_DeferredStartRoute`；`docs/Performance-Optimization.md`
+  §1.7。
+- **复发提示**：动 `TransitionRoute`/`PageRoute` 的动画时序前，先把 `routes.dart` 里
+  `didPush` / `createAnimation` / `createAnimationController` 读一遍。
+
+### C15. 2026-10-29 大面板上的 `FadeTransition`/`Opacity` 是 saveLayer，很贵
+
+- **症状**：给播放页右侧歌词面板（约 1400×1200 物理像素）加 120ms 淡入，主观上"更
+  顺"，实测**每帧 raster 20–25ms，挂载后多掉 8–13 帧**，比直接出现更卡。
+- **根因**：`Opacity` 在 alpha < 1 时走 `saveLayer`（整块离屏合成）。面积越大越贵；
+  本机（Skia + Intel iGPU）单次约 20ms。而且它掩盖不了前置的冻结帧 —— 冻结发生在
+  opacity 还是 0 的时候，那时根本还没开始淡。
+- **修法**：别用整块淡入。要柔和就用"纯色遮罩淡出"（一个 rect 的 alpha，成本可忽略），
+  或者干脆不做过渡。
+- **护栏**：`_RevealGate` 顶部的注释（`player_page.dart`）。
+- **复发提示**：任何"给大子树加淡入来掩盖卡顿"的想法，先估一下
+  `面积 × saveLayer` 的单价（本机 ≈ 20ms/1400×1200）。
+
 ## D. 领域事故索引（细节留在原文档）
 
 | 症状 | 出处 |
@@ -283,6 +382,10 @@
 | 睡眠定时到点的反馈只有 SnackBar（HUD 在播放页被禁用） | `UI-Rules.md` §8 |
 | Tab 焦点退不掉、空格激活「看不见的」聚焦按钮 | `UI-Rules.md` §10、本册 C5/B8 |
 | 切歌提前量导致上一首尾部被截断；双实例掩盖间隙 | `AudioEngine-Migration.md` 附录 B/C |
+| 歌词滚动条在跟唱换行时闪一下 | `UI-Rules.md` §16、本册 C10 |
+| 播放页展开/收起收尾时整页跳 64px | `UI-Rules.md` §17、本册 C11 |
+| 播放页展开动画第一次打开会顿（掉帧 14–16 帧） | `Performance-Optimization.md` §1.7、本册 C14/C15 |
+| 从播放页跳转时"闪一下再滑入" | `UI-Rules.md` §17、本册 C12 |
 | 镜像队列（引擎侧与 Dart 侧各持一份队列）必须互斥 | `AudioEngine-Migration.md` §0.4 |
 | 引擎时序问题无法用假引擎单测覆盖 | `AudioEngine-Migration.md` §P2 |
 | 变化检测移后台 isolate 时闭包捕获 UI 回调（unsendable） | `Performance-Optimization.md` §3.2 |

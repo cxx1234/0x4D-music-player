@@ -29,11 +29,24 @@ class App extends StatefulWidget {
   State<App> createState() => _AppState();
 }
 
-class _AppState extends State<App> with WidgetsBindingObserver {
+class _AppState extends State<App>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   bool _initialized = false;
   Object? _startupError;
   final _navKey = GlobalKey<NavigatorState>();
   final _showBar = ValueNotifier<bool>(true);
+
+  /// 「正在播放」展开进度（0 = 收起，1 = 完全展开），由播放页路由的过渡动画写入。
+  final _playerReveal = ValueNotifier<double>(0);
+
+  /// 展开动画是否已走完（播放页据此挂上推迟构建的右栏）。
+  final _playerRevealed = ValueNotifier<bool>(false);
+
+  /// 底栏内容的淡出进度（0 = 不透明）——在 push 播放页**之前**跑完，见 [_openPlayer]。
+  late final AnimationController _barFadeOut = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 70),
+  );
 
   /// 播放器跨会话界面状态（重开保留标签/队列滚动位置）。
   final _playerUiState = PlayerUiState();
@@ -65,6 +78,24 @@ class _AppState extends State<App> with WidgetsBindingObserver {
   /// 层 —— 会先被关掉，符合「一层一层退」。已经回到主界面（Shell）时什么都不做，
   /// 不切 tab、不退出应用。
   void _goBack() => popTopRoute(_navKey.currentState);
+
+  /// 推进度归零（路由销毁后调用，含 `pushAndRemoveUntil` 这种不走动画的替换），
+  /// 并唤醒等它收完的 [_openFromPlayer]。
+  ///
+  /// 排到帧后：销毁发生在树的 finalize 阶段，此刻直接写会踩「build 期间重建」。
+  void _resetPlayerReveal() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final retracted = _playerRetracted;
+      _playerRetracted = null;
+      if (!mounted) {
+        if (retracted != null && !retracted.isCompleted) retracted.complete();
+        return;
+      }
+      if (_playerReveal.value != 0) _playerReveal.value = 0;
+      if (_playerRevealed.value) _playerRevealed.value = false;
+      if (retracted != null && !retracted.isCompleted) retracted.complete();
+    });
+  }
 
   /// 初始化核心服务(幂等),失败时进入启动错误页。
   Future<void> _initializeServices() async {
@@ -154,7 +185,14 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       handleKeyboardFocusKeyEvent,
     );
     FocusManager.instance.removeLateKeyEventHandler(_backNavigation.handleKey);
+    // 有等待中的"离开播放页"流程时先放行，别让它挂着超时。
+    final retracted = _playerRetracted;
+    if (retracted != null && !retracted.isCompleted) retracted.complete();
+    _playerRetracted = null;
+    _barFadeOut.dispose();
     _showBar.dispose();
+    _playerReveal.dispose();
+    _playerRevealed.dispose();
     _shellController.dispose();
     super.dispose();
   }
@@ -196,34 +234,119 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     );
   }
 
-  void _openPlayer() {
+  /// 打开播放页的流程进行中（防止连点重复入栈）。
+  bool _openingPlayer = false;
+
+  /// 卡片的收回完成信号：`_resetPlayerReveal` 里 resolve。
+  Completer<void>? _playerRetracted;
+
+  /// 正在"离开播放页"的流程中（防止连点重复 pop/push）。
+  bool _leavingPlayer = false;
+
+  Future<void> _openPlayer() async {
     final nav = _navKey.currentState;
     // 导航未就绪，或播放页已在最上层（_showBar 为 false 即播放页可见，例如
     // 点击切歌通知时页面已经打开）→ 不重复入栈。
-    if (nav == null || !_showBar.value) return;
-    // 点按迷你底栏/通知进入播放页前先对账，确保首屏即引擎真相。
-    if (ServiceLocator.isReady) {
-      ServiceLocator.player.resyncFromAudio();
+    // `_leavingPlayer`：卡片收回中、目标页还没推入。这段空窗里迷你底栏已经挂回，
+    // 若允许点开播放页，目标页随后会压到播放页上面。
+    if (nav == null || !_showBar.value || _openingPlayer || _leavingPlayer) {
+      return;
     }
-    nav.push(
-      AppRouter.bottomUpRoute(
-        PlayerPage(
-          uiState: _playerUiState,
-          onOpenDetail: _openDetailFromPlayer,
+    _openingPlayer = true;
+    try {
+      // 点按迷你底栏/通知进入播放页前先对账，确保首屏即引擎真相。
+      if (ServiceLocator.isReady) {
+        ServiceLocator.player.resyncFromAudio();
+      }
+      // 底栏内容先淡出，再压入播放页。
+      //
+      // 顺序不能换：底栏是根 Scaffold 的 bottomNavigationBar，它的去留会改变
+      // body 高度，而播放页路由就在 body 里。必须在页面布局**之前**把底栏卸掉，
+      // 否则 body 会在动画收尾时变高 64，页面（连同底部控制带）整体往下跳。
+      await _barFadeOut.forward(from: 0);
+      if (!mounted) return;
+
+      // 底部控制带的 key 同时交给页面与过渡：过渡据此量出带子的真实高度。
+      final bandKey = GlobalKey();
+      nav.push(
+        AppRouter.bottomUpRoute(
+          PlayerPage(
+            uiState: _playerUiState,
+            onOpenDetail: _openDetailFromPlayer,
+            bottomBarKey: bandKey,
+            reveal: _playerReveal,
+            revealed: _playerRevealed,
+          ),
+          name: PlayerPage.routeName,
+          progress: _playerReveal,
+          revealed: _playerRevealed,
+          bandKey: bandKey,
+          onDisposed: _resetPlayerReveal,
         ),
-        name: PlayerPage.routeName,
-      ),
-    );
+      );
+    } finally {
+      _openingPlayer = false;
+      // 底栏此时已卸载，复位只影响下一次收起时的观感。
+      _barFadeOut.value = 0;
+    }
   }
 
-  /// 从播放页点歌手/专辑：推入详情页并清掉 shell 之上的所有路由
-  /// （播放器 + 之前可能残留的详情页），返回落到主页并让 Shell 切到对应 tab。
-  void _openDetailFromPlayer(Widget page, NavigationItem tab) {
+  /// 从播放页进二级页（歌手/专辑详情、歌词设置等）：**两段式**。
+  ///
+  /// ① 先 `pop` 播放页 —— 用它的反向动画把卡片收回迷你底栏（复用展开动画，不是
+  ///    另一套）。此时 Shell 的 tab 已经切好了（调用方先切），所以卡片收走的过程
+  ///    中露出来的是**目标 tab**；
+  /// ② 卡片彻底消失后，再把目标页按平台默认方式推入（从右侧滑入）。
+  ///
+  /// 为什么不能一步完成：播放页是路由，"后压的盖前面的"。想让卡片收回时露出新页，
+  /// 新页必须在播放页**下面**，而 `push` 只能往上加；`pushAndRemoveUntil` 会立刻
+  /// 移除播放页（底下露出主界面 = 闪一下），`pushReplacement` 则是新页盖着播放页
+  /// 滑入（看不到收回）。两段式是当前路由结构下唯一"逻辑正确"的排法。
+  Future<void> _openFromPlayer(Widget page) async {
+    final nav = _navKey.currentState;
+    if (nav == null || _leavingPlayer) return;
+    // 置位要让根 Scaffold 重建（收回期间用它挡住点击）。
+    setState(() => _leavingPlayer = true);
+    try {
+      if (!_showBar.value) {
+        final retracted = _playerRetracted = Completer<void>();
+        nav.pop();
+        // 兜底超时：万一反向动画被打断、路由没被销毁，也别把导航卡死。
+        await retracted.future.timeout(
+          AppRouter.transitionDuration + const Duration(milliseconds: 200),
+          onTimeout: () {},
+        );
+        if (!mounted) return;
+      }
+      // ② 推入目标页。若栈顶还不是 shell（例如播放页是从某个详情页点开的），用
+      //    replace 把那条旧页顶掉 —— 否则「详情 → 播放页 → 详情」会一层层堆起来
+      //    （旧代码靠 pushAndRemoveUntil(isFirst) 顺手兜住了，两段式里要显式补上）。
+      //    用 replace 而不是 pushAndRemoveUntil：旧页在新页滑入期间仍垫在下面，
+      //    不会在滑入过程中露出主界面。
+      final next = _navKey.currentState;
+      if (next == null) return;
+      final route = MaterialPageRoute<void>(builder: (_) => page);
+      if (next.canPop()) {
+        next.pushReplacement(route);
+      } else {
+        next.push(route);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _leavingPlayer = false);
+      } else {
+        _leavingPlayer = false;
+      }
+      _playerRetracted = null;
+    }
+  }
+
+  /// 从播放页点歌手/专辑：先切 Shell 的 tab（卡片收回时露出的就是目标 tab），
+  /// 再走两段式跳转。
+  Future<void> _openDetailFromPlayer(Widget page, NavigationItem tab) async {
+    if (_leavingPlayer) return;
     _shellController.tab.value = tab;
-    _navKey.currentState!.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => page),
-      (route) => route.isFirst,
-    );
+    await _openFromPlayer(page);
   }
 
   /// 主题兜底 notifier：ServiceLocator 就绪前 MaterialApp 也能稳定监听。
@@ -309,26 +432,48 @@ class _AppState extends State<App> with WidgetsBindingObserver {
                       // 所有页面（Shell + 子页面 + 播放页）都渲染在底栏上方，底栏不被
                       // 子页面盖住。顶部不再有全局顶栏，改由各页面自行避让（左侧边栏
                       // 顶部预留 45 给红绿灯，右侧内容区用统一高度的 PageToolbar）。
-                      body: GestureDetector(
-                        // 键盘导航退出口（P3）：点空白处取消焦点。
-                        // `translucent` + 根级只当兜底 —— 按钮 / 列表行 / 弹层菜单
-                        // 自己的手势会赢下手势竞技场（内层优先），只有「真的没东西
-                        // 可点」时才轮到它，不会误伤交互。
-                        behavior: HitTestBehavior.translucent,
-                        onTap: () => clearKeyboardFocus(),
-                        child: _PlayerNoticeConsumer(
-                          child: child ?? const SizedBox.shrink(),
+                      // 从播放页跳转的两段式里，卡片收回期间露出来的页面不该能点：
+                      // 那时的点击会在目标页推入后被 replace 顶掉，或把播放页推到
+                      // 目标页上面。用 AbsorbPointer 而不是 IgnorePointer —— 后者只是
+                      // 让子树不参与命中测试，事件仍会穿透到别的 Overlay entry。
+                      body: AbsorbPointer(
+                        absorbing: _leavingPlayer,
+                        child: GestureDetector(
+                          // 键盘导航退出口（P3）：点空白处取消焦点。
+                          // `translucent` + 根级只当兜底 —— 按钮 / 列表行 / 弹层菜单
+                          // 自己的手势会赢下手势竞技场（内层优先），只有「真的没东西
+                          // 可点」时才轮到它，不会误伤交互。
+                          behavior: HitTestBehavior.translucent,
+                          onTap: () => clearKeyboardFocus(),
+                          child: _PlayerNoticeConsumer(
+                            child: child ?? const SizedBox.shrink(),
+                          ),
                         ),
                       ),
-                      bottomNavigationBar: ValueListenableBuilder<bool>(
-                        valueListenable: _showBar,
-                        builder: (context, show, _) {
-                          // 全屏“正在播放”打开时隐藏底栏，关闭后恢复。
+                      bottomNavigationBar: ListenableBuilder(
+                        listenable: Listenable.merge([
+                          _showBar,
+                          _playerReveal,
+                        ]),
+                        builder: (context, _) {
                           // 启动失败时不显示底栏（此时没有播放器/队列）。
-                          if (!show || _startupError != null) {
+                          if (_startupError != null) {
                             return const SizedBox.shrink();
                           }
-                          return NowPlayingBar(onTap: _openPlayer);
+                          // 只要播放页在栈里（`!_showBar`）或展开动画还在跑
+                          // （`_playerReveal > 0`），底栏一律不占位：body 高度必须
+                          // 恒定，否则播放页会跟着 body 一起跳。收起动画跑到 0 时
+                          // 才重新挂上，此时页面已经不可见，交接无色差。
+                          if (!_showBar.value || _playerReveal.value > 0) {
+                            return const SizedBox.shrink();
+                          }
+                          return AbsorbPointer(
+                            absorbing: _leavingPlayer,
+                            child: _MiniBarSlot(
+                              fadeOut: _barFadeOut,
+                              onTap: _openPlayer,
+                            ),
+                          );
                         },
                       ),
                     ),
@@ -491,5 +636,42 @@ class NowPlayingBarVisibilityObserver extends NavigatorObserver {
     if (oldRoute is PageRoute) _pageRoutes.remove(oldRoute);
     if (newRoute is PageRoute) _pageRoutes.add(newRoute);
     _sync();
+  }
+}
+
+/// 迷你底栏槽位：播放页展开前先淡出**内容**，条子背景保持不透明。
+///
+/// 底栏自己的背景（`surfaceContainerLow`）若跟着淡出，会闪一下底下的列表；
+/// 外层 [ColoredBox] 同色兜住即可。淡出结束后底栏紧接着被卸载，播放页自己的
+/// 底部带子以同样的矩形/颜色接管。
+class _MiniBarSlot extends StatelessWidget {
+  const _MiniBarSlot({required this.fadeOut, required this.onTap});
+
+  /// 淡出进度（0 = 完全不透明，1 = 内容已不可见）。
+  final Animation<double> fadeOut;
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      // 进来时淡入：底栏要等收起动画结束才重新挂上，直接整块出现会和"刚淡掉的
+      // 控制行"撞在一起。
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: NowPlayingBar(onTap: onTap),
+        builder: (context, enter, child) => AnimatedBuilder(
+          animation: fadeOut,
+          child: child,
+          builder: (context, child) => Opacity(
+            opacity: ((1 - fadeOut.value) * enter).clamp(0.0, 1.0),
+            child: child,
+          ),
+        ),
+      ),
+    );
   }
 }

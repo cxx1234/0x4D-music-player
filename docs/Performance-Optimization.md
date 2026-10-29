@@ -3,7 +3,8 @@
 > 删除线 = 已完成；其余为待办。⛔=已失效/不再适用；🆕=2026-09-17 审计新增。
 > 🆕²=2026-09-22 审查新增（针对 0.2.4–0.2.6 的睡眠定时 / 通知 / HUD / 原生菜单）。
 > 🆕³=2026-09-23 新增（键盘焦点 / 空格归属，见 §10）。
-> 最后更新：2026-09-23（§9.2 已修且修法已修正、§9.3/§9.5 已完成、§9.4 按用户决定暂缓；新增 §10、优先级建议顺延为 §11；其余行号按 2026-09-17 代码）
+> 🆕⁴=2026-10-29 新增（播放页展开动画实测，见 §1.7）。
+> 最后更新：2026-10-29（新增 §1.7：展开动画掉帧的实测、修法与残留项；其余行号按 2026-09-17 代码）
 
 ## 1. 渲染 / UI 类
 
@@ -32,6 +33,74 @@
 - 位置：`sleep_timer_button.dart:50-92`（`ValueListenableBuilder` 订 `state`，倒计时**每秒重建整颗按钮**）+ `:105-137`（`_buildItems`）。
 - 问题：① 每秒重建含 `PopupMenuButton` 与文本格式化的整棵子树，开销可忽略但可免；② **菜单打开期间剩余时间不刷新**（`PopupMenuButton` 一次性构建 items）；③ 预设项用普通 `PopupMenuItem`（`:114-118`）无勾选态，而原生菜单会勾选 —— 同一功能两个入口反馈不一致。
 - 改法：预设项改 `CheckedPopupMenuItem`（`checked: state?.mode == SleepTimerMode.duration && state?.requested?.inMinutes == preset.inMinutes`）；若在意菜单里的实时倒计时，可改用 `showMenu` + 自持 `ValueListenableBuilder` 列表。
+
+### 1.7 🆕⁴ 播放页展开动画：实测、修法与残留（2026-10-29）
+
+**症状**：冷启动后第一次点迷你底栏进「正在播放」会明显顿一下，之后同样动效明显更顺。
+
+**测量方法**（很轻，值得复发时照抄）：`SchedulerBinding.addTimingsCallback` 把
+`build+raster ≥ 16ms` 的帧写进应用日志（Release 下也能看，DevTools 连不上 AOT），
+交互入口用临时 `MARK` 打点；再用 `--dart-define=AUTO_OPEN_PLAYER_SECONDS=6` 自动
+触发播放页展开，保证多轮可比。**测完把探针删掉**，它不是常驻设施。
+
+本机基线（2018 15" Intel MBP，UHD 630 + Radeon 560X，Retina 2x，Skia）：
+
+| 指标 | 修前 | 修后 |
+| --- | --- | --- |
+| 进播放页首帧 ui | 78–88ms | **22–23ms** |
+| 展开动画期间 ≥16ms 帧数 | 14–16 | **0** |
+| 展开动画期间 raster 中位 | 20ms | 全部 <16ms |
+| 挂载歌词栏那一帧 | ui 73–75 + raster 34 | ui 62–65 + raster 40–44（一次性） |
+
+**根因（三条，互不相同）**
+
+1. `TransitionRoute.didPush` 在同一帧 `forward()`，而 `AnimationController` 按真实
+   时间推进 —— 页面 build+layout 花 80ms，等这帧画完进度已经跳到 ~20%，**前半段
+   动画被整段吞掉**，观感是「卡一下再从中间开始」。
+2. 页面子树没有合成层：`BottomBarReveal` 每帧 `Transform.scale` + 圆角裁剪，整页
+   每帧重新光栅化（Retina 全窗 ≈ 520 万像素）。
+3. 右栏（歌词/队列）建一次 70ms 上下，且**每次打开都重做**：`LyricViewSession` 是
+   State 级的，`LyricLayout.compute` 会把整篇每一行都 `TextPainter.layout()` 一次
+   （主行 + 翻译行各一个）。
+
+**修法（已落地）**
+
+- `AppRouter.bottomUpRoute` 换 `_DeferredStartRoute`：`didPush` 里先 `stop(canceled: false)`
+  控制器，`addPostFrameCallback` 里再 `forward()`，进度从 0 连续走；同时暴露
+  `ValueNotifier<bool> revealed`（`AnimationStatus.completed` 时置 true）。
+- `BottomBarReveal` 的 `Transform.scale` 下、`_lift` 的 `Transform.translate` 下各加
+  一层 `RepaintBoundary`（**两层都要**：位移每帧变，只加外层会被内层 `markNeedsPaint`
+  重新标脏）。raster 中位 28.6 → 19.9ms。
+- `_RevealGate`（`player_page.dart`）：条件 = `revealed && 歌词就绪`，只拦**第一次**
+  揭开（之后常驻，否则收起时右半边会空）。就绪判定还要处理**前奏期**：
+  `activeLineIndex` 为 null 且位置早于第一行时间戳时，顶部本就正确，不能因此不挂。
+
+**被否掉的（都实测过，别再回头试）**
+
+- 挂载时加 120ms `FadeTransition` 淡入：`Opacity` 在 <1 时是 `saveLayer`，面板
+  ~1400×1200 每帧重合成 20–25ms，实测挂载后多掉 8–13 帧，且掩盖不了前置的冻结
+  （冻结发生在 opacity 还是 0 的时候）。已回退并在代码注释里写明。
+- 切独显：同一二进制、同一 harness，raster 只从 41.4 降到 36.5ms（≈12%，还在轮间
+  噪声内），`ui` 完全不变。**raster 的大头在 Skia 的 raster 线程 CPU（命令回放 /
+  文字 / saveLayer / 裁剪），不是 GPU 填充率**；这条也顺便否掉了"换 Impeller 能治
+  这 40ms"的期待（Impeller 主要治着色器编译尖峰）。
+
+**残留（未修，需上游改动）**
+
+- 挂载歌词栏仍是一帧约 105ms：ui 62–65（全量文字排版）+ raster 40–44（首绘）。
+  消它只有两条路，见 §1.7.1。
+- 稳态：歌词可见且跟唱时每帧 raster 18–30ms（整块歌词区重绘）。
+
+#### 1.7.1 下一步：歌词布局的懒/缓存化（未做）
+
+- **A. 布局常驻**：让 `LyricsView` 的 State（带 `LyricLayout`）不随播放页 pop 销毁
+  —— 重开 0ms，但切歌/切翻译/缩放窗口仍要重排；要处理 State 归属与隐藏时停 ticker
+  （包已尊重 `TickerMode`）。
+- **B. 上游/fork**：`LyricLayout` 只量可见行（其余按估算高度），并按
+  `(documentRevision, resolvedStyle, viewSize)` 缓存 —— 每次几 ms，且同时覆盖重开、
+  切歌、切翻译、resize。项目里 `audio_metadata_reader` 已有 fork 先例。
+- **C. 稳态重绘**：把 `LyricViewport.paint` 拆成「静态行层 + 活动行层」，让卡拉OK
+  填充只重绘活动行（约总面积 1/8）：20–30ms → 3–5ms。
 
 ---
 

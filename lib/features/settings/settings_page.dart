@@ -14,6 +14,7 @@ import '../shell/shell_controller.dart';
 import 'about_page.dart';
 import 'log_page.dart';
 import 'lyrics_settings_page.dart';
+import 'widgets/option_row.dart';
 
 /// 设置页：分组卡片（音乐库 / 播放设置 / 外观 / 通用）。
 class SettingsPage extends StatefulWidget {
@@ -140,27 +141,6 @@ class _SettingsPageState extends State<SettingsPage> {
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
-  /// 选项副标题样式：比 bodySmall 再小一档、偏灰（与 SongTile 副标题一致）。
-  TextStyle _subtitleStyle(ThemeData theme) => theme.textTheme.bodySmall!
-      .copyWith(fontSize: 11, color: theme.colorScheme.onSurfaceVariant);
-
-  /// 选项行的标题+副标题组合块（两行整体垂直居中，与 SongTile 一致）。
-  Widget _buildOptionText(ThemeData theme, String title, String subtitle) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: theme.textTheme.titleMedium),
-        Text(
-          subtitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: _subtitleStyle(theme),
-        ),
-      ],
-    );
-  }
-
   /// 主题行 leading 图标：跟随当前主题亮度 —— 深色显示月亮、浅色显示太阳。
   IconData _themeIndicatorIcon(ThemeData theme) =>
       theme.brightness == Brightness.dark ? Icons.dark_mode : Icons.light_mode;
@@ -182,6 +162,9 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 切换界面语言（UI 状态 + 写盘；MaterialApp 监听 localeNotifier 重建）。
   void _setLocale(String value) {
     setState(() => _locale = normalizeAppLocaleName(value));
+    // 与歌词设置页各开关同款：控件始终可点，写盘前才判断依赖是否就绪
+    // （页面可独立构建于初始化之前，`ServiceLocator.settings` 此时会抛）。
+    if (!ServiceLocator.isReady) return;
     ServiceLocator.settings.setLocale(value);
   }
 
@@ -323,13 +306,13 @@ class _SettingsPageState extends State<SettingsPage> {
       shadowColor: Colors.transparent,
       clipBehavior: Clip.antiAlias,
       child: ListTile(
+        minTileHeight: OptionRow.kHeight,
         minVerticalPadding: 16,
         enabled: hasFolders,
         leading: const Icon(Icons.refresh),
-        title: _buildOptionText(
-          theme,
-          l10n.settingsForceRescanTitle,
-          hasFolders
+        title: OptionRowText(
+          title: l10n.settingsForceRescanTitle,
+          subtitle: hasFolders
               ? l10n.settingsForceRescanSubtitle
               : l10n.settingsForceRescanNoFolders,
         ),
@@ -344,7 +327,6 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildPlaybackCard() {
-    final theme = Theme.of(context);
     final l10n = context.l10n;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -357,12 +339,12 @@ class _SettingsPageState extends State<SettingsPage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
+            minTileHeight: OptionRow.kHeight,
             minVerticalPadding: 16,
             leading: const Icon(Icons.replay_rounded),
-            title: _buildOptionText(
-              theme,
-              l10n.settingsResumeTitle,
-              l10n.settingsResumeSubtitle,
+            title: OptionRowText(
+              title: l10n.settingsResumeTitle,
+              subtitle: l10n.settingsResumeSubtitle,
             ),
             subtitle: null,
             trailing: _buildCompactSwitch(
@@ -372,12 +354,12 @@ class _SettingsPageState extends State<SettingsPage> {
             onTap: () => _setResumePlayback(!_resumePlayback),
           ),
           ListTile(
+            minTileHeight: OptionRow.kHeight,
             minVerticalPadding: 16,
             leading: const Icon(Icons.notifications_none_rounded),
-            title: _buildOptionText(
-              theme,
-              l10n.settingsTrackNotificationTitle,
-              l10n.settingsTrackNotificationSubtitle,
+            title: OptionRowText(
+              title: l10n.settingsTrackNotificationTitle,
+              subtitle: l10n.settingsTrackNotificationSubtitle,
             ),
             subtitle: null,
             trailing: _buildCompactSwitch(
@@ -389,12 +371,12 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           ListTile(
+            minTileHeight: OptionRow.kHeight,
             minVerticalPadding: 16,
             leading: const Icon(Icons.timer_outlined),
-            title: _buildOptionText(
-              theme,
-              l10n.settingsSleepFinishTrackTitle,
-              l10n.settingsSleepFinishTrackSubtitle,
+            title: OptionRowText(
+              title: l10n.settingsSleepFinishTrackTitle,
+              subtitle: l10n.settingsSleepFinishTrackSubtitle,
             ),
             subtitle: null,
             trailing: _buildCompactSwitch(
@@ -425,78 +407,42 @@ class _SettingsPageState extends State<SettingsPage> {
     final count = AccentColor.values.length;
     final fullMinWidth = 16.0 * count + dotsGap * (count - 1);
 
-    return SizedBox(
-      height: 72,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
-          children: [
-            // 本行不是 ListTile（圆点色板要横排），拿不到 ListTile 那条
-            // `iconColor = onSurfaceVariant` 的注入，裸 Icon 会退回 ThemeData
-            // 的固定纯黑/纯白（M2 遗留，见 library_page 同款注释）；
-            // 显式指定才和上下其它 leading 图标同样着色。
-            Icon(
-              Icons.palette_outlined,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 16),
-            // 文本块给上限宽度，剩余宽度尽量留给色板；极窄时文本省略号。
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 150),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.settingsAccentTitle,
-                    style: theme.textTheme.titleMedium,
-                  ),
-                  Text(
-                    l10n.settingsAccentSubtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _subtitleStyle(theme),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ValueListenableBuilder<Color?>(
-                valueListenable: systemColorListenable,
-                builder: (context, systemColor, _) => LayoutBuilder(
-                  builder: (context, constraints) {
-                    final available = constraints.maxWidth;
-                    if (available >= fullMinWidth) {
-                      // 宽度足够：圆点自适应填满（上限 24），右对齐。
-                      final size = ((available - dotsGap * (count - 1)) / count)
-                          .clamp(16.0, 24.0)
-                          .floorToDouble();
-                      return Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: _accentDots(
-                          theme,
-                          size: size,
-                          systemColor: systemColor,
-                        ),
-                      );
-                    }
-                    // 极端窄：固定 20 圆点 + 横向滚动兜底（不溢出）。
-                    return SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: _accentDots(
-                          theme,
-                          size: 20,
-                          systemColor: systemColor,
-                        ),
-                      ),
-                    );
-                  },
+    return OptionRow(
+      icon: Icons.palette_outlined,
+      title: l10n.settingsAccentTitle,
+      subtitle: l10n.settingsAccentSubtitle,
+      // 色板圆点直径要按可用宽度自适应，所以直接用 LayoutBuilder 读剩余宽度。
+      trailing: ValueListenableBuilder<Color?>(
+        valueListenable: systemColorListenable,
+        builder: (context, systemColor, _) => LayoutBuilder(
+          builder: (context, constraints) {
+            final available = constraints.maxWidth;
+            if (available >= fullMinWidth) {
+              // 宽度足够：圆点自适应填满（上限 24），右对齐。
+              final size = ((available - dotsGap * (count - 1)) / count)
+                  .clamp(16.0, 24.0)
+                  .floorToDouble();
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: _accentDots(
+                  theme,
+                  size: size,
+                  systemColor: systemColor,
+                ),
+              );
+            }
+            // 极端窄：固定 20 圆点 + 横向滚动兜底（不溢出）。
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _accentDots(
+                  theme,
+                  size: 20,
+                  systemColor: systemColor,
                 ),
               ),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -586,92 +532,58 @@ class _SettingsPageState extends State<SettingsPage> {
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
-          SizedBox(
-            height: 72,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  // 宽度不足以容纳文字版三按钮时，收成图标版 + tooltip。
-                  final compact = constraints.maxWidth < 550;
-                  return Row(
-                    children: [
-                      // 跟随当前主题亮度：深色显示月亮、浅色显示太阳。
-                      // 颜色同上：不在 ListTile 里，需显式跟随主题。
-                      Icon(
-                        _themeIndicatorIcon(theme),
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              context.l10n.settingsThemeTitle,
-                              style: theme.textTheme.titleMedium,
-                            ),
-                            Text(
-                              context.l10n.settingsThemeSubtitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: _subtitleStyle(theme),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // 语言切换后标签长度变化（中文 3 字 vs 英文单词），
-                      // 给按钮一个上限并允许等比缩小，避免挤压左侧文案。
-                      Flexible(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 360),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerRight,
-                            child: SegmentedButton<ThemeMode>(
-                              showSelectedIcon: false,
-                              segments: [
-                                for (final mode in ThemeMode.values)
-                                  if (compact)
-                                    ButtonSegment(
-                                      value: mode,
-                                      icon: Icon(_themeModeIcon(mode)),
-                                      tooltip: _themeModeLabel(mode),
-                                    )
-                                  else
-                                    ButtonSegment(
-                                      value: mode,
-                                      icon: Icon(_themeModeIcon(mode)),
-                                      label: Text(_themeModeLabel(mode)),
-                                    ),
-                              ],
-                              selected: {_themeMode},
-                              onSelectionChanged: (selection) {
-                                final mode = selection.first;
-                                setState(() => _themeMode = mode);
-                                ServiceLocator.settings.setThemeMode(mode);
-                              },
-                            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              // 宽度不足以容纳文字版三按钮时，收成图标版 + tooltip。
+              // 断点按整行宽度判定（旧值 550 是去掉 16+24 内边距后的内宽，
+              // 等价整行 590），行内边距改由 OptionRow 统一提供。
+              final compact = constraints.maxWidth < 590;
+              return OptionRow(
+                // 跟随当前主题亮度：深色显示月亮、浅色显示太阳。
+                icon: _themeIndicatorIcon(theme),
+                title: context.l10n.settingsThemeTitle,
+                subtitle: context.l10n.settingsThemeSubtitle,
+                // 标签长度随语言变化（中文 3 字 vs 英文 "Follow system"），
+                // 不设固定上限：宽度由 OptionRow 按「文字区保底」分配，
+                // 只有真的放不下时才等比缩小（旧上限 360 会把英文标签缩到 ~0.8）。
+                trailing: ShrinkableTrailing(
+                  child: SegmentedButton<ThemeMode>(
+                    showSelectedIcon: false,
+                    segments: [
+                      for (final mode in ThemeMode.values)
+                        if (compact)
+                          ButtonSegment(
+                            value: mode,
+                            icon: Icon(_themeModeIcon(mode)),
+                            tooltip: _themeModeLabel(mode),
+                          )
+                        else
+                          ButtonSegment(
+                            value: mode,
+                            icon: Icon(_themeModeIcon(mode)),
+                            label: Text(_themeModeLabel(mode)),
                           ),
-                        ),
-                      ),
                     ],
-                  );
-                },
-              ),
-            ),
+                    selected: {_themeMode},
+                    onSelectionChanged: (selection) {
+                      final mode = selection.first;
+                      setState(() => _themeMode = mode);
+                      ServiceLocator.settings.setThemeMode(mode);
+                    },
+                  ),
+                ),
+              );
+            },
           ),
           _buildAccentRow(theme),
           // 「歌词显示」二级页：字号 / 翻译 /（后续）样式与动效。
           ListTile(
+            minTileHeight: OptionRow.kHeight,
             minVerticalPadding: 16,
             leading: const Icon(Icons.lyrics_outlined),
-            title: _buildOptionText(
-              theme,
-              context.l10n.settingsLyricsTitle,
-              context.l10n.settingsLyricsSubtitle,
+            title: OptionRowText(
+              title: context.l10n.settingsLyricsTitle,
+              subtitle: context.l10n.settingsLyricsSubtitle,
             ),
             subtitle: null,
             trailing: Icon(Icons.chevron_right, color: chevronColor),
@@ -679,13 +591,13 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           // 底栏播放进度填充开关（「外观」分组）。
           ListTile(
+            minTileHeight: OptionRow.kHeight,
             // 与其它设置行一致的行高（续播/通用各行均为 16）。
             minVerticalPadding: 16,
             leading: const Icon(Icons.timeline_rounded),
-            title: _buildOptionText(
-              theme,
-              context.l10n.settingsNowPlayingFillTitle,
-              context.l10n.settingsNowPlayingFillSubtitle,
+            title: OptionRowText(
+              title: context.l10n.settingsNowPlayingFillTitle,
+              subtitle: context.l10n.settingsNowPlayingFillSubtitle,
             ),
             trailing: _buildCompactSwitch(
               value: _nowPlayingBarFill,
@@ -699,55 +611,57 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   /// 「语言」行：弹出菜单选择跟随系统 / English / 简体中文。
+  ///
+  /// ⚠️ `PopupMenuButton` 包在 `ListTile` **外层**（与歌词设置页的「行间过渡」行
+  /// 同款），整行都是点击区。若只把它放进 `trailing`，就只有右侧那一小块可点，
+  /// 行体是死的 —— 与其它所有设置行的手感不一致。
   Widget _buildLanguageRow(ThemeData theme) {
     final l10n = context.l10n;
-    return ListTile(
-      minVerticalPadding: 16,
-      leading: const Icon(Icons.language),
-      title: _buildOptionText(
-        theme,
-        l10n.settingsLanguageTitle,
-        l10n.settingsLanguageSubtitle,
-      ),
-      subtitle: null,
-      trailing: PopupMenuButton<String>(
-        initialValue: _locale,
-        enabled: ServiceLocator.isReady,
-        onSelected: _setLocale,
-        itemBuilder: (menuContext) => [
-          CheckedPopupMenuItem(
-            value: 'system',
-            checked: _locale == 'system',
-            child: Text(menuContext.l10n.settingsLanguageSystem),
-          ),
-          CheckedPopupMenuItem(
-            value: 'en',
-            checked: _locale == 'en',
-            child: Text(menuContext.l10n.settingsLanguageEnglish),
-          ),
-          CheckedPopupMenuItem(
-            value: 'zh',
-            checked: _locale == 'zh',
-            child: Text(menuContext.l10n.settingsLanguageSimplifiedChinese),
-          ),
-        ],
-        child: Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                _localeLabel(l10n),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              Icon(
-                Icons.arrow_drop_down,
+    return PopupMenuButton<String>(
+      initialValue: _locale,
+      onSelected: _setLocale,
+      itemBuilder: (menuContext) => [
+        CheckedPopupMenuItem(
+          value: 'system',
+          checked: _locale == 'system',
+          child: Text(menuContext.l10n.settingsLanguageSystem),
+        ),
+        CheckedPopupMenuItem(
+          value: 'en',
+          checked: _locale == 'en',
+          child: Text(menuContext.l10n.settingsLanguageEnglish),
+        ),
+        CheckedPopupMenuItem(
+          value: 'zh',
+          checked: _locale == 'zh',
+          child: Text(menuContext.l10n.settingsLanguageSimplifiedChinese),
+        ),
+      ],
+      child: ListTile(
+        minTileHeight: OptionRow.kHeight,
+        minVerticalPadding: 16,
+        leading: const Icon(Icons.language),
+        title: OptionRowText(
+          title: l10n.settingsLanguageTitle,
+          subtitle: l10n.settingsLanguageSubtitle,
+        ),
+        subtitle: null,
+        // 只是展示当前值 + 下拉箭头；点击由外层 PopupMenuButton 接管，
+        // 箭头右缘因此与其它行的 chevron 落在同一条内缘上。
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _localeLabel(l10n),
+              style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
-            ],
-          ),
+            ),
+            Icon(
+              Icons.arrow_drop_down,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ],
         ),
       ),
     );
@@ -768,12 +682,12 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           _buildLanguageRow(theme),
           ListTile(
+            minTileHeight: OptionRow.kHeight,
             minVerticalPadding: 16,
             leading: const Icon(Icons.receipt_long_outlined),
-            title: _buildOptionText(
-              theme,
-              l10n.settingsLogsTitle,
-              l10n.settingsLogsSubtitle,
+            title: OptionRowText(
+              title: l10n.settingsLogsTitle,
+              subtitle: l10n.settingsLogsSubtitle,
             ),
             subtitle: null,
             trailing: Icon(Icons.chevron_right, color: chevronColor),
@@ -782,12 +696,12 @@ class _SettingsPageState extends State<SettingsPage> {
             ).push(MaterialPageRoute(builder: (_) => const LogPage())),
           ),
           ListTile(
+            minTileHeight: OptionRow.kHeight,
             minVerticalPadding: 16,
             leading: const Icon(Icons.photo_library_outlined),
-            title: _buildOptionText(
-              theme,
-              l10n.settingsCacheTitle,
-              l10n.settingsCacheSubtitle,
+            title: OptionRowText(
+              title: l10n.settingsCacheTitle,
+              subtitle: l10n.settingsCacheSubtitle,
             ),
             subtitle: null,
             trailing: Row(
@@ -804,6 +718,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(width: 12),
                 TextButton.icon(
                   onPressed: _clearCache,
+                  // 淡淡的描边：与页面其它细线同色（`outlineVariant`，不是 M3
+                  // OutlinedButton 默认的 `outline`），让这个次要动作在行尾有
+                  // 边界感，又不抢主题色；尺寸/内边距保持 TextButton 不变，
+                  // 行内不会再被撑宽。
+                  style: TextButton.styleFrom(
+                    side: BorderSide(color: theme.colorScheme.outlineVariant),
+                  ),
                   icon: const Icon(Icons.cleaning_services, size: 18),
                   label: Text(l10n.settingsClearCoverCacheAction),
                 ),
@@ -811,12 +732,14 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
           ListTile(
+            minTileHeight: OptionRow.kHeight,
             minVerticalPadding: 16,
             leading: const Icon(Icons.info_outline),
-            title: _buildOptionText(
-              theme,
-              l10n.settingsAboutTitle,
-              l10n.settingsAboutSubtitle(ServiceLocator.appVersion ?? ''),
+            title: OptionRowText(
+              title: l10n.settingsAboutTitle,
+              subtitle: l10n.settingsAboutSubtitle(
+                ServiceLocator.appVersion ?? '',
+              ),
             ),
             subtitle: null,
             trailing: Icon(Icons.chevron_right, color: chevronColor),

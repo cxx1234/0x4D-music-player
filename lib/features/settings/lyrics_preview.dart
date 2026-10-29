@@ -12,6 +12,7 @@ import '../../core/models/lyric_text_size.dart';
 import '../../core/utils/lyric_document_parser.dart';
 import '../../core/utils/lyric_preset.dart';
 import '../../l10n/l10n.dart';
+import '../../widgets/hover_scrollbar_area.dart';
 
 /// 内置示例：10 行（含翻译与一个间奏空白），循环 36 秒。
 const String _kPreviewLyric = '''
@@ -187,9 +188,11 @@ class _LyricsPreviewState extends State<LyricsPreview>
               ),
             ),
             Expanded(
-              child: LyricView(
-                controller: _controller,
-                preset: _buildPreset(theme),
+              child: HoverScrollbarArea(
+                child: LyricView(
+                  controller: _controller,
+                  preset: _buildPreset(theme),
+                ),
               ),
             ),
           ],

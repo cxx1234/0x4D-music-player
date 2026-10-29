@@ -12,6 +12,7 @@ import '../../core/models/lyric_text_size.dart';
 import '../../core/services/lyrics_view_model.dart';
 import '../../core/services/service_locator.dart';
 import '../../l10n/l10n.dart';
+import '../../widgets/bottom_bar_reveal.dart';
 import '../../widgets/player_bar.dart';
 import '../../widgets/song_info_card.dart';
 import '../album/album_page.dart';
@@ -31,13 +32,30 @@ class PlayerPage extends StatefulWidget {
   /// 跨会话保留的播放器界面状态（App 持有，pop 不销毁）。
   final PlayerUiState uiState;
 
-  /// 点歌手/专辑：用详情页替换播放器路由并切到对应 shell tab。
+  /// 从播放页进二级页：**替换**掉播放器路由，并让 Shell 切到对应 tab
+  /// （返回时落在那个 tab 上，而不是播放页）。
+  ///
+  /// 播放页不能长期压在别的路由下面：它的展开进度由自身路由动画驱动，被遮住再
+  /// 返回会留下错位的中间态。凡是从播放页进二级页，一律走这条。
   final void Function(Widget page, NavigationItem tab) onOpenDetail;
+
+  /// 底部控制带的 key：交给展开动画量真实高度（宽窄/字号变化都能跟上）。
+  final GlobalKey? bottomBarKey;
+
+  /// 展开进度（0 = 收起）：底部控制带的内容随之淡入/淡出，避免带子还在长高时
+  /// 里面的进度条与控制按钮被裁掉半截。
+  final ValueListenable<double>? reveal;
+
+  /// 展开动画是否已走完：右栏（歌词/队列）等重内容推迟到这一刻才挂。
+  final ValueListenable<bool>? revealed;
 
   const PlayerPage({
     super.key,
     required this.uiState,
     required this.onOpenDetail,
+    this.bottomBarKey,
+    this.reveal,
+    this.revealed,
   });
 
   @override
@@ -54,6 +72,18 @@ const double _kMinInfoCardWidth = 500;
 // 宽模式下信息卡最大宽度 = 窗口全宽的 40%。
 const double _kInfoCardFactor = 0.40;
 
+/// 宽模式信息卡外层内边距（内容区计算与 Padding 共用）。
+const EdgeInsets _kWideInfoPadding = EdgeInsets.symmetric(
+  horizontal: 40,
+  vertical: 24,
+);
+
+/// 窄模式信息卡外层内边距。
+const EdgeInsets _kNarrowInfoPadding = EdgeInsets.symmetric(
+  horizontal: 32,
+  vertical: 24,
+);
+
 /// 宽模式下信息卡宽度：最窄 [_kMinInfoCardWidth]，最宽为窗口全宽的
 /// [_kInfoCardFactor]。
 double wideInfoCardWidth(double windowWidth) {
@@ -67,6 +97,12 @@ class _PlayerPageState extends State<PlayerPage> {
   /// 播放页关闭再打开不重新读盘/解析；播放页外切歌也持续跟踪）。
   /// 页面只消费 controller / hasTranslationNotifier / 翻译开关，不负责销毁。
   LyricsViewModel get _lyrics => ServiceLocator.lyrics;
+
+  /// [PlayerPage._deferUntilRevealed] 的额外就绪信号（文档 / 加载状态）。
+  late final Listenable _panelReadiness = Listenable.merge([
+    _lyrics.controller,
+    _lyrics.loadStateNotifier,
+  ]);
 
   // 宽模式下右栏显示队列(true)还是歌词(false)（外置于 uiState，重开保留）。
   bool get _showQueue => widget.uiState.showQueue;
@@ -95,15 +131,13 @@ class _PlayerPageState extends State<PlayerPage> {
     ui.lyricCountdown = settings.lyricCountdown;
   }
 
-  /// 歌词菜单栏的设置入口：打开歌词显示页，返回后立即应用改动。
-  Future<void> _openLyricsSettings() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const LyricsSettingsPage()));
-    if (!mounted) return;
-    setState(_syncLyricSettings);
-    // 设置页已同步常驻 VM；这里兜一次，独立构建场景也保持一致。
-    _lyrics.setShowTranslation(widget.uiState.showTranslation);
+  /// 歌词显示设置：与「歌手/专辑」同一套跳转 —— 替换播放器路由，并先把 Shell
+  /// 切到「设置」tab，返回时落在设置页（可继续调外观/歌词）。
+  ///
+  /// 设置页改动会直接写常驻的 [LyricsViewModel]（见设置页内注释），所以不需要
+  /// 这里再回写；播放页被替换掉后也不会留下"压在播放页上面"的状态。
+  void _openLyricsSettings() {
+    widget.onOpenDetail(const LyricsSettingsPage(), NavigationItem.settings);
   }
 
   @override
@@ -156,7 +190,7 @@ class _PlayerPageState extends State<PlayerPage> {
       preferredSize: Size.fromHeight(
         kToolbarHeight + layoutConfig.playerTopBarTopReserve,
       ),
-      child: Column(
+      child: _lift(Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // 顶部红绿灯预留区（macOS 45，其余 0）。
@@ -164,7 +198,7 @@ class _PlayerPageState extends State<PlayerPage> {
           AppBar(
             toolbarHeight: kToolbarHeight,
             leading: IconButton(
-              icon: const Icon(Icons.keyboard_arrow_down),
+              icon: _CollapseArrow(reveal: widget.reveal),
               tooltip: context.l10n.playerCollapse,
               onPressed: () => Navigator.of(context).pop(),
             ),
@@ -239,7 +273,7 @@ class _PlayerPageState extends State<PlayerPage> {
             ],
           ),
         ],
-      ),
+      )),
     );
   }
 
@@ -260,7 +294,7 @@ class _PlayerPageState extends State<PlayerPage> {
 
               // ── Empty state ────────────────────────────
               if (song == null) {
-                return Center(
+                return _lift(Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -283,12 +317,12 @@ class _PlayerPageState extends State<PlayerPage> {
                       ),
                     ],
                   ),
-                );
+                ));
               }
 
               // ── 窄模式：播放器 / 歌词·队列（整体淡入淡出过渡）──
               if (narrow) {
-                return AnimatedSwitcher(
+                return _lift(AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
                   switchInCurve: Curves.easeOutCubic,
                   switchOutCurve: Curves.easeInCubic,
@@ -301,12 +335,12 @@ class _PlayerPageState extends State<PlayerPage> {
                           key: const ValueKey('lyricsqueue'),
                           child: _buildNarrowLyricsQueue(context, theme, song),
                         ),
-                );
+                ));
               }
 
               // ── 宽模式：信息卡（纵排）| 队列/歌词。底部全宽播放条已抽到
               //    Scaffold.bottomNavigationBar（SnackBar 会自动顶到其上方）。──
-              return Row(
+              return _lift(Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   SizedBox(
@@ -314,23 +348,25 @@ class _PlayerPageState extends State<PlayerPage> {
                     child: _buildWideInfo(context, theme, song),
                   ),
                   Expanded(
-                    child: _RightPanel(
-                      viewModel: _viewModel,
-                      theme: theme,
-                      showQueue: _showQueue,
-                      uiState: widget.uiState,
-                      locateOnOpen: _locateOnQueueOpen,
-                      lyricsController: _lyrics.controller,
-                      hasTranslation: _lyrics.hasTranslationNotifier,
-                      lyricsLoadState: _lyrics.loadStateNotifier,
-                      onToggleTranslation: _toggleTranslation,
-                      onTextSizeChanged: _onTextSizeChanged,
-                      onLineTap: _handleLyricLineTap,
-                      onOpenSettings: _openLyricsSettings,
+                    child: _deferUntilRevealed(
+                      _RightPanel(
+                        viewModel: _viewModel,
+                        theme: theme,
+                        showQueue: _showQueue,
+                        uiState: widget.uiState,
+                        locateOnOpen: _locateOnQueueOpen,
+                        lyricsController: _lyrics.controller,
+                        hasTranslation: _lyrics.hasTranslationNotifier,
+                        lyricsLoadState: _lyrics.loadStateNotifier,
+                        onToggleTranslation: _toggleTranslation,
+                        onTextSizeChanged: _onTextSizeChanged,
+                        onLineTap: _handleLyricLineTap,
+                        onOpenSettings: _openLyricsSettings,
+                      ),
                     ),
                   ),
                 ],
-              );
+              ));
             },
           ),
           // 底部全宽播放条挂在 Scaffold.bottomNavigationBar：SnackBar(fixed)
@@ -342,13 +378,29 @@ class _PlayerPageState extends State<PlayerPage> {
               if (_viewModel.currentSong == null) {
                 return const SizedBox.shrink();
               }
-              return PlayerBar(
-                player: ServiceLocator.player,
-                theme: theme,
-                onSeek: _viewModel.seek,
-                compact: narrow,
-                // 快捷键/媒体键切歌、播放暂停时让对应按钮也亮一下。
-                pulses: ServiceLocator.feedback.pulses,
+              // 底色单独兜一层不参与淡出：`PlayerBar` 自己的 Material 也会被
+              // 一起淡掉，露出后面列表（收起时特别明显）。两层同色，视觉一致。
+              final surface = ColoredBox(
+                color: theme.colorScheme.surfaceContainerLow,
+                child: PlayerBar(
+                  key: widget.bottomBarKey,
+                  player: ServiceLocator.player,
+                  theme: theme,
+                  onSeek: _viewModel.seek,
+                  compact: narrow,
+                  // 快捷键/媒体键切歌、播放暂停时让对应按钮也亮一下。
+                  pulses: ServiceLocator.feedback.pulses,
+                ),
+              );
+              final reveal = widget.reveal;
+              if (reveal == null) return surface;
+              return ValueListenableBuilder<double>(
+                valueListenable: reveal,
+                child: surface,
+                builder: (context, value, child) => Opacity(
+                  opacity: BottomBarReveal.bandContentOpacity(value),
+                  child: child,
+                ),
               );
             },
           ),
@@ -359,45 +411,32 @@ class _PlayerPageState extends State<PlayerPage> {
 
   // ─── 信息模块构建 / 详情跳转 / 收藏 ─────────────────────
 
-  /// 宽模式信息卡：高度足够 → 宽版纵排；高度不足（放不下封面）→ 窄版横排。
+  /// 宽模式信息卡：形态与封面尺寸由 [resolveSongInfoCardLayout] 统一给出
+  /// （高度不足时先收缩封面，低于下限才切横排）。
   Widget _buildWideInfo(BuildContext context, ThemeData theme, Song song) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cardWidth = constraints.maxWidth;
-        // 估算宽版纵排封面（与 SongInfoCard 内部一致：max(宽×0.8, _kMinCover=380)，
-        // 宽取 padding 后的实际内容宽）。
-        final coverSize = math.max((cardWidth - 80) * 0.8, 380);
-        // 宽版纵排总高 ≈ 封面 + 文本区（间距28+title32+4+歌手24+4+meta16）
-        // + 上下 padding 48。
-        final wideNeeds = coverSize + 156;
-        final useWide = constraints.maxHeight >= wideNeeds;
+        final layout = resolveSongInfoCardLayout(
+          contentWidth: constraints.maxWidth - _kWideInfoPadding.horizontal,
+          contentHeight: constraints.maxHeight - _kWideInfoPadding.vertical,
+        );
 
-        final card = useWide
-            ? _buildSongInfoCard(
-                context,
-                theme,
-                song,
-                isNarrow: false,
-                compact: false,
-              )
-            : _buildSongInfoCard(
-                context,
-                theme,
-                song,
-                isNarrow: true,
-                compact: false,
-              );
+        final card = _buildSongInfoCard(
+          context,
+          theme,
+          song,
+          isNarrow: layout.form == SongInfoCardForm.horizontal,
+          compact: false,
+          coverSize: layout.coverSize,
+        );
 
-        // 高度不足切窄版横排；两种形态都保留滚动兜底（极端矮窗）。
+        // 两种形态都保留滚动兜底（极端矮窗 / 超长标题）。
         return SingleChildScrollView(
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
             child: Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 40,
-                  vertical: 24,
-                ),
+                padding: _kWideInfoPadding,
                 child: card,
               ),
             ),
@@ -408,36 +447,33 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   /// 窄模式播放器：信息卡（高度够 → 竖版封面在上，不够 → 横版封面在左；
-  /// 矮窗可滚动）。底部播放条由 Scaffold.bottomNavigationBar 承载。
+  /// 矮窗可滚动）。形态与尺寸由 [resolveSongInfoCardLayout] 统一给出。
   Widget _buildNarrowPlayer(BuildContext context, ThemeData theme, Song song) {
     return Column(
       children: [
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final cardWidth = constraints.maxWidth;
-              // 估算竖版封面（与 SongInfoCard 纵排一致：max(宽×0.8, _kMinCover=380)，
-              // 宽取 padding 后的实际内容宽）+ 文本区 + padding。
-              final coverSize = math.max((cardWidth - 64) * 0.8, 380);
-              final verticalNeeds = coverSize + 156;
-              // 高度足够 → 竖版；不足 → 横版。
-              final useVertical = constraints.maxHeight >= verticalNeeds;
+              final layout = resolveSongInfoCardLayout(
+                contentWidth:
+                    constraints.maxWidth - _kNarrowInfoPadding.horizontal,
+                contentHeight:
+                    constraints.maxHeight - _kNarrowInfoPadding.vertical,
+              );
               return SingleChildScrollView(
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minHeight: constraints.maxHeight),
                   child: Center(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 24,
-                      ),
+                      padding: _kNarrowInfoPadding,
                       child: _InfoReveal(
                         child: _buildSongInfoCard(
                           context,
                           theme,
                           song,
-                          isNarrow: !useVertical,
+                          isNarrow: layout.form == SongInfoCardForm.horizontal,
                           compact: false,
+                          coverSize: layout.coverSize,
                         ),
                       ),
                     ),
@@ -490,12 +526,15 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   /// 共享 SongInfoCard 构建（like/more/详情回调由页面注入）。
+  ///
+  /// [coverSize] 来自 [resolveSongInfoCardLayout]；迷你条不传（固定 48）。
   Widget _buildSongInfoCard(
     BuildContext context,
     ThemeData theme,
     Song song, {
     required bool isNarrow,
     required bool compact,
+    double? coverSize,
   }) {
     // 封面信息卡自成一合成层：封面绘制/涟漪等不波及播放页其它区域
     // （宽信息卡、窄竖/横版、迷你信息条共用此处）。
@@ -505,6 +544,7 @@ class _PlayerPageState extends State<PlayerPage> {
         theme: theme,
         isNarrow: isNarrow,
         compact: compact,
+        coverSize: coverSize,
         onLike: _toggleLike,
         onOpenArtist: () => _openArtist(context, song),
         onOpenAlbum: () => _openAlbum(context, song),
@@ -560,9 +600,90 @@ class _PlayerPageState extends State<PlayerPage> {
       NavigationItem.albums,
     );
   }
+
+  /// 歌词就绪后才允许挂右栏。
+  ///
+  /// 除了「界面已就位」，还得等**文档到齐**：加载窗口里挂上去只会先显示一个
+  /// 转圈，文档到达后 `LyricView` 又因 `ObjectKey(document)` 变化整体重建一次
+  /// （又一次全量排版）。等 ready 再挂，只付一次成本。
+  ///
+  /// 前奏期（还没到第一行时间戳）没有「当前行」，此时顶部就是正确位置，不能
+  /// 因此一直不挂。
+  bool _panelCanShow() {
+    if (_showQueue) return true;
+    final lyrics = _lyrics;
+    if (lyrics.loadStateNotifier.value == LyricLoadState.loading) return false;
+    final document = lyrics.controller.document;
+    if (document == null || document.lines.isEmpty) return true;
+    if (lyrics.controller.activeLineIndex != null) return true;
+    return lyrics.controller.position < document.lines.first.start;
+  }
+
+  /// 展开动画期间不挂右侧面板（歌词/队列）。
+  ///
+  /// 那棵树 build 一次要几十 ms（歌词排版 + 列表），而动画这 380ms 里它大半还被
+  /// 裁剪窗口挡在屏幕外。挂真内容的时机放在动画走完（progress 到 1）之后，这样
+  /// 首帧与逐帧光栅化都不含它，收尾那一帧也没有动画重叠。
+  ///
+  /// 只拦**第一次揭开**：一旦显示过就常驻，否则收起（progress 反向回到 0）时
+  /// 面板会瞬间消失，收卡片的过程右半边变空白。
+  Widget _deferUntilRevealed(Widget child) {
+    final revealed = widget.revealed;
+    if (revealed == null) return child;
+    return _RevealGate(
+      revealed: revealed,
+      pending: _panelReadiness,
+      canShow: _panelCanShow,
+      child: child,
+    );
+  }
+
+  /// 正文（appBar + body）整体上浮；底部控制带不参与，始终贴底。
+  ///
+  /// 只改绘制不改布局：`child` 透传给 [ValueListenableBuilder]，逐帧只重建这层
+  /// 包装，歌词/信息卡不会被每帧重建。
+  Widget _lift(Widget child) {
+    final reveal = widget.reveal;
+    if (reveal == null) return child;
+    return ValueListenableBuilder<double>(
+      valueListenable: reveal,
+      child: child,
+      // 内层 RepaintBoundary 不能省：位移每帧变，若它直接挂着页面子树，
+      // markNeedsPaint 会一路冒到外层边界，整页又要重录一次（外层边界就白加了）。
+      builder: (context, value, child) => Transform.translate(
+        offset: Offset(0, BottomBarReveal.contentLiftFor(value)),
+        child: RepaintBoundary(child: child),
+      ),
+    );
+  }
 }
 
 // ─── 共享切换过渡：歌词 ↔ 播放列表（淡入 + 朝标签方向轻滑）────
+
+/// 收起箭头：随展开进度翻面 —— 但只在**收尾段**（0.8 → 1）转。
+///
+/// 顶栏是最后才被揭开的部分，全程线性转头会在没人看得见的时段转完；收进收尾段
+/// 之后，箭头出现的同时正好转到位。用进度驱动而不是"点击时放一次动画"：不需要
+/// 额外状态机，半路被打断（反向 pop）也不会错位。
+class _CollapseArrow extends StatelessWidget {
+  const _CollapseArrow({required this.reveal});
+
+  /// 展开进度（0 = 收起）。为 null 时退化为静态图标（独立构建场景/测试）。
+  final ValueListenable<double>? reveal;
+
+  @override
+  Widget build(BuildContext context) {
+    final reveal = this.reveal;
+    if (reveal == null) return const Icon(Icons.keyboard_arrow_down);
+    return ValueListenableBuilder<double>(
+      valueListenable: reveal,
+      builder: (context, value, _) => Transform.rotate(
+        angle: BottomBarReveal.collapseArrowTurns(value) * 2 * math.pi,
+        child: const Icon(Icons.keyboard_arrow_down),
+      ),
+    );
+  }
+}
 
 class _FadeSlideTransition extends StatelessWidget {
   /// 滑动方向：+1 向右（切到播放列表），-1 向左（切到歌词）。
@@ -915,4 +1036,66 @@ class _AppBarTab extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 揭开幕布 **且** 内容就绪之后才挂上 [child]，之后一直保留。
+///
+/// 注意别在这里加整块淡入：`FadeTransition` 在 opacity < 1 时是 saveLayer，
+/// 面板（Retina 约 1400×1200）每帧重合成要 20~25ms，实测反而比"直接出现"
+/// 多掉十几帧。
+class _RevealGate extends StatefulWidget {
+  const _RevealGate({
+    required this.revealed,
+    required this.canShow,
+    required this.child,
+    this.pending,
+  });
+
+  /// 展开动画是否已走完。
+  final ValueListenable<bool> revealed;
+
+  /// [revealed] 之外的额外条件（如歌词文档是否就绪）。
+  final bool Function() canShow;
+
+  /// [canShow] 依赖的通知源；变化时重新判断一次。
+  final Listenable? pending;
+
+  final Widget child;
+
+  @override
+  State<_RevealGate> createState() => _RevealGateState();
+}
+
+class _RevealGateState extends State<_RevealGate> {
+  bool _shown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _shown = widget.revealed.value && widget.canShow();
+    if (!_shown) {
+      widget.revealed.addListener(_maybeShow);
+      widget.pending?.addListener(_maybeShow);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.revealed.removeListener(_maybeShow);
+    widget.pending?.removeListener(_maybeShow);
+    super.dispose();
+  }
+
+  void _maybeShow() {
+    if (_shown) return;
+    if (!widget.revealed.value || !widget.canShow()) return;
+    // 显示过之后不再关心：拆掉监听，逐帧零开销。
+    widget.revealed.removeListener(_maybeShow);
+    widget.pending?.removeListener(_maybeShow);
+    setState(() => _shown = true);
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      _shown ? widget.child : const SizedBox.expand();
 }
