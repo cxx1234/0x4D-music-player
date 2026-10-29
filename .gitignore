@@ -18,6 +18,11 @@ migrate_working_dir/
 *.iws
 .idea/
 
+# Eclipse/Buildship（VS Code Java 扩展导入 Gradle 工程时自动生成，
+# 内含 java.home、临时 init-script 等本机绝对路径，勿提交）。
+android/.project
+android/.settings/
+
 # The .vscode folder contains launch configuration and tasks you configure in
 # VS Code which you may wish to be included in version control, so this line
 # is commented out by default.
