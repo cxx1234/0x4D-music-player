@@ -108,7 +108,7 @@ lib/
 - **Flutter / Dart**
 - **drift** —— 本地音乐库的 SQLite ORM
 - **audioplayers** —— 音频播放（单曲；队列逻辑在应用内）
-- **audio_metadata_reader** —— 元数据与内嵌封面解析（纯 Dart；使用 [cxx1234 fork](https://github.com/cxx1234/audio_metadata_reader)，固定在 commit `4a6f245` 以获得 `albumArtist` 与内嵌歌词支持）
+- **audio_metadata_reader** —— 元数据与内嵌封面解析（纯 Dart；使用 [cxx1234 fork](https://github.com/cxx1234/audio_metadata_reader)，固定在 commit `be6c8bf` 以获得 `albumArtist` 与内嵌歌词支持）
 - **flutter_lyric** —— LRC/QRC/YRC 歌词渲染，含逐字特效、切句动画与倒计时点
 - **file_picker / watcher** —— 文件夹选择与音乐库变动监听
 - **lpinyin** —— 拼音排序键

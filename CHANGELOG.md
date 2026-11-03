@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   during the reveal 14–16 → 0. The panel mount itself still costs one ~105ms
   frame because `flutter_lyric` lays out every lyric line eagerly; that is
   tracked in `docs/Performance-Optimization.md` §1.7
+- The pinned `audio_metadata_reader` fork moves to `be6c8bf`, which merges the two
+  upstream commits made after 1.8.1: Ogg/Opus duration now comes from the last page
+  of the stream instead of walking every page (a long file no longer costs a full
+  pass at scan time), MP4 files keep their metadata when a tagger appended non-box
+  bytes after the last box, and ALAC sample entries report a sample rate like AAC
+  ones. The fork-only `albumArtist` and embedded-lyrics support is unchanged —
+  verified against the `test/music` set for mp3, flac and m4a
 
 ### Removed
 - The `android/`, `ios/` and `web/` platform folders. None of them was ever more than

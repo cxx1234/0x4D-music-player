@@ -45,8 +45,8 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: "47bf3f76231e85b83a6264d13ad04347630666bb"
-      resolved-ref: "47bf3f76231e85b83a6264d13ad04347630666bb"
+      ref: be6c8bfecf4eff52cf672da58261e335d7e3b76b
+      resolved-ref: be6c8bfecf4eff52cf672da58261e335d7e3b76b
       url: "https://github.com/cxx1234/audio_metadata_reader.git"
     source: git
     version: "1.8.1"
