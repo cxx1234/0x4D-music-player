@@ -21,12 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   during the reveal 14–16 → 0. The panel mount itself still costs one ~105ms
   frame because `flutter_lyric` lays out every lyric line eagerly; that is
   tracked in `docs/Performance-Optimization.md` §1.7
-- The pinned `audio_metadata_reader` fork moves to `be6c8bf`, which merges the two
-  upstream commits made after 1.8.1: Ogg/Opus duration now comes from the last page
-  of the stream instead of walking every page (a long file no longer costs a full
-  pass at scan time), MP4 files keep their metadata when a tagger appended non-box
-  bytes after the last box, and ALAC sample entries report a sample rate like AAC
-  ones. The fork-only `albumArtist` and embedded-lyrics support is unchanged —
+- The pinned `audio_metadata_reader` fork moves to `4ac4718` on its `app` branch
+  (renamed from `feat/album-artist`), which merges the two upstream commits made
+  after 1.8.1: Ogg/Opus duration now comes from the last page of the stream instead
+  of walking every page (a long file no longer costs a full pass at scan time), and
+  MP4 files keep their metadata when a tagger appended non-box bytes after the last
+  box. The fork-only `albumArtist` and embedded-lyrics support is unchanged —
   verified against the `test/music` set for mp3, flac and m4a
 
 ### Removed
@@ -38,6 +38,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   macOS app is untouched. `flutter create --platforms=<name> .` regenerates a platform
   folder if that decision ever changes, and `README.md` / `docs/Architecture.md` now
   state the supported platforms explicitly.
+
+### Fixed
+- Hi-Res ALAC (Apple Lossless) files now report their real sample rate. The `alac`
+  sample entry stores the rate as a 16.16 fixed-point value, which cannot hold more
+  than 65535 Hz, so 88.2 kHz and 96 kHz files stored half the rate there and the
+  song info card showed 44100/48000 Hz. The parser now reads the exact value from
+  the codec's magic cookie, which also fills `bitrate` (previously always null for
+  ALAC). Files already in the library keep the old value until a rescan — use
+  Settings › force rescan to refresh them
 
 ## [0.4.1] - 2026-10-27
 

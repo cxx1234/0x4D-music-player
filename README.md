@@ -115,7 +115,7 @@ See [docs/Architecture.md](docs/Architecture.md) for the full architecture and [
 - **Flutter / Dart**
 - **drift** — SQLite ORM for the local library database
 - **audioplayers** — audio playback (single-track; queue logic lives in the app)
-- **audio_metadata_reader** — metadata & embedded cover art parsing (pure Dart; uses the [cxx1234 fork](https://github.com/cxx1234/audio_metadata_reader) pinned to commit `be6c8bf` for `albumArtist` + embedded lyrics support)
+- **audio_metadata_reader** — metadata & embedded cover art parsing (pure Dart; uses the [cxx1234 fork](https://github.com/cxx1234/audio_metadata_reader) pinned to commit `4ac4718` for `albumArtist` + embedded lyrics support)
 - **flutter_lyric** — LRC/QRC/YRC lyric rendering with word-level effects, line transitions and countdown dots
 - **file_picker / watcher** — folder selection & library change watching
 - **lpinyin** — pinyin sort keys

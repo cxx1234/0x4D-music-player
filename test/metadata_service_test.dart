@@ -82,6 +82,12 @@ void main() {
       );
       expect(song.album, 'R∃/MEMBER');
       expect(song.durationMs, greaterThan(0));
+      expect(
+        song.sampleRate,
+        96000,
+        reason: 'Hi-Res ALAC：alac magic cookie 的 32 位采样率，而非 16.16 定点字段的一半',
+      );
+      expect(song.bitrate, isNotNull, reason: 'ALAC bitrate 来自 magic cookie');
       expect(song.hasEmbeddedLyrics, isTrue, reason: 'M4A 有 ©lyr');
       expect(song.mimeType, 'audio/mp4');
     });

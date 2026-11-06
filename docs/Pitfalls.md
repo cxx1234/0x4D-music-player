@@ -370,6 +370,23 @@
 - **复发提示**：任何"给大子树加淡入来掩盖卡顿"的想法，先估一下
   `面积 × saveLayer` 的单价（本机 ≈ 20ms/1400×1200）。
 
+### C16. 2026-11-06 ALAC 采样率读数偏一半：16.16 定点字段装不下 88.2/96 kHz
+
+- **症状**：`test/music` 里 96 kHz 的 ALAC（`.m4a`）在歌曲信息卡显示 `44100 Hz`；
+  `bitrate` 恒为 `null`。
+- **根因**：ALAC 把采样率写两处 —— `alac` sample entry 的 AudioSampleEntry 字段是
+  16.16 定点（整数部分只有 16 位，最大 65535 Hz），Hi-Res 文件在那里存的是**一半**
+  （96 kHz → 48000、88.2 kHz → 44100）；精确值只存在于 `alac` magic cookie 的
+  32 位字段里。旧解析器只读定点字段。
+- **修法**：fork 里先取 cookie（`ALACSpecificConfig`，`[size]["alac"][version/flags]
+  [24 字节 config]`），其 `offset 24` 的 32 位采样率优先；`offset 20` 的平均码率
+  顺带填 `bitrate`。
+- **护栏**：fork `test/mp4/mp4_test.dart`（`track_alac_hires.m4a`）+ 本仓
+  `test/metadata_service_test.dart` 对 96 kHz 样本断言 `sampleRate == 96000`。
+- **复发提示**：改动或重 pin `audio_metadata_reader` 后跑一次
+  `dart run tool/test_album_artist.dart`（或直接看歌曲信息卡的 Hz），Hi-Res ALAC
+  若回落成 44100/48000 就是这个字段被读错了。
+
 ## D. 领域事故索引（细节留在原文档）
 
 | 症状 | 出处 |
