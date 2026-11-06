@@ -170,6 +170,73 @@
   输出至少有三种（原样透传按钮 / 合成快捷键 / 合成手势），而且**没有一个统一入口**；
   遇到“按了没反应”先用探针，别猜。
 
+### B10. 2026-11-06 冷启动窗口尺寸不受自己代码控制（persistent UI 恢复 + `contentMinSize` 钳制）
+
+- **症状①**：macOS **冷启动偶发**窗口是 640×520（正好是 `contentMinSize`），
+  而不是 xib / `awakeFromNib` 定的 800×600。
+- **症状②（用户 2026-11-06 实测）**：**⌘W 关窗口 → 切到别的 app → Dock 右键「退出」→
+  重启**，窗口回到 800×600 —— 这条路径**每次都丢**、不是偶发。对照：foobar2000、
+  Apple Music 在同样操作后仍保持上次尺寸。
+- **根因**：这个窗口还参与了 macOS 的**窗口状态恢复**（persistent UI / Resume）——
+  `MainMenu.xib` 的 `<window>` 没写 `restorable="NO"`，`AppDelegate`
+  的 `applicationSupportsSecureRestorableState` 返回 `true`。实测时序：
+  `awakeFromNib` 里 `setFrame` 复原 800×600 之后**约 0.5~0.7 s**，
+  `NSPersistentUIRestorer` → `-[NSWindow restoreStateWithCoder:]` →
+  `-[NSWindow _setFrameFromString:…]` 把**上次会话的 frame 盖回来**；
+  而 `_setFrameFromString:` 落地后受 `contentMinSize` 钳制 ——
+  **任何小于 640×520 的存档 frame 都会被拉成 640×520**。
+- **实测对照**（`setFrameUsingName` 直接喂存档串，屏幕 1680×1025）：
+  `1002×841` / `700×600` 原样恢复；`500×400`、`400×300` → **640×520**；
+  `0×0` / screenRect 全 0 / 无存档 → 不恢复，保持 800×600。
+- **复现**：把窗口拉到 500×400 → ⌘Q 正常退出 → 冷启动（次次命中）。
+- **症状②的机制**：persistent UI 只恢复**退出那一刻仍可见**的窗口；关掉的窗口在退出时
+  不被编码/恢复（`performClose` 后 `NSApp.terminate` 实测同样没有
+  `restoreStateWithCoder:`），于是启动时只剩 `awakeFromNib` 的 800×600。
+- **写入 / 读取时机**（实测）：拖动缩放**不写**；关窗**不写**；正常退出**写，且只写可见
+  窗口**；`kill -9` / SIGTERM / 崩溃**不写**（所以旧存档会被一直复用，表现为「连着几次
+  都是同一个错尺寸」）；读取发生在启动后 **约 0.45~0.7 s**。
+- **对照：别的 app 为什么记得**（2026-11-06 实测 prefs）：foobar2000 用 frame autosave，
+  `~/Library/Preferences/com.foobar2000.mac.plist` 里有
+  `"NSWindow Frame fooMainWindow2" = "263 97 1157 911 …"` —— 写 UserDefaults、与窗口
+  可见性 / 退出方式无关，故关窗退出、`kill` 都记得；Apple Music **不用** `NSWindow Frame`，
+  而是自己一套 iTunes 时代的键（`plutil -p ~/Library/Preferences/com.apple.Music.plist`
+  可见 `activityWindowHPos/HSize/VPos/VSize`、`eqWindowHPos/VPos`、
+  `infoPanelWindowWidth/Height/HPos/VPos`，以及视图状态里的
+  `windowWidth/Height/HPos/VPos/zoomed`）—— 主窗口具体用哪个键未逐一验证，但同样不是靠
+  「退出时可见即恢复」这条路。判据：`defaults read <bundle-id> | grep -i "window frame"`
+  有主窗口那一条、或 `plutil -p` 里出现 `*Window*HPos/VPos` 一类键，就是它自己记的。
+- **能不能手动触发记录**：persistent UI **没有公开 API**（只有私有
+  `NSPersistentUIManager` 的 flush，sandbox + 无版本承诺，勿用）；要「随时记录」就用
+  frame autosave：`window.saveFrame(usingName:)` 立刻写 UserDefaults，
+  `window.setFrameUsingName(_:)` 读回（**同样受 `contentMinSize` 钳制**，仍要校验）。
+- **存档 frame 怎么会小于最小**：① `contentMinSize` 是 `4c9ecb8` 才加的，
+  早期版本存下的小窗口在升级后第一次启动就被钳；② 赋 `contentViewController`
+  的瞬间窗口先塌成 1×0（日志实测 `setContentSize({1,0})` → `setFrame({1,28})`），
+  启动早期被结束就有机会存到畸形 frame；③ 上次贴着最小，或在副屏 / 换分辨率后
+  被系统约束过。
+- **状态**：**已按 B 落地并实测通过（2026-11-06，Flutter 3.47.9）**。
+  `MainFlutterWindow.swift`：`isRestorable = false` 关掉系统恢复；几何存 `UserDefaults`
+  的 `mainWindowFrame`（`[x, y, w, h]`，**不**解析 AppKit 私有的 frame 字符串；读取兼容
+  数字与字符串，方便手工 `defaults write` 调试）；**写入点挂在 `setFrame(_:display:)`
+  覆盖上**（所有 frame 变化都过这里，含程序化设置与 zoom；实测 `didMove` /
+  `didEndLiveResize` 通知对程序化 setFrame **不触发**，不能只靠通知），另外关窗 /
+  切走 app / 退出时立即落盘；0.4 s 合并。读取点在 `contentMinSize` 之后，校验规则：
+  `w/h < 640×520` 或完全落在所有屏幕之外 → **回落居中 800×600**（不是让 AppKit 钳到
+  最小），部分越界 → 平移进可见区域。
+  备选的 A（恒定 800×600，丢尺寸记忆）与 C（恢复后兜底，修不了症状②、且会把用户
+  故意贴最小的窗口撑成 800×600）已否掉。
+- **验证**（2026-11-06 实测，`flutter build macos --debug` + 逐条冷启动量窗口）：
+  ① 无存档 → 800×600 居中；② 存档 400×300（< 最小）→ **800×600 居中**（不再 640×520）；
+  ③ 存档 1100×800 @ (300,150) → 原样恢复；④ 存档部分出屏 (300,900) → 平移进可见区、
+  尺寸不变；⑤ **⌘W 关窗 → 正常退出 → 重启 → 仍回 1100×800**（症状②修好）；
+  ⑥ 改尺寸后 `kill -9` → 重启仍回该尺寸。另：同一台机器上 AppKit 旧存档（1002×841）
+  已不再生效（`isRestorable = false` 后首启是默认 800×600），确认两套机制只剩一套。
+- **复发提示**：凡是“窗口尺寸不听自己代码的”，先查是不是 persistent UI 在动手 ——
+  在 `setFrame(_:display:)` / `restoreState(with:)` 打日志，
+  `Thread.callStackSymbols` 里出现 `NSPersistentUIRestorer` / `restoreStateWithCoder:`
+  即中；`NSUserDefaults` 里的 `NSWindow Frame …` 键、以及 Saved Application State
+  目录都**可能**是空的，看不到存档不代表没恢复。
+
 ## C. Flutter 框架层
 
 ### C1. 2026-08-19 → 08-24 Flutter 3.47 macOS 全窗口闪烁（Intel 专属）
@@ -408,6 +475,8 @@
 | 变化检测移后台 isolate 时闭包捕获 UI 回调（unsendable） | `Performance-Optimization.md` §3.2 |
 | 媒体控制下发的并发载体随引擎迁移变更，需代际守卫 | `Performance-Optimization.md` §5.6 |
 | Windows C++/WinRT 缺 `winrt` 头时改走 cppwinrt / audio_service | `TODO.md` §3 |
+| 冷启动窗口偶尔变成 640×520（最小尺寸），但代码写的是 800×600 | 本册 B10 |
+| 关窗后退出再启动，窗口尺寸被重置成 800×600（foobar2000 / Apple Music 不会） | 本册 B10 |
 
 **本册与代码注释的分工**：本册给的是排查路径与实证结论；改动点旁边那 1~2 行关键注释
 仍要写（改代码的人看的是代码，不是文档）。

@@ -40,6 +40,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   state the supported platforms explicitly.
 
 ### Fixed
+- The main window now persists its own size and position instead of relying on
+  macOS window state restoration. That mechanism only restored windows that were
+  still open when the app quit — closing the window (⌘W) and quitting from the Dock
+  reset the next launch to the 800×600 default — and whatever it did restore was
+  clamped to `contentMinSize`, so a saved frame below 640×520 (for example one left
+  by a build that predates the minimum) came back as exactly 640×520. The window is
+  now non-restorable, writes `[x, y, w, h]` to `UserDefaults` when a move/resize
+  ends (coalesced), when the window closes, when the app resigns active and on
+  terminate, and validates the saved frame on launch: below the minimum or off every
+  screen falls back to a centred 800×600 rather than being clamped. See
+  `docs/Pitfalls.md` B10
 - Hi-Res ALAC (Apple Lossless) files now report their real sample rate. The `alac`
   sample entry stores the rate as a 16.16 fixed-point value, which cannot hold more
   than 65535 Hz, so 88.2 kHz and 96 kHz files stored half the rate there and the
