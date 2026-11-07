@@ -55,13 +55,13 @@ class AppDelegate: FlutterAppDelegate {
     NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
   }
 
-  // Dock 右键菜单:「Show Window」,窗口关闭后也能主动唤回主窗口。
+  // Dock 右键菜单:「显示窗口」,窗口关闭后也能主动唤回主窗口。
   // 注意:Dock 菜单通过 NSApplicationDelegate 的 applicationDockMenu(_:) 提供,
   // NSDockTile 并没有公开的 menu 属性(编译期即可发现)。
   override func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
     let dockMenu = NSMenu()
     let showWindowItem = NSMenuItem(
-      title: "Show Window",
+      title: NSLocalizedString("menu.showWindow", comment: "Show Window"),
       action: #selector(showMainWindow),
       keyEquivalent: ""
     )

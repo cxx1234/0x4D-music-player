@@ -51,6 +51,9 @@
 "menu.closeWindow" = "Close Window";
 "menu.bringAllToFront" = "Bring All to Front";
 
+/* Dock menu */
+"menu.showWindow" = "Show Window";
+
 /* Help menu */
 "menu.help" = "Help";
 "menu.aboutApp" = "About This App";

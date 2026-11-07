@@ -40,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   state the supported platforms explicitly.
 
 ### Fixed
+- The Dock menu's "Show Window" item is localized again. It was built with a
+  hard-coded English title while every other menu item goes through
+  `NSLocalizedString`, so the Chinese build showed `Show Window` in the Dock's
+  right-click menu. It now uses the new `menu.showWindow` key in both
+  `en.lproj` and `zh-Hans.lproj`. See `docs/I18n.md`
 - Launching the app from the Dock no longer leaves it in the background when the
   previous session was quit with the window closed. Only the "already running, click
   the Dock icon" path (reopen) activated the app; a cold launch had no activation call

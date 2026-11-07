@@ -51,6 +51,9 @@
 "menu.closeWindow" = "关闭窗口";
 "menu.bringAllToFront" = "前置全部窗口";
 
+/* Dock 菜单 */
+"menu.showWindow" = "显示窗口";
+
 /* 帮助菜单 */
 "menu.help" = "帮助";
 "menu.aboutApp" = "关于本软件";
