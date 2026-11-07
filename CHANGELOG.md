@@ -40,6 +40,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   state the supported platforms explicitly.
 
 ### Fixed
+- Launching the app from the Dock no longer leaves it in the background when the
+  previous session was quit with the window closed. Only the "already running, click
+  the Dock icon" path (reopen) activated the app; a cold launch had no activation call
+  at all and relied on the system, which does not bring such an app forward — the
+  window from the nib appeared at the right size but was not the key window, so
+  typing stayed in whatever app was in front. `applicationDidFinishLaunching` now
+  schedules the same `showMainWindow()` call on the main queue; placing it after
+  `super.applicationDidFinishLaunching` does nothing, because AppKit's launch
+  notification runs a nested run loop that does not return promptly. See
+  `docs/Pitfalls.md` B11
 - The main window now persists its own size and position instead of relying on
   macOS window state restoration. That mechanism only restored windows that were
   still open when the app quit — closing the window (⌘W) and quitting from the Dock

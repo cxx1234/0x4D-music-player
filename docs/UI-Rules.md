@@ -62,6 +62,16 @@
   **回落居中 800×600**，不要依赖 AppKit 去钳。
 - 改动这块时跑 B10「验证」里的三条手工用例（含 ⌘W→Dock 退出、`kill -9` 两条退出路径）。
 
+### 2.3 冷启动必须显式激活（2026-11-07）
+
+- 所有「把主窗口带到前台」的路径都走 `AppDelegate.showMainWindow()`
+  （`makeKeyAndOrderFront` + `NSRunningApplication.activate`）：
+  已运行时点 Dock 图标走 `applicationShouldHandleReopen`，**冷启动在
+  `applicationDidFinishLaunching` 里排进主队列后调用**（不要写在
+  `super.applicationDidFinishLaunching` 之后，那条路会进嵌套 runloop，见 `Pitfalls.md` B11）。
+- 不要依赖系统自动激活：上次「无可见窗口时退出」后，系统重新拉起 App 时不会带到前台，
+  表现为「窗口在、焦点不在」（见 `Pitfalls.md` B11）。
+
 ## 3. 左侧边栏（NavigationRail）对齐参考
 
 - NavigationRail 宽度：macOS = `layoutConfig.sidebarWidth`（92），顶部外包 `Padding(top: layoutConfig.sidebarTopInset)`。

@@ -237,6 +237,29 @@
   即中；`NSUserDefaults` 里的 `NSWindow Frame …` 键、以及 Saved Application State
   目录都**可能**是空的，看不到存档不代表没恢复。
 
+### B11. 2026-11-07 冷启动后窗口没有焦点（冷启动路径缺显式激活）
+
+- **症状**：`⌘W 关窗 → 切到别的 app → Dock 右键退出 → 再启动`，窗口按上次尺寸正常出现，
+  但 **App 不在前台**、窗口不是 key window（键盘输入还在原来那个 app 里，要先点一下窗口）。
+- **根因**：代码只在「App 已运行、点 Dock 图标唤起」这条路径上显式激活
+  （`applicationShouldHandleReopen` → `showMainWindow()` → `makeKeyAndOrderFront` +
+  `NSRunningApplication.activate`）；**冷启动的 `applicationDidFinishLaunching` 里没有任何
+  激活调用**，全靠系统自动激活。而上次若是「无可见窗口时退出」，系统不会把重新拉起的
+  App 带到前台 —— nib 照样把窗口显示出来，于是「窗口在、焦点不在」。
+- **实测判据**：冷启动后 `NSRunningApplication.isActive == false`（`lsappinfo front` 仍是
+  别的 app）；同一进程再 `open -a` 一次（走 reopen 路径）立刻 `active == true`。
+  只看「窗口是否存在」是看不出来的 —— 窗口一直都在。
+- **修法**：`applicationDidFinishLaunching` 里把 `showMainWindow()`（与 Dock 唤起同一条路径）
+  **先排进主队列再调 `super`**：`DispatchQueue.main.async { self?.showMainWindow() }`。
+- ⚠️ **坑：写在 `super.applicationDidFinishLaunching` 之后不生效**（2026-11-07 实测）——
+  super 的实现会进嵌套 runloop：它之后的语句 **10 s 内都没执行**，而主队列上的 5 s
+  定时器能正常触发、`sample` 显示主线程停在 `NSApplication run`。结论：所有「启动后做一次」
+  的原生活儿都排在 super **之前**（进主队列），别写在它后面。
+- **验证**：`open -a` 冷启动、以及「直接从 shell 起二进制」两种方式都 `active=true`
+  （改前是 `false`）；完整「关窗 → 退出 → 重启」流程同样 `active=true`。
+- **复发提示**：再遇到「窗口出来了但没焦点」，先量 `isActive` / `lsappinfo front`，
+  别只数窗口；同时检查是否又在别的入口里另写了一套「显示窗口」而漏了激活。
+
 ## C. Flutter 框架层
 
 ### C1. 2026-08-19 → 08-24 Flutter 3.47 macOS 全窗口闪烁（Intel 专属）
