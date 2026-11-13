@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-13
+
+### Added
+- Playback notices now also cover resuming. With the window closed or the app in
+  the background, pressing play after a pause shows a banner for the track that
+  started again: the song title, a "Resumed playing" subtitle, artist/album and
+  the cover. It reuses the track-change notification id, so it replaces the
+  banner already in Notification Center instead of piling up a second one.
+- Resuming is only reported for user gestures - the in-app play buttons, media
+  keys, the system Now Playing panel and the menu - because the signal is emitted
+  from `play()`/`pause()` themselves. Automatic advances, queue end, sleep-timer
+  fade-out and failed loads never fire it, so the banner cannot appear while the
+  app is changing tracks on its own.
+- The existing Playback setting now governs both banners: "Show system
+  notifications for track changes and playback resume". The stored key keeps
+  reading the old `showTrackChangeNotification` value, so existing settings files
+  need no migration.
+
 ### Changed
 - Opening the now-playing page no longer drops frames. The reveal transition used
   to start on the same frame that built the page, so an 80ms build consumed the

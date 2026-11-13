@@ -50,6 +50,27 @@ class PlaybackFailure {
   final int? consecutiveCount;
 }
 
+/// 用户主动发起的播放意图翻转。
+enum PlaybackIntent {
+  /// 从「未在播」变为「在播」（[PlayerService.play]）。
+  play,
+
+  /// 从「在播」变为「暂停」（[PlayerService.pause]）。
+  pause,
+}
+
+/// 一次用户播放意图翻转（供"后台恢复播放提示"这类只该由用户手势触发的功能使用）。
+///
+/// [seq] 自增：`ValueNotifier` 对相同值不会通知，而"暂停 → 播放 → 暂停 → 播放"
+/// 每一步都必须触发，所以负载每次都是新对象（与 `PlaybackPulse` 同理）。
+@immutable
+class PlaybackIntentEvent {
+  const PlaybackIntentEvent({required this.seq, required this.intent});
+
+  final int seq;
+  final PlaybackIntent intent;
+}
+
 /// Core audio playback service.
 ///
 /// ### 职责划分（2026-09 播放引擎抽象重构）
@@ -220,6 +241,17 @@ class PlayerService extends ChangeNotifier {
   late final ValueNotifier<bool> playingNotifier = ValueNotifier<bool>(
     _engine.isPlaying,
   );
+
+  /// 用户播放意图翻转通知器（只在 [play] / [pause] 真正改变播放状态时触发）。
+  ///
+  /// ⚠️ 与 [playingNotifier] 分工不同，**不要混用**：[playingNotifier] 跟的是
+  /// 引擎瞬时状态，切歌空档、加载失败、自动推进、播完收尾都会让它翻转；本通知器
+  /// 只由用户手势驱动（UI 按钮、媒体键、系统「正在播放」面板、原生菜单最终都落到
+  /// [play] / [pause]），因此自动切歌不会被误当成"用户恢复了播放"。
+  late final ValueNotifier<PlaybackIntentEvent?> playbackIntentNotifier =
+      ValueNotifier<PlaybackIntentEvent?>(null);
+
+  int _intentSeq = 0;
 
   /// 供 UI 订阅的合并通知器：切歌 / 播放态翻转 / 队列结构变化。
   ///
@@ -665,6 +697,7 @@ class PlayerService extends ChangeNotifier {
 
   Future<void> play() async {
     if (_playQueue.isEmpty) return;
+    final wasAdvancing = isAdvancing;
     // 用户主动播放 → 放弃进行中的睡眠淡出：否则淡出循环的收尾
     // （`if (_shouldPlay) await pause()`）会把刚恢复的播放又暂停一次，
     // 表现为「按了播放没反应」（媒体键 / 系统「正在播放」面板走的就是这里）。
@@ -672,17 +705,44 @@ class PlayerService extends ChangeNotifier {
     // 惰性加载：启动恢复的队列尚未交给引擎（macOS 沙箱时序）。
     if (!_isLoaded) {
       await _loadCurrent(autoPlay: true);
+      _emitUserIntent(PlaybackIntent.play, wasAdvancing: wasAdvancing);
       return;
     }
     _shouldPlay = true;
     await _engine.play();
+    _emitUserIntent(PlaybackIntent.play, wasAdvancing: wasAdvancing);
   }
 
   Future<void> pause() async {
+    final wasAdvancing = isAdvancing;
+    await _pauseEngine();
+    _emitUserIntent(PlaybackIntent.pause, wasAdvancing: wasAdvancing);
+  }
+
+  /// 暂停引擎并落盘位置的共用实现（刻意不发 [playbackIntentNotifier]）。
+  ///
+  /// 睡眠定时的淡出收尾也走这里：那不是用户手势，不该被"恢复播放提示"这类
+  /// 订阅方当成一次暂停动作。
+  Future<void> _pauseEngine() async {
     _shouldPlay = false;
     await _engine.pause();
     // 暂停是最常见的"离开播放"动作，立即落盘当前位置。
     _persistPosition();
+  }
+
+  /// 上报一次用户播放意图翻转。
+  ///
+  /// 只在**真实翻转**时上报：媒体键连按、「正在播放」面板重复下发同一意图、
+  /// 已暂停时再按暂停，都不该算一次恢复/暂停。
+  ///
+  /// 用 [isAdvancing] 而不是 [isPlaying] 判定"是否真的响起来了"——加载失败时
+  /// 播放意图仍为 true，但引擎并没有在播，此时不能当成一次恢复播放。
+  void _emitUserIntent(PlaybackIntent intent, {required bool wasAdvancing}) {
+    if (wasAdvancing == isAdvancing) return;
+    playbackIntentNotifier.value = PlaybackIntentEvent(
+      seq: ++_intentSeq,
+      intent: intent,
+    );
   }
 
   Future<void> togglePlay() async {
@@ -773,7 +833,7 @@ class PlayerService extends ChangeNotifier {
         }
       }
       if (generation != _fadeGeneration) return;
-      if (_shouldPlay) await pause();
+      if (_shouldPlay) await _pauseEngine();
       if (generation != _fadeGeneration) return;
       await _engine.setVolume(_volume);
       notifyListeners();
@@ -1095,6 +1155,7 @@ class PlayerService extends ChangeNotifier {
     currentSongNotifier.dispose();
     loadedSongNotifier.dispose();
     playingNotifier.dispose();
+    playbackIntentNotifier.dispose();
     super.dispose();
   }
 }

@@ -164,15 +164,25 @@ The UI (`SleepTimerButton` in the player page's `PlayerBar`) and the notice
 SnackBar (`app.dart`) only read `ServiceLocator.sleepTimer` state — they contain no
 scheduling logic.
 
-### Track-change notifications
+### Playback notifications
 
 `TrackNotificationService` (`lib/core/services/track_notification_service.dart`)
-posts a desktop banner (macOS) whenever the current song changes. It listens to
-`PlayerService.currentSongNotifier`, so every way of changing tracks — manual
-skip, auto-advance, shuffle, repeat and jump-to-song — goes through one path; a
-300 ms debounce collapses rapid skipping, and a fixed notification id makes each
-new track **replace** the previous banner instead of stacking up in Notification
-Center.
+posts desktop banners (macOS) for two events, both behind the same Settings ›
+Playback switch:
+
+- **Track change** — it listens to `PlayerService.currentSongNotifier`, so every
+  way of changing tracks (manual skip, auto-advance, shuffle, repeat and
+  jump-to-song) goes through one path.
+- **Playback resume** — it listens to `PlayerService.playbackIntentNotifier`,
+  which `play()` / `pause()` emit and nothing else does. The engine-facing
+  `playingNotifier` would not do: it flips during load windows, automatic
+  advances and queue end, so a banner would appear while the app changes tracks
+  on its own. The intent signal is also the reason sleep-timer fade-out (which
+  pauses through a private path) never reports.
+
+Both use a 300 ms debounce (separate timers, so one never cancels the other) and
+a shared fixed notification id, which makes each new banner **replace** the
+previous one instead of stacking up in Notification Center.
 
 Banners are **background-only**: `presentBanner` / `presentList` / `presentAlert`
 are all off, which suppresses the banner while the app is in front (the player bar
@@ -189,10 +199,11 @@ directory, which the system cannot read back.
 A "Next" action is registered on the notification category (actions can only be
 configured during `initialize`) and handled in `_onResponse`; it skips without
 activating the app. Play/pause is deliberately absent: it is stateful, and the
-banner only refreshes on track changes.
+banner still does not refresh when playback pauses, so the button would go stale
+after a background pause.
 
 Permission is requested when the user turns the switch on in Settings › Playback,
-with the first track change as a fallback (the switch defaults to on).
+with the first banner as a fallback (the switch defaults to on).
 
 ⸻
 

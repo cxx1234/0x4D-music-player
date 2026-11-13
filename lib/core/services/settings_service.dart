@@ -96,11 +96,12 @@ class AppSettings {
   /// `false`（默认）= 到点立即淡出暂停；`true` = 到点后转为"播完当前曲目再停"。
   final bool sleepTimerFinishCurrentTrack;
 
-  /// 切歌时是否弹桌面系统横幅通知（默认开）。
+  /// 播放提示横幅（切歌 / 恢复播放）是否开启（默认开）。
   ///
-  /// 仅控制切歌横幅；系统「正在播放」面板与媒体键（MediaControlService）
-  /// 不受此开关影响。
-  final bool showTrackChangeNotification;
+  /// 只控制这两类桌面横幅；系统「正在播放」面板与媒体键（MediaControlService）
+  /// 不受此开关影响。持久化键沿用旧的 `showTrackChangeNotification` 兼容读取
+  /// （见 [AppSettings.fromJson]），改名只是为了让语义跟覆盖范围一致。
+  final bool showPlaybackNotification;
 
   const AppSettings({
     this.musicFolders = const [],
@@ -122,7 +123,7 @@ class AppSettings {
     this.lyricSlideAlignment = 'left',
     this.nowPlayingBarFill = true,
     this.sleepTimerFinishCurrentTrack = false,
-    this.showTrackChangeNotification = true,
+    this.showPlaybackNotification = true,
   });
 
   /// The raw folder paths (convenience getter).
@@ -148,7 +149,7 @@ class AppSettings {
     'lyricSlideAlignment': lyricSlideAlignment,
     'nowPlayingBarFill': nowPlayingBarFill,
     'sleepTimerFinishCurrentTrack': sleepTimerFinishCurrentTrack,
-    'showTrackChangeNotification': showTrackChangeNotification,
+    'showPlaybackNotification': showPlaybackNotification,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -188,8 +189,11 @@ class AppSettings {
       nowPlayingBarFill: json['nowPlayingBarFill'] as bool? ?? true,
       sleepTimerFinishCurrentTrack:
           json['sleepTimerFinishCurrentTrack'] as bool? ?? false,
-      showTrackChangeNotification:
-          json['showTrackChangeNotification'] as bool? ?? true,
+      // 旧版本写出的是 showTrackChangeNotification：读它兜底，老配置无需迁移。
+      showPlaybackNotification:
+          json['showPlaybackNotification'] as bool? ??
+          json['showTrackChangeNotification'] as bool? ??
+          true,
     );
   }
 
@@ -213,7 +217,7 @@ class AppSettings {
     String? lyricSlideAlignment,
     bool? nowPlayingBarFill,
     bool? sleepTimerFinishCurrentTrack,
-    bool? showTrackChangeNotification,
+    bool? showPlaybackNotification,
   }) {
     return AppSettings(
       musicFolders: musicFolders ?? this.musicFolders,
@@ -237,8 +241,8 @@ class AppSettings {
       nowPlayingBarFill: nowPlayingBarFill ?? this.nowPlayingBarFill,
       sleepTimerFinishCurrentTrack:
           sleepTimerFinishCurrentTrack ?? this.sleepTimerFinishCurrentTrack,
-      showTrackChangeNotification:
-          showTrackChangeNotification ?? this.showTrackChangeNotification,
+      showPlaybackNotification:
+          showPlaybackNotification ?? this.showPlaybackNotification,
     );
   }
 
@@ -304,14 +308,14 @@ class SettingsService {
     await _save();
   }
 
-  /// 切歌时是否弹桌面系统横幅通知（默认开）。
-  bool get showTrackChangeNotification => _settings.showTrackChangeNotification;
+  /// 播放提示横幅（切歌 / 恢复播放）是否开启（默认开）。
+  bool get showPlaybackNotification => _settings.showPlaybackNotification;
 
-  /// 持久化切歌通知开关。
+  /// 持久化播放提示开关。
   ///
-  /// 通知服务每次切歌都现读本设置，因此改完即时生效（无需通知服务）。
-  Future<void> setShowTrackChangeNotification(bool value) async {
-    _settings = _settings.copyWith(showTrackChangeNotification: value);
+  /// 通知服务每次触发都现读本设置，因此改完即时生效（无需通知服务）。
+  Future<void> setShowPlaybackNotification(bool value) async {
+    _settings = _settings.copyWith(showPlaybackNotification: value);
     await _save();
   }
 

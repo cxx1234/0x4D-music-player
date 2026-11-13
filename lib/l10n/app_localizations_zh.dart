@@ -246,10 +246,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsResumeSubtitle => '启动后恢复上次播放进度';
 
   @override
-  String get settingsTrackNotificationTitle => '切歌时显示系统通知';
+  String get settingsPlaybackNotificationTitle => '切歌 / 恢复播放时显示通知';
 
   @override
-  String get settingsTrackNotificationSubtitle => '只应用在后台/关窗时弹出，前台不打扰';
+  String get settingsPlaybackNotificationSubtitle => '只在后台/关窗时弹出，前台不打扰';
+
+  @override
+  String get notificationPlaybackResumed => '已恢复播放';
 
   @override
   String get settingsSleepFinishTrackTitle => '睡眠定时先播完当前曲';

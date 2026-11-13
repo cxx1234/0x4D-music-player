@@ -12,20 +12,28 @@ import '../utils/logger.dart';
 import 'player_service.dart';
 import 'settings_service.dart';
 
-/// 切歌通知：每切一首歌弹一条**桌面系统横幅**（macOS 通知中心）。
+/// 播放提示通知：在**后台**弹一条桌面系统横幅（macOS 通知中心）。
 ///
 /// 与 [MediaControlService] 是互补关系，互不干扰：
 /// - [MediaControlService] 管系统「正在播放」面板与媒体键（`MediaPlayer`）；
 /// - 本服务只管横幅通知（`UserNotifications`）。
 ///
-/// 触发来源是 [PlayerService.currentSongNotifier]（已按歌曲 id 去重），
-/// 因此手动切歌 / 自动播完进下一首 / 随机 / 循环回环 / 点歌跳转都能覆盖。
+/// 两个触发来源：
+/// - [PlayerService.currentSongNotifier]（已按歌曲 id 去重）→ **切歌**提示。
+///   手动切歌 / 自动播完进下一首 / 随机 / 循环回环 / 点歌跳转都能覆盖。
+/// - [PlayerService.playbackIntentNotifier] → **恢复播放**提示。只跟用户手势
+///   （底栏/播放页按钮、媒体键、系统「正在播放」面板、原生菜单），自动推进与
+///   加载失败不会误报。
 ///
 /// 展示策略：**仅后台弹**。通知的 `presentBanner/presentList/presentAlert`
 /// 只影响 App 处于前台时的 `willPresent` 行为——设为 false 后，App 前台
 /// （窗口可见，用户本就看得到底栏/播放页）不打扰，后台或关窗驻留时系统照常弹。
 ///
-/// 可在设置页「播放设置 › 切歌时显示系统通知」里关闭（[SettingsService.setShowTrackChangeNotification]）。
+/// 两条提示共用同一个通知 id：恢复播放时**替换**通知中心里那条切歌横幅，
+/// 而不是再堆一条。
+///
+/// 可在设置页「播放设置 › 切歌 / 恢复播放时显示系统通知」里关闭
+/// （[SettingsService.setShowPlaybackNotification]）。
 class TrackNotificationService {
   TrackNotificationService(this._player, this._settings);
 
@@ -40,7 +48,7 @@ class TrackNotificationService {
     'com.jerryc.txvziwm/window',
   );
 
-  /// 固定通知 id：新歌**替换**上一条横幅，而不是在通知中心里越堆越多。
+  /// 固定通知 id：新歌 / 恢复播放**替换**上一条横幅，而不是在通知中心里越堆越多。
   static const int _notificationId = 1001;
 
   /// 封面副本的保留时长：超过这个时间又没再被用到的副本会在下一次拷贝时删掉。
@@ -56,6 +64,10 @@ class TrackNotificationService {
 
   /// 连续切歌的合并窗口：窗口期内只弹最后确定的当前曲，避免快速连点时刷屏。
   static const Duration _debounce = Duration(milliseconds: 300);
+
+  /// 恢复播放的合并窗口（时长与切歌相同，但**各用各的 timer**：共用会让
+  /// "刚切歌又按播放"的两条提示互相取消）。
+  Timer? _resumeDebounceTimer;
 
   /// 通知动作分类 id。
   ///
@@ -86,14 +98,17 @@ class TrackNotificationService {
   ///
   /// **不在这里请求授权**：启动就弹权限框体验差。改由 [ensurePermission]
   /// 在两个有上下文的时机申请：设置页打开开关时（明确的用户手势），
-  /// 或首次切歌时（该开关默认就是开，老用户可能永远不会去点它，需要兜底）。
+  /// 或首次触发提示时（该开关默认就是开，老用户可能永远不会去点它，需要兜底）。
   Future<void> initialize() async {
     // 其余桌面平台暂未接入（Windows 需 AUMID/GUID，Linux 需 libnotify/DBus），
     // 先保持 no-op，避免漏传平台 settings 触发运行时 ArgumentError。
     if (!Platform.isMacOS) return;
 
     await _initializePlugin();
-    if (_ready) _player.currentSongNotifier.addListener(_onSongChanged);
+    if (_ready) {
+      _player.currentSongNotifier.addListener(_onSongChanged);
+      _player.playbackIntentNotifier.addListener(_onPlaybackIntent);
+    }
   }
 
   /// 语言切换后重新注册通知动作，让「下一首」按钮标签跟随应用语言。
@@ -113,8 +128,8 @@ class TrackNotificationService {
             requestSoundPermission: false,
             requestBadgePermission: false,
             // 只加「下一首」：它是**无状态**动作，任何时刻点语义都对。
-            // 故意不加「播放/暂停」——那是有状态的，而横幅只在切歌时刷新
-            // （暂停不会刷新），会出现"已经暂停了按钮还写着暂停"的错位。
+            // 故意不加「播放/暂停」——那是有状态的，而横幅只在切歌与**恢复播放**
+            // 时刷新（暂停不刷新），会出现"已经暂停了按钮还写着暂停"的错位。
             notificationCategories: [
               DarwinNotificationCategory(
                 _categoryId,
@@ -141,16 +156,55 @@ class TrackNotificationService {
   void _onSongChanged() {
     final song = _player.currentSongNotifier.value;
     // 停止/清空队列（切到 null）不通知；设置里关掉开关也不通知。
-    if (song == null || !_settings.showTrackChangeNotification) return;
+    if (song == null || !_settings.showPlaybackNotification) return;
 
     _debounceTimer?.cancel();
     _debounceTimer = Timer(_debounce, () => unawaited(_showTrack(song)));
   }
 
+  /// 用户恢复播放：弹一条"接着放的是什么"的横幅。
+  ///
+  /// 只处理 [PlaybackIntent.play]：暂停不提示（用户刚按下暂停，那条横幅留在
+  /// 通知中心反而更有用，再弹一条只是噪音）；自动推进 / 加载失败不会上报
+  /// intent，因此不会误弹。
+  void _onPlaybackIntent() {
+    final event = _player.playbackIntentNotifier.value;
+    if (event == null || event.intent != PlaybackIntent.play) return;
+    final song = _player.currentSong;
+    if (song == null || !_settings.showPlaybackNotification) return;
+
+    _resumeDebounceTimer?.cancel();
+    _resumeDebounceTimer = Timer(
+      _debounce,
+      () => unawaited(_showResumed(song)),
+    );
+  }
+
+  Future<void> _showResumed(Song song) async {
+    // 防抖窗口期内可能已关开关 / 又切了歌：恢复提示永远跟"此刻在播的那首"走。
+    if (!_ready || !_settings.showPlaybackNotification) return;
+    if (_player.currentSong?.id != song.id) return;
+
+    await _showNowPlaying(
+      song,
+      statusLabel: appLocalizationsFor(
+        _settings.settings.locale,
+      ).notificationPlaybackResumed,
+    );
+  }
+
   Future<void> _showTrack(Song song) async {
     // 防抖窗口期内用户可能刚把开关关掉，落闸前再确认一次。
-    if (!_ready || !_settings.showTrackChangeNotification) return;
-    // 未授权时系统会静默丢弃通知，这里提前拦掉；首次切歌会在这一步弹一次
+    if (!_ready || !_settings.showPlaybackNotification) return;
+    await _showNowPlaying(song);
+  }
+
+  /// 展示当前曲目的横幅（切歌与恢复播放共用，只有 [statusLabel] 不同）。
+  ///
+  /// [statusLabel] 作为 `subtitle`：切歌时留空（歌名 + 演唱者/专辑已足够），
+  /// 恢复播放时填「已恢复播放」——否则两种横幅长得一模一样，用户会以为歌换了。
+  Future<void> _showNowPlaying(Song song, {String? statusLabel}) async {
+    // 未授权时系统会静默丢弃通知，这里提前拦掉；首次触发会在这一步弹一次
     // 权限框（设置页开开关时已申请过则直接拿到缓存结果）。
     if (!await ensurePermission()) return;
 
@@ -174,6 +228,7 @@ class TrackNotificationService {
         payload: song.filePath,
         notificationDetails: NotificationDetails(
           macOS: DarwinNotificationDetails(
+            subtitle: statusLabel,
             categoryIdentifier: _categoryId,
             // 仅后台弹：前台不打扰，后台/关窗时系统照常展示。
             presentBanner: false,
@@ -186,7 +241,7 @@ class TrackNotificationService {
         ),
       );
     } catch (e) {
-      AppLogger.warning('Notify', 'Failed to show track notification', e);
+      AppLogger.warning('Notify', 'Failed to show notification', e);
     }
   }
 
@@ -267,7 +322,7 @@ class TrackNotificationService {
   /// 请求/查询通知授权，返回是否已获授权。
   ///
   /// 两个调用点：① 设置页把开关打开时（明确的用户手势，最自然的时机）；
-  /// ② 首次切歌时兜底（开关默认就是开，老用户可能永远不会去点它）。
+  /// ② 首次触发提示时兜底（开关默认就是开，老用户可能永远不会去点它）。
   /// 已决定过时系统不再弹框，只返回当前状态，因此重复调用是安全的。
   Future<bool> ensurePermission() async {
     if (_permissionGranted) return true;
@@ -327,6 +382,8 @@ class TrackNotificationService {
 
   void dispose() {
     _debounceTimer?.cancel();
+    _resumeDebounceTimer?.cancel();
     _player.currentSongNotifier.removeListener(_onSongChanged);
+    _player.playbackIntentNotifier.removeListener(_onPlaybackIntent);
   }
 }

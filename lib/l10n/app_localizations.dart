@@ -569,14 +569,20 @@ abstract class AppLocalizations {
   /// Settings row title.
   ///
   /// In en, this message translates to:
-  /// **'Show a system notification on track change'**
-  String get settingsTrackNotificationTitle;
+  /// **'Show a notification on track change or resume'**
+  String get settingsPlaybackNotificationTitle;
 
   /// Settings row subtitle.
   ///
   /// In en, this message translates to:
   /// **'Only appears in the background or when the window is closed'**
-  String get settingsTrackNotificationSubtitle;
+  String get settingsPlaybackNotificationSubtitle;
+
+  /// System notification subtitle shown when playback resumes.
+  ///
+  /// In en, this message translates to:
+  /// **'Resumed playing'**
+  String get notificationPlaybackResumed;
 
   /// Settings row title.
   ///

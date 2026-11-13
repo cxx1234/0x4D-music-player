@@ -317,13 +317,17 @@
   "@settingsResumeSubtitle": {
     "description": "Settings row subtitle."
   },
-  "settingsTrackNotificationTitle": "Show a system notification on track change",
-  "@settingsTrackNotificationTitle": {
+  "settingsPlaybackNotificationTitle": "Show a notification on track change or resume",
+  "@settingsPlaybackNotificationTitle": {
     "description": "Settings row title."
   },
-  "settingsTrackNotificationSubtitle": "Only appears in the background or when the window is closed",
-  "@settingsTrackNotificationSubtitle": {
+  "settingsPlaybackNotificationSubtitle": "Only appears in the background or when the window is closed",
+  "@settingsPlaybackNotificationSubtitle": {
     "description": "Settings row subtitle."
+  },
+  "notificationPlaybackResumed": "Resumed playing",
+  "@notificationPlaybackResumed": {
+    "description": "System notification subtitle shown when playback resumes."
   },
   "settingsSleepFinishTrackTitle": "Finish the current track before sleeping",
   "@settingsSleepFinishTrackTitle": {
