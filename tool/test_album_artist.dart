@@ -1,4 +1,4 @@
-/// 实际验证本地 fork 补强后的 audio_metadata_reader（feat/album-artist）。
+/// 实际验证本地 fork 补强后的 audio_metadata_reader（app 分支）。
 ///
 /// 读取 test/music/ 下的真实音频文件，重点验证：
 ///   - 通用视图 AudioMetadata.albumArtist（补丁新增，此前丢失）

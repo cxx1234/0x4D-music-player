@@ -293,8 +293,6 @@ class _PlaylistPageState extends State<PlaylistPage> {
       dialogTitle: l10n.playlistExport,
       fileName: '${selected.name}.m3u8',
       bytes: content.bytes,
-      type: FileType.custom,
-      allowedExtensions: const ['m3u8', 'm3u'],
     );
     if (uri == null || !mounted) return;
     // saveFile 已把 bytes 写入所选位置，uri 非空即成功。
@@ -422,8 +420,6 @@ class _PlaylistPageState extends State<PlaylistPage> {
       dialogTitle: l10n.playlistExport,
       fileName: '${playlist.name}.m3u8',
       bytes: content.bytes,
-      type: FileType.custom,
-      allowedExtensions: const ['m3u8', 'm3u'],
     );
     if (uri == null || !mounted) return;
     // saveFile 已把 bytes 写入所选位置，uri 非空即成功。

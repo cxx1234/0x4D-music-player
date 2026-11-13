@@ -51,7 +51,7 @@ void main() {
       settings.setVolume(0.3),
       settings.setResumePlaybackPosition(false),
       settings.setNowPlayingBarFill(false),
-      settings.setShowTrackChangeNotification(false),
+      settings.setShowPlaybackNotification(false),
     ]);
 
     final file = File('${dir.path}/settings.json');
@@ -59,7 +59,7 @@ void main() {
     expect(json['volume'], 0.3);
     expect(json['resumePlaybackPosition'], false);
     expect(json['nowPlayingBarFill'], false);
-    expect(json['showTrackChangeNotification'], false);
+    expect(json['showPlaybackNotification'], false);
     // 原子写不留下临时文件
     expect(await File('${dir.path}/settings.json.tmp').exists(), isFalse);
   });

@@ -55,13 +55,13 @@ class AppDelegate: FlutterAppDelegate {
     NSRunningApplication.current.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
   }
 
-  // Dock 右键菜单:「Show Window」,窗口关闭后也能主动唤回主窗口。
+  // Dock 右键菜单:「显示窗口」,窗口关闭后也能主动唤回主窗口。
   // 注意:Dock 菜单通过 NSApplicationDelegate 的 applicationDockMenu(_:) 提供,
   // NSDockTile 并没有公开的 menu 属性(编译期即可发现)。
   override func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
     let dockMenu = NSMenu()
     let showWindowItem = NSMenuItem(
-      title: "Show Window",
+      title: NSLocalizedString("menu.showWindow", comment: "Show Window"),
       action: #selector(showMainWindow),
       keyEquivalent: ""
     )
@@ -854,6 +854,14 @@ class AppDelegate: FlutterAppDelegate {
     MediaControlsPlugin.register(
       with: controller.registrar(forPlugin: "MediaControlsPlugin")
     )
+
+    // 冷启动不一定能被系统带到前台（上次是「关窗后退出」、或由后台上下文拉起时尤其明显：
+    // 主窗口由 nib 显示出来，但既不是 key window、App 也不 active）。这里显式激活一次，
+    // 与点 Dock 图标唤起（applicationShouldHandleReopen → showMainWindow）走同一条路径。
+    //
+    // 必须排进主队列再调 super：super 的实现会进入嵌套 runloop，写在它之后的语句
+    // 迟迟（甚至长时间）不执行；排进主队列则 runloop 一开转就跑到。
+    DispatchQueue.main.async { [weak self] in self?.showMainWindow() }
 
     super.applicationDidFinishLaunching(notification)
   }

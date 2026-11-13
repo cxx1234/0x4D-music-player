@@ -250,12 +250,15 @@ class AppLocalizationsEn extends AppLocalizations {
       'Restores your previous playback position on launch';
 
   @override
-  String get settingsTrackNotificationTitle =>
-      'Show a system notification on track change';
+  String get settingsPlaybackNotificationTitle =>
+      'Show a notification on track change or resume';
 
   @override
-  String get settingsTrackNotificationSubtitle =>
+  String get settingsPlaybackNotificationSubtitle =>
       'Only appears in the background or when the window is closed';
+
+  @override
+  String get notificationPlaybackResumed => 'Resumed playing';
 
   @override
   String get settingsSleepFinishTrackTitle =>

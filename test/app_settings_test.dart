@@ -59,32 +59,40 @@ void main() {
     );
   });
 
-  test('默认 showTrackChangeNotification 为开（老配置缺失该键时行为不变）', () {
+  test('默认 showPlaybackNotification 为开（老配置缺失该键时行为不变）', () {
     const s = AppSettings();
-    expect(s.showTrackChangeNotification, isTrue);
+    expect(s.showPlaybackNotification, isTrue);
   });
 
-  test('toJson/fromJson 往返保留 showTrackChangeNotification', () {
-    const s = AppSettings(showTrackChangeNotification: false);
+  test('toJson/fromJson 往返保留 showPlaybackNotification', () {
+    const s = AppSettings(showPlaybackNotification: false);
     final restored = AppSettings.fromJson(s.toJson());
-    expect(restored.showTrackChangeNotification, isFalse);
+    expect(restored.showPlaybackNotification, isFalse);
   });
 
   test('fromJson 缺失该键时回退 true', () {
     final restored = AppSettings.fromJson({'musicFolders': []});
-    expect(restored.showTrackChangeNotification, isTrue);
+    expect(restored.showPlaybackNotification, isTrue);
   });
 
-  test('copyWith 可关闭/恢复 showTrackChangeNotification', () {
+  test('fromJson 读旧键 showTrackChangeNotification（老配置无需迁移）', () {
+    expect(
+      AppSettings.fromJson({
+        'musicFolders': [],
+        'showTrackChangeNotification': false,
+      }).showPlaybackNotification,
+      isFalse,
+    );
+  });
+
+  test('copyWith 可关闭/恢复 showPlaybackNotification', () {
     const s = AppSettings();
     expect(
-      s
-          .copyWith(showTrackChangeNotification: false)
-          .showTrackChangeNotification,
+      s.copyWith(showPlaybackNotification: false).showPlaybackNotification,
       isFalse,
     );
     expect(
-      s.copyWith(showTrackChangeNotification: true).showTrackChangeNotification,
+      s.copyWith(showPlaybackNotification: true).showPlaybackNotification,
       isTrue,
     );
   });

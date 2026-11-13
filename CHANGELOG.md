@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-13
+
+### Added
+- Playback notices now also cover resuming. With the window closed or the app in
+  the background, pressing play after a pause shows a banner for the track that
+  started again: the song title, a "Resumed playing" subtitle, artist/album and
+  the cover. It reuses the track-change notification id, so it replaces the
+  banner already in Notification Center instead of piling up a second one.
+- Resuming is only reported for user gestures - the in-app play buttons, media
+  keys, the system Now Playing panel and the menu - because the signal is emitted
+  from `play()`/`pause()` themselves. Automatic advances, queue end, sleep-timer
+  fade-out and failed loads never fire it, so the banner cannot appear while the
+  app is changing tracks on its own.
+- The existing Playback setting now governs both banners: "Show system
+  notifications for track changes and playback resume". The stored key keeps
+  reading the old `showTrackChangeNotification` value, so existing settings files
+  need no migration.
+
 ### Changed
 - Opening the now-playing page no longer drops frames. The reveal transition used
   to start on the same frame that built the page, so an 80ms build consumed the
@@ -21,6 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   during the reveal 14–16 → 0. The panel mount itself still costs one ~105ms
   frame because `flutter_lyric` lays out every lyric line eagerly; that is
   tracked in `docs/Performance-Optimization.md` §1.7
+- The pinned `audio_metadata_reader` fork moves to `4ac4718` on its `app` branch
+  (renamed from `feat/album-artist`), which merges the two upstream commits made
+  after 1.8.1: Ogg/Opus duration now comes from the last page of the stream instead
+  of walking every page (a long file no longer costs a full pass at scan time), and
+  MP4 files keep their metadata when a tagger appended non-box bytes after the last
+  box. The fork-only `albumArtist` and embedded-lyrics support is unchanged —
+  verified against the `test/music` set for mp3, flac and m4a
 
 ### Removed
 - The `android/`, `ios/` and `web/` platform folders. None of them was ever more than
@@ -31,6 +56,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   macOS app is untouched. `flutter create --platforms=<name> .` regenerates a platform
   folder if that decision ever changes, and `README.md` / `docs/Architecture.md` now
   state the supported platforms explicitly.
+
+### Fixed
+- The Dock menu's "Show Window" item is localized again. It was built with a
+  hard-coded English title while every other menu item goes through
+  `NSLocalizedString`, so the Chinese build showed `Show Window` in the Dock's
+  right-click menu. It now uses the new `menu.showWindow` key in both
+  `en.lproj` and `zh-Hans.lproj`. See `docs/I18n.md`
+- Launching the app from the Dock no longer leaves it in the background when the
+  previous session was quit with the window closed. Only the "already running, click
+  the Dock icon" path (reopen) activated the app; a cold launch had no activation call
+  at all and relied on the system, which does not bring such an app forward — the
+  window from the nib appeared at the right size but was not the key window, so
+  typing stayed in whatever app was in front. `applicationDidFinishLaunching` now
+  schedules the same `showMainWindow()` call on the main queue; placing it after
+  `super.applicationDidFinishLaunching` does nothing, because AppKit's launch
+  notification runs a nested run loop that does not return promptly. See
+  `docs/Pitfalls.md` B11
+- The main window now persists its own size and position instead of relying on
+  macOS window state restoration. That mechanism only restored windows that were
+  still open when the app quit — closing the window (⌘W) and quitting from the Dock
+  reset the next launch to the 800×600 default — and whatever it did restore was
+  clamped to `contentMinSize`, so a saved frame below 640×520 (for example one left
+  by a build that predates the minimum) came back as exactly 640×520. The window is
+  now non-restorable, writes `[x, y, w, h]` to `UserDefaults` when a move/resize
+  ends (coalesced), when the window closes, when the app resigns active and on
+  terminate, and validates the saved frame on launch: below the minimum or off every
+  screen falls back to a centred 800×600 rather than being clamped. See
+  `docs/Pitfalls.md` B10
+- Hi-Res ALAC (Apple Lossless) files now report their real sample rate. The `alac`
+  sample entry stores the rate as a 16.16 fixed-point value, which cannot hold more
+  than 65535 Hz, so 88.2 kHz and 96 kHz files stored half the rate there and the
+  song info card showed 44100/48000 Hz. The parser now reads the exact value from
+  the codec's magic cookie, which also fills `bitrate` (previously always null for
+  ALAC). Files already in the library keep the old value until a rescan — use
+  Settings › force rescan to refresh them
 
 ## [0.4.1] - 2026-10-27
 
