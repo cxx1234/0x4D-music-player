@@ -8,10 +8,13 @@ class AlbumsViewModel extends PageViewModel {
 
   List<Album> get albums => _albums;
 
-  /// Loads all albums from the database.
-  Future<void> load() {
-    return runLoad(() async {
-      _albums = await ServiceLocator.songRepo.getAllAlbums();
-    }, hasData: _albums.isNotEmpty);
+  /// 订阅专辑实时查询：新增文件（扫描 / 文件夹监视）、删除文件、改标签后
+  /// 自动更新，不再依赖页面切换或 watcher 事件手工重载。
+  void start() {
+    trackStream(ServiceLocator.songRepo.watchAllAlbums(), (albums) {
+      _albums = albums;
+      setLoading(false);
+      safeNotify();
+    });
   }
 }

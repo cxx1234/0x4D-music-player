@@ -406,6 +406,17 @@ class AppDatabase extends _$AppDatabase {
         .get();
   }
 
+  /// [getAvailableSongs] 的实时版本：songs 表变化（扫描、文件夹监视、
+  /// 收藏切换）后自动重新发射。
+  Stream<List<Song>> watchAvailableSongs({
+    SongSortOrder order = SongSortOrder.title,
+  }) {
+    return (select(songs)
+          ..where((t) => t.isAvailable.equals(1))
+          ..orderBy(_songOrdering(order)))
+        .watch();
+  }
+
   // ─── Album queries ──────────────────────────────────────
 
   Future<List<Album>> getAllAlbums() =>
@@ -568,6 +579,25 @@ class AppDatabase extends _$AppDatabase {
     return query.map((row) => row.readTable(songs)).get();
   }
 
+  /// [getSongsInPlaylist] 的实时版本：songs / playlist_songs 变化后重新发射。
+  Stream<List<Song>> watchSongsInPlaylist(int playlistId, {int? limit}) {
+    final query =
+        select(songs).join([
+            innerJoin(playlistSongs, playlistSongs.songId.equalsExp(songs.id)),
+          ])
+          ..where(
+            playlistSongs.playlistId.equals(playlistId) &
+                songs.isAvailable.equals(1),
+          )
+          ..orderBy([OrderingTerm.asc(playlistSongs.position)]);
+    if (limit != null) {
+      query.limit(limit);
+    }
+    return query.watch().map(
+      (rows) => [for (final row in rows) row.readTable(songs)],
+    );
+  }
+
   /// 把 [songId] 加入 [playlistId]。若已存在则忽略（不允许重复）。
   Future<void> addSongToPlaylist(int playlistId, int songId) async {
     final nextPos = await _nextPosition(playlistId);
@@ -667,11 +697,28 @@ class AppDatabase extends _$AppDatabase {
             ]))
           .get();
 
+  /// [getFavoriteSongs] 的实时版本。
+  Stream<List<Song>> watchFavoriteSongs() =>
+      (select(songs)
+            ..where((t) => t.isFavorite.equals(1) & t.isAvailable.equals(1))
+            ..orderBy([
+              (t) => OrderingTerm.asc(t.titleSortKey, nulls: NullsOrder.last),
+            ]))
+          .watch();
+
   Future<int> getFavoriteCount() async {
     final result = await customSelect(
       'SELECT COUNT(*) FROM songs WHERE is_favorite = 1 AND is_available = 1',
     ).getSingle();
     return result.read<int>('COUNT(*)');
+  }
+
+  /// [getFavoriteCount] 的实时版本。
+  Stream<int> watchFavoriteCount() {
+    return customSelect(
+      'SELECT COUNT(*) FROM songs WHERE is_favorite = 1 AND is_available = 1',
+      readsFrom: {songs},
+    ).watchSingle().map((row) => row.read<int>('COUNT(*)'));
   }
 
   /// 每个播放列表的可用歌曲数。
@@ -684,6 +731,20 @@ class AppDatabase extends _$AppDatabase {
       'GROUP BY ps.playlist_id',
     ).get();
     return {for (final r in rows) r.read<int>('pid'): r.read<int>('c')};
+  }
+
+  /// [getPlaylistSongCounts] 的实时版本。
+  Stream<Map<int, int>> watchPlaylistSongCounts() {
+    return customSelect(
+      'SELECT ps.playlist_id AS pid, COUNT(*) AS c '
+      'FROM playlist_songs ps '
+      'JOIN songs s ON s.id = ps.song_id '
+      'WHERE s.is_available = 1 '
+      'GROUP BY ps.playlist_id',
+      readsFrom: {playlistSongs, songs},
+    ).watch().map(
+      (rows) => {for (final r in rows) r.read<int>('pid'): r.read<int>('c')},
+    );
   }
 
   /// 每个歌手的可用歌曲数与专辑数（聚合查询）。
@@ -705,6 +766,27 @@ class AppDatabase extends _$AppDatabase {
           albumCount: r.read<int>('album_count'),
         ),
     };
+  }
+
+  /// [getArtistStats] 的实时版本。
+  Stream<Map<int, ({int songCount, int albumCount})>> watchArtistStats() {
+    return customSelect(
+      'SELECT artist_id AS aid, '
+      'COUNT(*) AS song_count, '
+      'COUNT(DISTINCT album_id) AS album_count '
+      'FROM songs '
+      'WHERE is_available = 1 AND artist_id IS NOT NULL '
+      'GROUP BY artist_id',
+      readsFrom: {songs},
+    ).watch().map(
+      (rows) => {
+        for (final r in rows)
+          r.read<int>('aid'): (
+            songCount: r.read<int>('song_count'),
+            albumCount: r.read<int>('album_count'),
+          ),
+      },
+    );
   }
 
   // ─── Sort key backfill ─────────────────────────────────

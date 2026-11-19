@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
-import '../../core/services/folder_watcher_service.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
+import '../../core/utils/logger.dart';
 import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
 import '../../l10n/app_localizations.dart';
@@ -31,11 +31,7 @@ String _albumSubtitle(AppLocalizations l10n, Album album) {
 }
 
 class AlbumsPage extends StatefulWidget {
-  /// 是否为当前选中的 tab；从非激活切回激活时重新加载数据（保活下的
-  /// 跨页数据新鲜度：扫描/删文件夹等变更后切回本页能看到最新数据）。
-  final bool active;
-
-  const AlbumsPage({super.key, this.active = true});
+  const AlbumsPage({super.key});
 
   @override
   State<AlbumsPage> createState() => _AlbumsPageState();
@@ -46,37 +42,16 @@ class _AlbumsPageState extends State<AlbumsPage> {
   bool _searchActive = false;
   String _query = '';
   final _albumFilterCache = QueryFilterCache<Album>();
-  StreamSubscription<FolderWatcherEvent>? _folderWatcherSub;
 
   @override
   void initState() {
     super.initState();
     _viewModel.addListener(_onChanged);
-    _viewModel.load();
-    _attachFolderWatcher();
-  }
-
-  /// 订阅文件夹监听事件：正看着本 tab 时外部文件增删也能实时刷新（保活页
-  /// 平时靠 `active` 激活刷新，监听覆盖「停留在本页」的即时变更）。
-  void _attachFolderWatcher() {
-    if (!ServiceLocator.isReady) return;
-    _folderWatcherSub ??= ServiceLocator.folderWatcher.events.listen((_) {
-      if (mounted) _viewModel.load();
-    });
-  }
-
-  @override
-  void didUpdateWidget(AlbumsPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.active && !oldWidget.active) {
-      _viewModel.load();
-    }
+    _viewModel.start();
   }
 
   @override
   void dispose() {
-    _folderWatcherSub?.cancel();
-    _folderWatcherSub = null;
     _viewModel.removeListener(_onChanged);
     _viewModel.dispose();
     super.dispose();
@@ -290,23 +265,34 @@ class _AlbumDetailContentState extends State<_AlbumDetailContent> {
   List<_AlbumRow> _rows = [];
   bool _loading = true;
 
+  StreamSubscription<List<Song>>? _songsSub;
+
   @override
   void initState() {
     super.initState();
-    _load();
+    // 实时查询：页面开着时新增/删除歌曲（扫描、文件夹监视）立刻反映到列表。
+    _songsSub = ServiceLocator.songRepo
+        .watchSongsByAlbum(widget.album.id)
+        .listen(_applySongs, onError: _onSongsError);
   }
 
-  Future<void> _load() async {
-    final songs = await ServiceLocator.songRepo.getSongsByAlbum(
-      widget.album.id,
-    );
-    if (mounted) {
-      setState(() {
-        _songs = songs;
-        _rows = _buildRows(songs);
-        _loading = false;
-      });
-    }
+  void _applySongs(List<Song> songs) {
+    if (!mounted) return;
+    setState(() {
+      _songs = songs;
+      _rows = _buildRows(songs);
+      _loading = false;
+    });
+  }
+
+  void _onSongsError(Object error, StackTrace stackTrace) {
+    AppLogger.error('DB', 'Album detail live query failed', error, stackTrace);
+  }
+
+  @override
+  void dispose() {
+    _songsSub?.cancel();
+    super.dispose();
   }
 
   /// 是否多碟专辑（出现 >1 个不同的碟号）。

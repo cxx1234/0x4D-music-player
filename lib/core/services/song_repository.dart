@@ -36,6 +36,11 @@ class SongRepository {
 
   Stream<List<Song>> watchAllSongs() => _db.watchAllSongs();
 
+  /// 音乐库列表的实时查询（仅可用文件，按 [order] 排序）。
+  Stream<List<Song>> watchAvailableSongs({
+    SongSortOrder order = SongSortOrder.title,
+  }) => _db.watchAvailableSongs(order: order);
+
   Future<List<Song>> getSongsByFolder(String folderPath) =>
       _db.getSongsByFolder(folderPath);
 
@@ -81,6 +86,10 @@ class SongRepository {
   Future<Map<int, ({int songCount, int albumCount})>> getArtistStats() =>
       _db.getArtistStats();
 
+  /// 歌手统计的实时查询（songs 表变化后自动更新）。
+  Stream<Map<int, ({int songCount, int albumCount})>> watchArtistStats() =>
+      _db.watchArtistStats();
+
   // ─── Playlist queries ──────────────────────────────────
 
   Future<List<Playlist>> getAllPlaylists() => _db.getAllPlaylists();
@@ -100,6 +109,10 @@ class SongRepository {
   Future<List<Song>> getSongsInPlaylist(int playlistId, {int? limit}) =>
       _db.getSongsInPlaylist(playlistId, limit: limit);
 
+  /// 播放列表详情歌曲的实时查询。
+  Stream<List<Song>> watchSongsInPlaylist(int playlistId, {int? limit}) =>
+      _db.watchSongsInPlaylist(playlistId, limit: limit);
+
   Future<void> addSongToPlaylist(int playlistId, int songId) =>
       _db.addSongToPlaylist(playlistId, songId);
 
@@ -118,11 +131,21 @@ class SongRepository {
 
   Future<List<Song>> getFavoriteSongs() => _db.getFavoriteSongs();
 
+  /// 「我的收藏」列表的实时查询。
+  Stream<List<Song>> watchFavoriteSongs() => _db.watchFavoriteSongs();
+
   Future<int> getFavoriteCount() => _db.getFavoriteCount();
+
+  /// 「我的收藏」计数的实时查询。
+  Stream<int> watchFavoriteCount() => _db.watchFavoriteCount();
 
   Future<int> toggleFavorite(int id) => _db.toggleFavorite(id);
 
   Future<Map<int, int>> getPlaylistSongCounts() => _db.getPlaylistSongCounts();
+
+  /// 各播放列表可用歌曲数的实时查询。
+  Stream<Map<int, int>> watchPlaylistSongCounts() =>
+      _db.watchPlaylistSongCounts();
 
   // ─── Sort key backfill ────────────────────────────────
 

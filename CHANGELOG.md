@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Library screens now keep themselves up to date. The album grid, artist list,
+  playlist list, the album/artist/playlist detail pages and 我的收藏 subscribe to
+  drift `watch*` queries instead of re-querying on tab switches or folder-watcher
+  events, so an open page reflects new or removed files, tag edits, playlist
+  changes and favourite toggles as soon as the write lands. This fixes detail
+  pages that stayed stale until they were closed and reopened. Subscriptions are
+  owned by `PageViewModel.trackStream` (cancelled on dispose), the playback queue
+  is still pruned against the live song list, and the `active` flag that used to
+  force a reload when switching tabs is gone from the browse pages.
+
 ## [0.4.2] - 2026-11-13
 
 ### Added

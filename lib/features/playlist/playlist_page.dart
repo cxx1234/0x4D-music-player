@@ -7,7 +7,6 @@ import 'package:path/path.dart' as p;
 
 import '../../core/constants/motion.dart';
 import '../../core/database/database.dart';
-import '../../core/services/folder_watcher_service.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
 import '../../core/utils/memoized_filter.dart';
@@ -28,14 +27,10 @@ import 'playlist_io.dart';
 import 'playlist_view_model.dart';
 
 class PlaylistPage extends StatefulWidget {
-  /// 是否为当前选中的 tab；从非激活切回激活时重新加载数据（保活下的
-  /// 跨页数据新鲜度：扫描/删文件夹等变更后切回本页能看到最新数据）。
-  final bool active;
-
   /// Shell 控制器（macOS 菜单「新建播放列表」动作由此到达本页）。
   final ShellController? controller;
 
-  const PlaylistPage({super.key, this.active = true, this.controller});
+  const PlaylistPage({super.key, this.controller});
 
   @override
   State<PlaylistPage> createState() => _PlaylistPageState();
@@ -47,38 +42,17 @@ class _PlaylistPageState extends State<PlaylistPage> {
   String _query = '';
   final _playlistFilterCache = QueryFilterCache<Playlist>();
   StreamSubscription<ShellAction>? _actionSub;
-  StreamSubscription<FolderWatcherEvent>? _folderWatcherSub;
 
   @override
   void initState() {
     super.initState();
     _viewModel.addListener(_onChanged);
-    _viewModel.load();
+    _viewModel.start();
     _actionSub = widget.controller?.actions.listen(_onShellAction);
-    _attachFolderWatcher();
-  }
-
-  /// 订阅文件夹监听事件：外部文件增删后实时刷新列表与各播放列表计数（保活页
-  /// 平时靠 `active` 激活刷新，监听覆盖「停留在本页」的即时变更）。
-  void _attachFolderWatcher() {
-    if (!ServiceLocator.isReady) return;
-    _folderWatcherSub ??= ServiceLocator.folderWatcher.events.listen((_) {
-      if (mounted) _viewModel.load();
-    });
-  }
-
-  @override
-  void didUpdateWidget(PlaylistPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.active && !oldWidget.active) {
-      _viewModel.load();
-    }
   }
 
   @override
   void dispose() {
-    _folderWatcherSub?.cancel();
-    _folderWatcherSub = null;
     _actionSub?.cancel();
     _viewModel.removeListener(_onChanged);
     _viewModel.dispose();
@@ -138,16 +112,9 @@ class _PlaylistPageState extends State<PlaylistPage> {
     if (name == null || name.isEmpty) return;
 
     final id = await _viewModel.createPlaylist(name);
-    await _viewModel.load();
+    // 实时查询是另一条异步链路，这里直接按 id 取，避免依赖它是否已发射。
+    final created = await ServiceLocator.songRepo.getPlaylistById(id);
     if (!mounted) return;
-
-    Playlist? created;
-    for (final p in _viewModel.playlists) {
-      if (p.id == id) {
-        created = p;
-        break;
-      }
-    }
     if (created != null) {
       await _openDetail(created);
     }
@@ -215,7 +182,6 @@ class _PlaylistPageState extends State<PlaylistPage> {
       playlistId,
       imported.songs.map((s) => s.id).toList(),
     );
-    await _viewModel.load();
     if (!mounted) return;
 
     final l10n = context.l10n;
@@ -455,14 +421,12 @@ class _PlaylistPageState extends State<PlaylistPage> {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => PlaylistDetailPage(playlist: playlist)),
     );
-    await _viewModel.load();
   }
 
   Future<void> _openFavorites() async {
     await Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (_) => const FavoritesPage()));
-    await _viewModel.load();
   }
 
   /// 「我的收藏」固定卡的右键菜单：只有「播放」。

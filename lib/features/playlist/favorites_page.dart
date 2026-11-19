@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
+import '../../core/utils/logger.dart';
 import '../../l10n/l10n.dart';
 import '../../widgets/detail_header.dart';
 import '../../widgets/detail_top_bar.dart';
@@ -20,14 +23,19 @@ class _FavoritesPageState extends State<FavoritesPage> {
   List<Song> _songs = [];
   bool _loading = true;
 
+  StreamSubscription<List<Song>>? _songsSub;
+
   @override
   void initState() {
     super.initState();
-    _load();
+    // 实时查询：取消喜欢、外部文件变化后列表自动更新。
+    _songsSub = ServiceLocator.songRepo.watchFavoriteSongs().listen(
+      _applySongs,
+      onError: _onSongsError,
+    );
   }
 
-  Future<void> _load() async {
-    final songs = await ServiceLocator.songRepo.getFavoriteSongs();
+  void _applySongs(List<Song> songs) {
     if (!mounted) return;
     setState(() {
       _songs = songs;
@@ -35,9 +43,18 @@ class _FavoritesPageState extends State<FavoritesPage> {
     });
   }
 
+  void _onSongsError(Object error, StackTrace stackTrace) {
+    AppLogger.error('DB', 'Favorites live query failed', error, stackTrace);
+  }
+
+  @override
+  void dispose() {
+    _songsSub?.cancel();
+    super.dispose();
+  }
+
   Future<void> _unfavorite(Song song) async {
     await ServiceLocator.songRepo.toggleFavorite(song.id);
-    await _load();
   }
 
   void _playAll() {

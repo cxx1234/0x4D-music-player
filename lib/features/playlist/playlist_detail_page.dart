@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
@@ -5,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../../core/constants/motion.dart';
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
+import '../../core/utils/logger.dart';
 import '../../widgets/cached_album_art.dart';
 import '../../l10n/l10n.dart';
 import '../../widgets/detail_header.dart';
@@ -31,21 +34,38 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
   bool _reorderMode = false;
   late String _name = widget.playlist.name;
 
+  StreamSubscription<List<Song>>? _songsSub;
+
   @override
   void initState() {
     super.initState();
-    _load();
+    // 实时查询：增删歌、拖动排序、外部文件变化后列表自动更新。
+    _songsSub = ServiceLocator.songRepo
+        .watchSongsInPlaylist(widget.playlist.id)
+        .listen(_applySongs, onError: _onSongsError);
   }
 
-  Future<void> _load() async {
-    final songs = await ServiceLocator.songRepo.getSongsInPlaylist(
-      widget.playlist.id,
-    );
+  void _applySongs(List<Song> songs) {
     if (!mounted) return;
     setState(() {
       _songs = songs;
       _loading = false;
     });
+  }
+
+  void _onSongsError(Object error, StackTrace stackTrace) {
+    AppLogger.error(
+      'DB',
+      'Playlist detail live query failed',
+      error,
+      stackTrace,
+    );
+  }
+
+  @override
+  void dispose() {
+    _songsSub?.cancel();
+    super.dispose();
   }
 
   void _playAll() {
@@ -73,16 +93,12 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       for (final s in ordered) s.id,
     ]);
     if (!mounted) return;
-    // 名称排序后退出手动排序模式，列表按新顺序呈现。
+    // 名称排序后退出手动排序模式，列表按新顺序呈现（新顺序由实时查询驱动）。
     if (_reorderMode) setState(() => _reorderMode = false);
-    await _load();
   }
 
   Future<void> _addSongs() async {
-    final added = await showAddSongsSheet(context, widget.playlist.id);
-    if (added != null && added > 0) {
-      await _load();
-    }
+    await showAddSongsSheet(context, widget.playlist.id);
   }
 
   Future<void> _exportM3u() async {
@@ -177,7 +193,6 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       widget.playlist.id,
       song.id,
     );
-    await _load();
   }
 
   Future<void> _onReorder(int oldIndex, int newIndex) async {
@@ -187,7 +202,6 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
       oldIndex,
       newIndex,
     );
-    await _load();
   }
 
   void _toggleReorderMode() {

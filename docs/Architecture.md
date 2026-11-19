@@ -72,6 +72,23 @@ Database / Audio Engine / File System
 * Business logic belongs to Services or Repositories.
 * Models remain immutable whenever possible.
 
+### Data freshness (live queries)
+
+Library data in the UI is reactive: browsing and detail pages subscribe to a drift
+`watch*` query through `SongRepository` (`watchAvailableSongs`, `watchAllAlbums`,
+`watchSongsByAlbum`, `watchSongsInPlaylist`, `watchFavoriteSongs`, …) instead of
+re-querying on their own. Any write — folder-watcher batch, scan, playlist edit,
+favourite toggle — is committed to SQLite, and drift re-emits the affected queries,
+so pages no longer need "reload when the tab becomes active" hooks.
+
+* `FolderWatcherService` is a **writer only**: it parses changed files and upserts
+  them. It does not drive UI refresh.
+* `PageViewModel.trackStream` owns the subscriptions and cancels them in `dispose`.
+* Playback-queue pruning hangs off the library query emission (the queue is player
+  state, not a database query).
+* Custom SQL aggregates used by a live query must declare `readsFrom`, otherwise
+  drift has no table dependency to invalidate them.
+
 ⸻
 
 ## Project Structure

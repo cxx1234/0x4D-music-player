@@ -76,3 +76,9 @@ app.*.map.json
 # Personal notes (not part of the project)
 RESUME-NOTES.md
 FLUTTER-NOTES.md
+
+# Product / resume documents (PM portfolio material, not part of the app)
+docs/Product-PRD.md
+docs/Competitive-Analysis.md
+docs/Metrics.md
+

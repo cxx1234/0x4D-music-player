@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 
 import '../../core/database/database.dart';
 import '../../core/database/song_sort_order.dart';
-import '../../core/services/folder_watcher_service.dart';
 import '../../core/services/library_scanner_service.dart';
 import '../../core/services/player_service.dart';
 import '../../core/services/service_locator.dart';
@@ -43,8 +42,8 @@ class LibraryViewModel extends PageViewModel {
   /// 扫描单飞守卫：startScan/forceScan/rescan/quickSync 共用，防并发双跑事务。
   bool _scanInProgress = false;
 
-  /// 文件夹监听的订阅：外部文件增删（去抖批量 flush 后）实时刷新歌曲列表。
-  StreamSubscription<FolderWatcherEvent>? _folderWatcherSub;
+  /// 歌曲列表实时查询的订阅（切换排序时重建）。
+  StreamSubscription<List<Song>>? _songsSub;
 
   LibraryScanState get scanState => _scanState;
   ScanProgress? get scanProgress => scanProgressNotifier.value;
@@ -99,25 +98,29 @@ class LibraryViewModel extends PageViewModel {
         ServiceLocator.player.playingNotifier,
       ]);
 
-  /// 幂等订阅文件夹监听事件：外部文件增删去抖批量落库后，实时刷新歌曲列表与
-  /// 播放队列（LibraryPage 保活常驻，靠它捕捉 watcher 驱动的变更）。
-  void _attachFolderWatcherListener() {
-    if (_folderWatcherSub != null) return;
-    _folderWatcherSub = ServiceLocator.folderWatcher.events.listen(
-      (_) => unawaited(_onFolderWatcherEvent()),
+  /// 订阅音乐库实时查询：扫描、文件夹监视、收藏切换等任何 songs 表写入都会
+  /// 触发重新发射，列表与播放队列随之更新 —— 不再依赖 watcher 事件手工重载。
+  void _startSongWatch() {
+    unawaited(_songsSub?.cancel());
+    _songsSub = trackStream(
+      ServiceLocator.songRepo.watchAvailableSongs(order: _sortOrder),
+      (songs) {
+        _songs = songs;
+        setLoading(false);
+        _syncQueueWithSongs(songs);
+        safeNotify();
+      },
     );
   }
 
-  void _detachFolderWatcherListener() {
-    _folderWatcherSub?.cancel();
-    _folderWatcherSub = null;
-  }
-
-  /// 外部文件变化已由 FolderWatcherService 落库：重载歌曲 + 同步播放队列。
-  Future<void> _onFolderWatcherEvent() async {
-    await _syncQueueWithLibrary();
-    await _loadSongs();
-    safeNotify();
+  /// 从播放队列剪掉库里已不存在的文件（新增/删除后保持队列与库一致）。
+  void _syncQueueWithSongs(List<Song> songs) {
+    final player = ServiceLocator.player;
+    // 空队列无需裁剪（pruneQueue 在空队列时会走 release 分支，避免每次发射都
+    // 白跑一趟引擎）。
+    if (player.queue.isEmpty) return;
+    final available = {for (final song in songs) song.filePath};
+    unawaited(player.pruneQueue(available));
   }
 
   // ─── Initialization ────────────────────────────────────
@@ -128,6 +131,11 @@ class LibraryViewModel extends PageViewModel {
   /// Resolves macOS security-scoped bookmarks first to restore sandbox
   /// file access across app restarts.
   Future<void> initialize() async {
+    _sortOrder = ServiceLocator.settings.songSortOrder;
+    // 先订阅：库里的歌曲立刻可用，不必等 quick sync 扫完（它会写库并触发
+    // 一次重新发射）。
+    _startSongWatch();
+
     final folders = ServiceLocator.settings.musicFolders;
     if (folders.isNotEmpty) {
       // 沙箱权限恢复已在 ServiceLocator.initialize() 完成（与 UI 解耦，
@@ -138,26 +146,16 @@ class LibraryViewModel extends PageViewModel {
       // sandbox permissions happen to be unavailable.
       await _quickSync(folders);
     }
-    _sortOrder = ServiceLocator.settings.songSortOrder;
-    _attachFolderWatcherListener();
-    await _loadSongs();
     safeNotify();
   }
 
-  /// 重新加载歌曲列表（排序或收藏变化后调用）。
-  Future<void> reloadSongs() async {
-    await _loadSongs();
-    safeNotify();
-  }
-
-  /// 切换排序方式并持久化到设置。
+  /// 切换排序方式并持久化到设置（重新订阅新排序的查询）。
   Future<void> setSortOrder(SongSortOrder order) async {
     if (_sortOrder == order) return;
     _sortOrder = order;
     safeNotify();
     await ServiceLocator.settings.setSongSortOrder(order);
-    await _loadSongs();
-    safeNotify();
+    _startSongWatch();
   }
 
   // ─── Scanning ──────────────────────────────────────────
@@ -231,8 +229,6 @@ class LibraryViewModel extends PageViewModel {
     ServiceLocator.folderWatcher.discardPendingUnder(folderPath);
     await ServiceLocator.songRepo.removeFolder(folderPath);
     await ServiceLocator.settings.removeMusicFolder(folderPath);
-    await _syncQueueWithLibrary();
-    await _loadSongs();
     safeNotify();
   }
 
@@ -286,8 +282,6 @@ class LibraryViewModel extends PageViewModel {
       );
     }
 
-    await _syncQueueWithLibrary();
-    await _loadSongs();
     safeNotify();
   }
 
@@ -320,17 +314,6 @@ class LibraryViewModel extends PageViewModel {
         result?.parsedFiles ?? const <String>{},
       );
     }
-    await _syncQueueWithLibrary();
-  }
-
-  /// 移除音乐库中已不存在的歌曲，保持播放队列与库一致。
-  Future<void> _syncQueueWithLibrary() async {
-    final available = await ServiceLocator.database.getAllFilePaths();
-    await ServiceLocator.player.pruneQueue(available.toSet());
-  }
-
-  Future<void> _loadSongs() async {
-    _songs = await ServiceLocator.songRepo.getAvailableSongs(order: _sortOrder);
   }
 
   void _startWatching(List<String> folders) {
@@ -339,11 +322,7 @@ class LibraryViewModel extends PageViewModel {
 
   @override
   void dispose() {
-    // 测试环境可能未初始化 ServiceLocator，需要判空。
-    if (ServiceLocator.isReady) {
-      _detachFolderWatcherListener();
-    }
     scanProgressNotifier.dispose();
-    super.dispose(); // 基类置 _disposed 并释放
+    super.dispose(); // 基类置 _disposed 并取消实时查询订阅
   }
 }

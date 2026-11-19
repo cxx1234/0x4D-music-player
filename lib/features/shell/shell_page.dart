@@ -74,11 +74,11 @@ class _ShellPageState extends State<ShellPage> {
           controller: widget.controller,
         );
       case NavigationItem.albums:
-        return AlbumsPage(active: active);
+        return const AlbumsPage();
       case NavigationItem.artists:
-        return ArtistsPage(active: active);
+        return const ArtistsPage();
       case NavigationItem.playlists:
-        return PlaylistPage(active: active, controller: widget.controller);
+        return PlaylistPage(controller: widget.controller);
       case NavigationItem.settings:
         return SettingsPage(controller: widget.controller, active: active);
     }

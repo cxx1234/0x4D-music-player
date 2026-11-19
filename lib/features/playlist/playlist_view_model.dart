@@ -1,52 +1,68 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart' hide Column;
 
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/viewmodels/page_view_model.dart';
 
-/// ViewModel for the Playlists browse page.
 class PlaylistsViewModel extends PageViewModel {
   List<Playlist> _playlists = [];
   Map<int, int> _songCounts = {};
   int _favoriteCount = 0;
 
+  bool _playlistsLoaded = false;
+  bool _songCountsLoaded = false;
+  bool _favoriteCountLoaded = false;
+
+  /// 播放列表首帧数据到达信号（供 [ensureLoaded] 等待）。
+  final Completer<void> _playlistsReady = Completer<void>();
+
   List<Playlist> get playlists => _playlists;
   int get favoriteCount => _favoriteCount;
-
-  /// 正在进行的加载（供 [ensureLoaded] 复用，避免与首载并发双跑）。
-  Future<void>? _inflight;
 
   /// 某个播放列表的可用歌曲数。
   int songCountFor(Playlist playlist) => _songCounts[playlist.id] ?? 0;
 
-  /// 记录正在进行的加载，返回完成时清空 [_inflight] 的包装 future。
-  Future<void> _track(Future<void> future) {
-    _inflight = future;
-    return future.whenComplete(() {
-      if (identical(_inflight, future)) _inflight = null;
+  /// 订阅播放列表 / 各列表歌曲数 / 收藏数的实时查询。
+  ///
+  /// 三份数据都到齐后才收起首载转圈：否则会先渲染一排「0 首」再跳成真实值。
+  void start() {
+    final repo = ServiceLocator.songRepo;
+    trackStream(repo.watchAllPlaylists(), (playlists) {
+      _playlists = playlists;
+      _playlistsLoaded = true;
+      if (!_playlistsReady.isCompleted) _playlistsReady.complete();
+      _finishLoadingIfReady();
+      safeNotify();
+    });
+    trackStream(repo.watchPlaylistSongCounts(), (counts) {
+      _songCounts = counts;
+      _songCountsLoaded = true;
+      _finishLoadingIfReady();
+      safeNotify();
+    });
+    trackStream(repo.watchFavoriteCount(), (count) {
+      _favoriteCount = count;
+      _favoriteCountLoaded = true;
+      _finishLoadingIfReady();
+      safeNotify();
     });
   }
 
-  /// 加载播放列表列表与"我的收藏"数量（供页面刷新，总是强制重查）。
-  Future<void> load() {
-    return _track(runLoad(_doLoad, hasData: _playlists.isNotEmpty));
+  void _finishLoadingIfReady() {
+    if (!_playlistsLoaded || !_songCountsLoaded || !_favoriteCountLoaded) {
+      return;
+    }
+    setLoading(false);
   }
 
-  Future<void> _doLoad() async {
-    _playlists = await ServiceLocator.songRepo.getAllPlaylists();
-    _songCounts = await ServiceLocator.songRepo.getPlaylistSongCounts();
-    _favoriteCount = await ServiceLocator.songRepo.getFavoriteCount();
-  }
-
-  /// 数据已就绪立即返回；否则等待正在进行的加载或补一次加载。
+  /// 播放列表数据已就绪立即返回；否则等待首帧到达。
   ///
   /// macOS 菜单动作（导出/导入）可能在页面首次构建、数据尚未加载完成时
   /// 到达，直接读 [_playlists] 会误判为空（如「没有可导出的播放列表」）。
-  /// 动作处理前先 await 本方法确保数据到位。
-  Future<void> ensureLoaded() {
-    if (_playlists.isNotEmpty) return Future.value();
-    return _inflight ?? _track(_doLoad());
-  }
+  Future<void> ensureLoaded() =>
+      _playlistsReady.isCompleted ? Future.value() : _playlistsReady.future;
 
   /// 新建播放列表，返回新 id。
   Future<int> createPlaylist(String name) async {
@@ -56,20 +72,24 @@ class PlaylistsViewModel extends PageViewModel {
     );
   }
 
-  Future<bool> renamePlaylist(int id, String name) async {
-    final ok = await ServiceLocator.songRepo.updatePlaylist(
+  Future<bool> renamePlaylist(int id, String name) {
+    return ServiceLocator.songRepo.updatePlaylist(
       PlaylistsCompanion(
         name: Value(name),
         updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
       ),
       id,
     );
-    await load();
-    return ok;
   }
 
-  Future<void> deletePlaylist(int id) async {
-    await ServiceLocator.songRepo.deletePlaylist(id);
-    await load();
+  Future<void> deletePlaylist(int id) =>
+      ServiceLocator.songRepo.deletePlaylist(id);
+
+  @override
+  void dispose() {
+    // 页面销毁后仍未拿到首帧（如启动即退出）：放行等待方，避免菜单动作
+    // 永远 await 在一个不会再完成的 Future 上。
+    if (!_playlistsReady.isCompleted) _playlistsReady.complete();
+    super.dispose();
   }
 }

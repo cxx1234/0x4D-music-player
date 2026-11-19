@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
-/// 页面 ViewModel 基类：统一「已销毁守卫 + 安全通知 + 首载/刷新 loading 模板」。
+import '../utils/logger.dart';
+
+/// 页面 ViewModel 基类：统一「已销毁守卫 + 安全通知 + 实时查询订阅」。
 ///
 /// 页面 State 持有 VM 实例：`initState` 里 `addListener`、`dispose` 里
 /// `removeListener` + `vm.dispose()`。VM 内异步方法（await 之后再通知）一律走
@@ -10,7 +14,10 @@ abstract class PageViewModel extends ChangeNotifier {
 
   bool _loading = true;
 
-  /// 是否正在首次加载（浏览页据此显示转圈；刷新不置位避免闪烁）。
+  /// 已订阅的实时查询（dispose 时统一取消，避免数据库流泄漏）。
+  final List<StreamSubscription<Object?>> _streamSubscriptions = [];
+
+  /// 是否正在首次加载（浏览页据此显示转圈；后续实时更新不置位避免闪烁）。
   bool get loading => _loading;
 
   @protected
@@ -25,30 +32,33 @@ abstract class PageViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 通用加载模板：无数据时置 loading 并通知；刷新（已有数据）不闪 loading；
-  /// `finally` 里无论成败都复位并通知。
-  ///
-  /// [hasData] 由调用方在发起加载前同步求值，决定是否显示首载转圈。
+  /// 订阅一条实时查询：数据变化 → [onData]；流报错记日志并保留上一帧数据
+  /// （页面不闪断）；VM 销毁时统一取消。
   @protected
-  Future<void> runLoad(
-    Future<void> Function() action, {
-    required bool hasData,
-  }) async {
-    if (!hasData) {
-      setLoading(true);
-      safeNotify();
-    }
-    try {
-      await action();
-    } finally {
-      setLoading(false);
-      safeNotify();
-    }
+  StreamSubscription<T> trackStream<T>(
+    Stream<T> stream,
+    void Function(T value) onData,
+  ) {
+    final subscription = stream.listen(
+      (value) {
+        if (_disposed) return;
+        onData(value);
+      },
+      onError: (Object e, StackTrace s) {
+        AppLogger.error('DB', 'Live query failed', e, s);
+      },
+    );
+    _streamSubscriptions.add(subscription);
+    return subscription;
   }
 
   @override
   void dispose() {
     _disposed = true;
+    for (final subscription in _streamSubscriptions) {
+      unawaited(subscription.cancel());
+    }
+    _streamSubscriptions.clear();
     super.dispose();
   }
 }
