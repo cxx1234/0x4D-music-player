@@ -588,3 +588,38 @@
 
 **别踩过的坑**：上沿做过"向底色渐隐"（`ShaderMask` + `dstIn`）—— 下层列表会从页面里
 双重曝光出来，且每帧一个全屏 `saveLayer`，已改成叠一层渐变/细线。
+
+## 18. 歌曲信息面板（2026-11-19）
+
+### 入口
+
+- 所有歌曲菜单的**最后一项**「歌曲信息」：音乐库 / 专辑详情 / 歌手详情 / 我的收藏 /
+  播放列表详情、队列右键菜单、正在播放信息卡的「更多」。
+- 入口签名一律 `showSongInfoDialog(context, songId)`：**只传 id**，不传 `Song` 实体。
+
+### 形态
+
+- 模态对话框，宽度上限 560，高度上限为屏幕高度的 80%，内容区独立滚动。
+- `Dialog(elevation: 0)` + `outlineVariant` 边线 + `surfaceContainerLow` 底色：
+  不引入 Material 阴影（与 §4.3 同一条 Impeller 约束）。
+- 头部：封面 72 + 标题（最多 2 行）+ 歌手 · 专辑；`isAvailable = 0` 时在头部
+  下方加一条 `errorContainer` 警告条。
+- 三段：文件 / 标签 / 播放。**值为空的行整行隐藏**，不显示 "—" 或空占位。
+- 文件路径可选中（`SelectableText`），右侧复制按钮；复制后 1.5s 内图标变勾。
+  不用 HUD 做回显：HUD 是全局 overlay，会被对话框盖住。
+
+### 架构约束（为将来迁移独立窗口留路）
+
+- `SongInfoView` 是**纯展示层**：只吃 `SongInfoData`（扁平 DTO）+ `onClose`，
+  不 import `ServiceLocator`、不查数据库、不从 `BuildContext` 取业务数据。
+- 数据一律由 `loadSongInfo(songId)`（`lib/features/song_info/song_info_loader.dart`）
+  现取；专辑艺术家来自 `albums.album_artist`（歌曲行没有该字段）。
+- 码率口径：一律 `averageBitrateBps()`（`fileSize × 8 ÷ 时长`），不要直接展示
+  `songs.bitrate`（FLAC 是 PCM 位率，见 `docs/Pitfalls.md` C17）。
+- Flutter 目前没有官方桌面多窗口 API；将来若换独立窗口（多 engine），把 DTO
+  序列化传过去、复用 `SongInfoView` 即可，入口不用改。
+
+### i18n 与格式化
+
+- 文案全部走 `songInfo*` 键；格式化函数在 `lib/core/utils/display_format.dart`
+  （单位保留拉丁字母；日期用 `MaterialLocalizations.formatMediumDate`）。

@@ -477,6 +477,19 @@
   `dart run tool/test_album_artist.dart`（或直接看歌曲信息卡的 Hz），Hi-Res ALAC
   若回落成 44100/48000 就是这个字段被读错了。
 
+### C17. 2026-11-19 `AudioMetadata.bitrate` 在 FLAC 上是 PCM 位率，不是文件码率
+
+- **症状**：界面直接展示 `songs.bitrate` 时，FLAC 恒显示 706 kbps（16-bit / 44.1 kHz）
+  或 1411 kbps（16-bit / 96 kHz），与压缩后的体积无关。
+- **根因**：fork 的 FLAC STREAMINFO 解析是 `bitrate = bitPerSample * sampleRate`，
+  即未压缩 PCM 位率；VBR MP3 的 `bitrate` 也只是某一帧的值。
+- **实测**：`test/music/幽閉サテライト - 大地に咲く旋律 (with senya).flac` 解析值
+  `705600 bps`；`36,544,379 B × 8 ÷ 280.013 s ≈ 1,044,077 bps`。
+- **修法**：显示一律用 `averageBitrateBps()`（`lib/core/utils/display_format.dart`），
+  只有算不出平均码率时才回退解析值。
+- **复发提示**：任何新界面要显示码率，先过这个函数；若 fork 以后修正了 FLAC 的
+  `bitrate` 语义，只改函数内部，不改调用点。
+
 ## D. 领域事故索引（细节留在原文档）
 
 | 症状 | 出处 |

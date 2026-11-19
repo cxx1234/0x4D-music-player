@@ -1046,6 +1046,126 @@
   "@songAddedQueue": {
     "description": "SnackBar after appending a song to the queue."
   },
+  "songInfoTitle": "Song Info",
+  "@songInfoTitle": {
+    "description": "Song menu item and the title of the song info dialog."
+  },
+  "songInfoFileSection": "File",
+  "@songInfoFileSection": {
+    "description": "Song info dialog: file details section title."
+  },
+  "songInfoTagSection": "Tags",
+  "@songInfoTagSection": {
+    "description": "Song info dialog: tag details section title."
+  },
+  "songInfoPlaybackSection": "Playback",
+  "@songInfoPlaybackSection": {
+    "description": "Song info dialog: playback statistics section title."
+  },
+  "songInfoFormat": "Format",
+  "@songInfoFormat": {
+    "description": "Song info row label: file format (MP3 / FLAC / M4A)."
+  },
+  "songInfoBitrate": "Average bitrate",
+  "@songInfoBitrate": {
+    "description": "Song info row label: file size divided by duration."
+  },
+  "songInfoSampleRate": "Sample rate",
+  "@songInfoSampleRate": {
+    "description": "Song info row label: sample rate in kHz."
+  },
+  "songInfoDuration": "Duration",
+  "@songInfoDuration": {
+    "description": "Song info row label: track duration."
+  },
+  "songInfoFileSize": "File size",
+  "@songInfoFileSize": {
+    "description": "Song info row label: size on disk."
+  },
+  "songInfoModifiedAt": "Modified",
+  "@songInfoModifiedAt": {
+    "description": "Song info row label: file modification date."
+  },
+  "songInfoAddedAt": "Added",
+  "@songInfoAddedAt": {
+    "description": "Song info row label: date the song entered the library."
+  },
+  "songInfoPath": "Path",
+  "@songInfoPath": {
+    "description": "Song info row label: absolute file path."
+  },
+  "songInfoTagTitle": "Title",
+  "@songInfoTagTitle": {
+    "description": "Song info row label: tag title."
+  },
+  "songInfoArtist": "Artist",
+  "@songInfoArtist": {
+    "description": "Song info row label: tag artist."
+  },
+  "songInfoAlbum": "Album",
+  "@songInfoAlbum": {
+    "description": "Song info row label: tag album."
+  },
+  "songInfoAlbumArtist": "Album artist",
+  "@songInfoAlbumArtist": {
+    "description": "Song info row label: tag album artist."
+  },
+  "songInfoYear": "Year",
+  "@songInfoYear": {
+    "description": "Song info row label: tag year."
+  },
+  "songInfoGenre": "Genre",
+  "@songInfoGenre": {
+    "description": "Song info row label: tag genre."
+  },
+  "songInfoTrackNumber": "Track",
+  "@songInfoTrackNumber": {
+    "description": "Song info row label: tag track number."
+  },
+  "songInfoDiscNumber": "Disc",
+  "@songInfoDiscNumber": {
+    "description": "Song info row label: tag disc number."
+  },
+  "songInfoEmbeddedLyrics": "Embedded lyrics",
+  "@songInfoEmbeddedLyrics": {
+    "description": "Song info row label: whether lyrics are embedded in the file."
+  },
+  "songInfoLyricsFile": "Lyrics file",
+  "@songInfoLyricsFile": {
+    "description": "Song info row label: sidecar .lrc file path."
+  },
+  "songInfoPlayCount": "Play count",
+  "@songInfoPlayCount": {
+    "description": "Song info row label: number of plays."
+  },
+  "songInfoFavorite": "Favorite",
+  "@songInfoFavorite": {
+    "description": "Song info row label: whether the song is liked."
+  },
+  "songInfoYes": "Yes",
+  "@songInfoYes": {
+    "description": "Song info boolean value: true."
+  },
+  "songInfoNo": "No",
+  "@songInfoNo": {
+    "description": "Song info boolean value: false."
+  },
+  "songInfoUnavailable": "This file is no longer available; it may have been moved or deleted outside the library.",
+  "@songInfoUnavailable": {
+    "description": "Song info warning when the scanned file is missing."
+  },
+  "songInfoCopyPath": "Copy path",
+  "@songInfoCopyPath": {
+    "description": "Song info button tooltip: copy the file path."
+  },
+  "songInfoCopied": "Copied",
+  "@songInfoCopied": {
+    "description": "Song info button tooltip after copying the path."
+  },
+  "songInfoClose": "Close",
+  "@songInfoClose": {
+    "description": "Song info dialog close button."
+  },
   "playlistCount": "{count, plural, =0{No playlists} =1{1 playlist} other{{count} playlists}}",
   "@playlistCount": {
     "description": "Playlists page subtitle count.",

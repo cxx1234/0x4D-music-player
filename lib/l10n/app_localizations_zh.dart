@@ -829,6 +829,96 @@ class AppLocalizationsZh extends AppLocalizations {
   String get songAddedQueue => '已添加到播放队列';
 
   @override
+  String get songInfoTitle => '歌曲信息';
+
+  @override
+  String get songInfoFileSection => '文件';
+
+  @override
+  String get songInfoTagSection => '标签';
+
+  @override
+  String get songInfoPlaybackSection => '播放';
+
+  @override
+  String get songInfoFormat => '格式';
+
+  @override
+  String get songInfoBitrate => '平均码率';
+
+  @override
+  String get songInfoSampleRate => '采样率';
+
+  @override
+  String get songInfoDuration => '时长';
+
+  @override
+  String get songInfoFileSize => '文件大小';
+
+  @override
+  String get songInfoModifiedAt => '修改时间';
+
+  @override
+  String get songInfoAddedAt => '加入音乐库';
+
+  @override
+  String get songInfoPath => '文件路径';
+
+  @override
+  String get songInfoTagTitle => '标题';
+
+  @override
+  String get songInfoArtist => '歌手';
+
+  @override
+  String get songInfoAlbum => '专辑';
+
+  @override
+  String get songInfoAlbumArtist => '专辑艺术家';
+
+  @override
+  String get songInfoYear => '年份';
+
+  @override
+  String get songInfoGenre => '流派';
+
+  @override
+  String get songInfoTrackNumber => '音轨';
+
+  @override
+  String get songInfoDiscNumber => '碟号';
+
+  @override
+  String get songInfoEmbeddedLyrics => '内嵌歌词';
+
+  @override
+  String get songInfoLyricsFile => '歌词文件';
+
+  @override
+  String get songInfoPlayCount => '播放次数';
+
+  @override
+  String get songInfoFavorite => '收藏';
+
+  @override
+  String get songInfoYes => '是';
+
+  @override
+  String get songInfoNo => '否';
+
+  @override
+  String get songInfoUnavailable => '文件已不可用，可能在音乐库外被移动或删除。';
+
+  @override
+  String get songInfoCopyPath => '复制路径';
+
+  @override
+  String get songInfoCopied => '已复制';
+
+  @override
+  String get songInfoClose => '关闭';
+
+  @override
   String playlistCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

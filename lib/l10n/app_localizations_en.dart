@@ -882,6 +882,97 @@ class AppLocalizationsEn extends AppLocalizations {
   String get songAddedQueue => 'Added to the queue';
 
   @override
+  String get songInfoTitle => 'Song Info';
+
+  @override
+  String get songInfoFileSection => 'File';
+
+  @override
+  String get songInfoTagSection => 'Tags';
+
+  @override
+  String get songInfoPlaybackSection => 'Playback';
+
+  @override
+  String get songInfoFormat => 'Format';
+
+  @override
+  String get songInfoBitrate => 'Average bitrate';
+
+  @override
+  String get songInfoSampleRate => 'Sample rate';
+
+  @override
+  String get songInfoDuration => 'Duration';
+
+  @override
+  String get songInfoFileSize => 'File size';
+
+  @override
+  String get songInfoModifiedAt => 'Modified';
+
+  @override
+  String get songInfoAddedAt => 'Added';
+
+  @override
+  String get songInfoPath => 'Path';
+
+  @override
+  String get songInfoTagTitle => 'Title';
+
+  @override
+  String get songInfoArtist => 'Artist';
+
+  @override
+  String get songInfoAlbum => 'Album';
+
+  @override
+  String get songInfoAlbumArtist => 'Album artist';
+
+  @override
+  String get songInfoYear => 'Year';
+
+  @override
+  String get songInfoGenre => 'Genre';
+
+  @override
+  String get songInfoTrackNumber => 'Track';
+
+  @override
+  String get songInfoDiscNumber => 'Disc';
+
+  @override
+  String get songInfoEmbeddedLyrics => 'Embedded lyrics';
+
+  @override
+  String get songInfoLyricsFile => 'Lyrics file';
+
+  @override
+  String get songInfoPlayCount => 'Play count';
+
+  @override
+  String get songInfoFavorite => 'Favorite';
+
+  @override
+  String get songInfoYes => 'Yes';
+
+  @override
+  String get songInfoNo => 'No';
+
+  @override
+  String get songInfoUnavailable =>
+      'This file is no longer available; it may have been moved or deleted outside the library.';
+
+  @override
+  String get songInfoCopyPath => 'Copy path';
+
+  @override
+  String get songInfoCopied => 'Copied';
+
+  @override
+  String get songInfoClose => 'Close';
+
+  @override
   String playlistCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

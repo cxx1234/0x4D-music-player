@@ -1,8 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:txvziwm/core/database/database.dart';
+import 'package:txvziwm/core/utils/display_format.dart';
 import 'package:txvziwm/features/player/player_page.dart';
-import 'package:txvziwm/widgets/song_info_card.dart';
 
 void main() {
   group('wideInfoCardWidth', () {
@@ -27,34 +26,21 @@ void main() {
     });
   });
 
-  group('fileTypeOf', () {
-    Song song(String fileName) => Song(
-      id: 1,
-      title: 'x',
-      filePath: '/a/$fileName',
-      fileName: fileName,
-      hasEmbeddedArt: 0,
-      hasEmbeddedLyrics: 0,
-      dateAdded: DateTime(2020),
-      playCount: 0,
-      isFavorite: 0,
-      isAvailable: 1,
-    );
-
+  group('fileTypeLabel', () {
     test('mp3 扩展名 → MP3', () {
-      expect(fileTypeOf(song('song.mp3')), 'MP3');
+      expect(fileTypeLabel('song.mp3'), 'MP3');
     });
 
     test('flac 扩展名 → FLAC', () {
-      expect(fileTypeOf(song('song.flac')), 'FLAC');
+      expect(fileTypeLabel('song.flac'), 'FLAC');
     });
 
     test('无扩展名返回空串', () {
-      expect(fileTypeOf(song('song')), '');
+      expect(fileTypeLabel('song'), '');
     });
 
     test('点号结尾返回空串', () {
-      expect(fileTypeOf(song('song.')), '');
+      expect(fileTypeLabel('song.'), '');
     });
   });
 }

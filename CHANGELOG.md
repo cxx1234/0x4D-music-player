@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-19
+
+### Added
+- Every song menu - the library, album, artist, playlist and favorites lists, the
+  queue's context menu and the now-playing card - now ends with "Song Info". It
+  opens a read-only dialog with the file details (format, average bitrate, sample
+  rate, duration, size, modified/added dates and the full path, selectable and
+  copyable), the tags (title, artist, album, album artist, year, genre, track and
+  disc number, lyrics source) and playback statistics (play count, favourite).
+  Empty values hide their row instead of showing a placeholder, and a file the
+  scanner has marked unavailable gets a warning banner.
+- The bitrate shown is the file's average (`size × 8 ÷ duration`), not the
+  parser's `bitrate` field: for FLAC that field is the PCM bit depth × sample
+  rate (always 705.6 kbps at 16-bit/44.1 kHz), which would misreport the file by
+  up to 40%. See `docs/Pitfalls.md` C17.
+- The dialog is only a shell around a pure `SongInfoView` fed by a flat
+  `SongInfoData` snapshot, and entries pass a song id rather than a `Song`
+  object, so the panel can later move into its own window without touching the
+  data layer (`docs/UI-Rules.md` §18).
+- Not covered yet, because the metadata reader does not expose them: bit depth,
+  channel count, and ALAC vs AAC for `.m4a` (shown as `M4A`); track/disc totals
+  and the language tag are parsed but not stored. Tracked in `docs/TODO.md` §5.
+
 ### Changed
 - Library screens now keep themselves up to date. The album grid, artist list,
   playlist list, the album/artist/playlist detail pages and 我的收藏 subscribe to

@@ -6,6 +6,7 @@ import '../../core/models/accent_color.dart';
 import '../../core/services/album_art_cache_service.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/app_locale.dart';
+import '../../core/utils/display_format.dart';
 import '../../l10n/app_localizations.dart';
 import '../../l10n/enum_labels.dart';
 import '../../l10n/l10n.dart';
@@ -132,13 +133,6 @@ class _SettingsPageState extends State<SettingsPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(context.l10n.settingsCoverCacheCleared(removed))),
     );
-  }
-
-  /// 字节数 → 人类可读（B/KB/MB）。
-  String _formatBytes(int bytes) {
-    if (bytes < 1024) return '$bytes B';
-    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   /// 主题行 leading 图标：跟随当前主题亮度 —— 深色显示月亮、浅色显示太阳。
@@ -710,7 +704,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 Text(
                   _cacheSizeBytes == null
                       ? '…'
-                      : _formatBytes(_cacheSizeBytes!),
+                      : formatFileSize(_cacheSizeBytes!),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

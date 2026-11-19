@@ -1490,6 +1490,186 @@ abstract class AppLocalizations {
   /// **'Added to the queue'**
   String get songAddedQueue;
 
+  /// Song menu item and the title of the song info dialog.
+  ///
+  /// In en, this message translates to:
+  /// **'Song Info'**
+  String get songInfoTitle;
+
+  /// Song info dialog: file details section title.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get songInfoFileSection;
+
+  /// Song info dialog: tag details section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Tags'**
+  String get songInfoTagSection;
+
+  /// Song info dialog: playback statistics section title.
+  ///
+  /// In en, this message translates to:
+  /// **'Playback'**
+  String get songInfoPlaybackSection;
+
+  /// Song info row label: file format (MP3 / FLAC / M4A).
+  ///
+  /// In en, this message translates to:
+  /// **'Format'**
+  String get songInfoFormat;
+
+  /// Song info row label: file size divided by duration.
+  ///
+  /// In en, this message translates to:
+  /// **'Average bitrate'**
+  String get songInfoBitrate;
+
+  /// Song info row label: sample rate in kHz.
+  ///
+  /// In en, this message translates to:
+  /// **'Sample rate'**
+  String get songInfoSampleRate;
+
+  /// Song info row label: track duration.
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get songInfoDuration;
+
+  /// Song info row label: size on disk.
+  ///
+  /// In en, this message translates to:
+  /// **'File size'**
+  String get songInfoFileSize;
+
+  /// Song info row label: file modification date.
+  ///
+  /// In en, this message translates to:
+  /// **'Modified'**
+  String get songInfoModifiedAt;
+
+  /// Song info row label: date the song entered the library.
+  ///
+  /// In en, this message translates to:
+  /// **'Added'**
+  String get songInfoAddedAt;
+
+  /// Song info row label: absolute file path.
+  ///
+  /// In en, this message translates to:
+  /// **'Path'**
+  String get songInfoPath;
+
+  /// Song info row label: tag title.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get songInfoTagTitle;
+
+  /// Song info row label: tag artist.
+  ///
+  /// In en, this message translates to:
+  /// **'Artist'**
+  String get songInfoArtist;
+
+  /// Song info row label: tag album.
+  ///
+  /// In en, this message translates to:
+  /// **'Album'**
+  String get songInfoAlbum;
+
+  /// Song info row label: tag album artist.
+  ///
+  /// In en, this message translates to:
+  /// **'Album artist'**
+  String get songInfoAlbumArtist;
+
+  /// Song info row label: tag year.
+  ///
+  /// In en, this message translates to:
+  /// **'Year'**
+  String get songInfoYear;
+
+  /// Song info row label: tag genre.
+  ///
+  /// In en, this message translates to:
+  /// **'Genre'**
+  String get songInfoGenre;
+
+  /// Song info row label: tag track number.
+  ///
+  /// In en, this message translates to:
+  /// **'Track'**
+  String get songInfoTrackNumber;
+
+  /// Song info row label: tag disc number.
+  ///
+  /// In en, this message translates to:
+  /// **'Disc'**
+  String get songInfoDiscNumber;
+
+  /// Song info row label: whether lyrics are embedded in the file.
+  ///
+  /// In en, this message translates to:
+  /// **'Embedded lyrics'**
+  String get songInfoEmbeddedLyrics;
+
+  /// Song info row label: sidecar .lrc file path.
+  ///
+  /// In en, this message translates to:
+  /// **'Lyrics file'**
+  String get songInfoLyricsFile;
+
+  /// Song info row label: number of plays.
+  ///
+  /// In en, this message translates to:
+  /// **'Play count'**
+  String get songInfoPlayCount;
+
+  /// Song info row label: whether the song is liked.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorite'**
+  String get songInfoFavorite;
+
+  /// Song info boolean value: true.
+  ///
+  /// In en, this message translates to:
+  /// **'Yes'**
+  String get songInfoYes;
+
+  /// Song info boolean value: false.
+  ///
+  /// In en, this message translates to:
+  /// **'No'**
+  String get songInfoNo;
+
+  /// Song info warning when the scanned file is missing.
+  ///
+  /// In en, this message translates to:
+  /// **'This file is no longer available; it may have been moved or deleted outside the library.'**
+  String get songInfoUnavailable;
+
+  /// Song info button tooltip: copy the file path.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy path'**
+  String get songInfoCopyPath;
+
+  /// Song info button tooltip after copying the path.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied'**
+  String get songInfoCopied;
+
+  /// Song info dialog close button.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get songInfoClose;
+
   /// Playlists page subtitle count.
   ///
   /// In en, this message translates to:

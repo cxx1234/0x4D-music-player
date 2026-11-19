@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../core/constants/motion.dart';
 import '../core/database/database.dart';
+import '../core/utils/display_format.dart';
 import '../l10n/l10n.dart';
 import 'cached_album_art.dart';
 import 'text_link.dart';
@@ -94,14 +95,6 @@ SongInfoCardLayout resolveSongInfoCardLayout({
   );
 }
 
-/// 从文件名扩展名推导文件类型（如 `song.mp3` → `MP3`；无扩展名返回空串）。
-String fileTypeOf(Song song) {
-  final name = song.fileName;
-  final dot = name.lastIndexOf('.');
-  if (dot < 0 || dot == name.length - 1) return '';
-  return name.substring(dot + 1).toUpperCase();
-}
-
 /// 歌曲信息卡片（正在播放页的信息模块，宽/窄/迷你三形态共享）。
 ///
 /// - 宽版（[isNarrow]=false）：纵排 —— cover 居中在上，title / 歌手·专辑 / 格式·采样率
@@ -151,8 +144,9 @@ class SongInfoCard extends StatelessWidget {
   );
 
   String get _metaText {
+    final fileType = fileTypeLabel(song.fileName);
     final parts = <String>[
-      if (fileTypeOf(song).isNotEmpty) fileTypeOf(song),
+      if (fileType.isNotEmpty) fileType,
       if (song.sampleRate != null) '${song.sampleRate} Hz',
     ];
     return parts.join(' | ');
