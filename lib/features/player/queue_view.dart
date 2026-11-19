@@ -6,6 +6,7 @@ import '../../l10n/app_localizations.dart';
 import '../../l10n/l10n.dart';
 import '../../widgets/context_menu.dart';
 import '../../widgets/song_tile.dart';
+import '../song_info/song_info_dialog.dart';
 import 'player_ui_state.dart';
 import 'player_view_model.dart';
 
@@ -293,7 +294,7 @@ class _QueueViewState extends State<QueueView> {
     }
   }
 
-  /// 队列行的右键菜单：只有「从队列移除」。
+  /// 队列行的右键菜单：「歌曲信息」+「从队列移除」。
   ///
   /// 没有「播放这首」——点行本身就是跳过去播（与歌曲行右键不含「播放」是同一条
   /// 理由）。菜单锚在行尾的菜单槽位，与歌曲行三点按钮同一位置。
@@ -301,14 +302,24 @@ class _QueueViewState extends State<QueueView> {
     final rowRect = overlayRectOf(rowContext);
     if (rowRect == null) return;
 
+    final queue = _displayQueue;
+    if (displayIndex < 0 || displayIndex >= queue.length) return;
+    final song = queue[displayIndex];
+
     final value = await showRowMenu<String>(
       context: rowContext,
       rowRect: rowRect,
       entries: [
+        PopupMenuItem(value: 'info', child: Text(context.l10n.songInfoTitle)),
         PopupMenuItem(value: 'remove', child: Text(context.l10n.queueRemove)),
       ],
     );
-    if (value != 'remove' || !mounted) return;
+    if (!mounted || value == null) return;
+    if (value == 'info') {
+      await showSongInfoDialog(context, song.id);
+      return;
+    }
+    if (value != 'remove') return;
     // 随机模式下展示位置 ≠ 逻辑下标，必须换算（与批量删除同一处理）。
     await vm.removeFromQueue(_toLogicalIndex(displayIndex));
   }

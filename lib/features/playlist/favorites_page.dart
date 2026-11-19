@@ -10,6 +10,7 @@ import '../../widgets/detail_header.dart';
 import '../../widgets/detail_top_bar.dart';
 import '../../widgets/play_all_button.dart';
 import '../../widgets/song_tile.dart';
+import '../song_info/song_info_dialog.dart';
 
 /// "我的收藏"详情页：布局与播放列表详情一致（详情块 + 播放全部 + 列表），可取消喜欢。
 class FavoritesPage extends StatefulWidget {
@@ -126,8 +127,12 @@ class _FavoritesPageState extends State<FavoritesPage> {
                               value: 'unfavorite',
                               child: Text(context.l10n.playerUnlike),
                             ),
+                            PopupMenuItem(
+                              value: 'info',
+                              child: Text(context.l10n.songInfoTitle),
+                            ),
                           ],
-                          onMenuSelected: (song, value) {
+                          onMenuSelected: (song, value) async {
                             if (value == 'play') {
                               ServiceLocator.player.playFromList(
                                 _songs,
@@ -135,6 +140,8 @@ class _FavoritesPageState extends State<FavoritesPage> {
                               );
                             } else if (value == 'unfavorite') {
                               _unfavorite(song);
+                            } else if (value == 'info') {
+                              await showSongInfoDialog(context, song.id);
                             }
                           },
                         );

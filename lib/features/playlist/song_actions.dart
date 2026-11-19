@@ -4,6 +4,7 @@ import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../l10n/app_localizations.dart';
 import '../../l10n/l10n.dart';
+import '../song_info/song_info_dialog.dart';
 import 'playlist_picker_sheet.dart';
 
 /// 歌曲"更多"菜单项。
@@ -32,6 +33,7 @@ List<PopupMenuEntry<String>> songMenuItems(AppLocalizations l10n, Song song) {
       value: 'favorite',
       child: Text(song.isFavorite == 1 ? l10n.playerUnlike : l10n.playerLike),
     ),
+    PopupMenuItem(value: 'info', child: Text(l10n.songInfoTitle)),
   ];
 }
 
@@ -44,7 +46,10 @@ List<PopupMenuEntry<String>> currentSongMenuItems(
   AppLocalizations l10n,
   Song song,
 ) {
-  return [PopupMenuItem(value: 'playlist', child: Text(l10n.playlistAddTo))];
+  return [
+    PopupMenuItem(value: 'playlist', child: Text(l10n.playlistAddTo)),
+    PopupMenuItem(value: 'info', child: Text(l10n.songInfoTitle)),
+  ];
 }
 
 /// 处理歌曲"更多"菜单点击。
@@ -68,6 +73,8 @@ Future<void> handleSongMenuAction(
     await _addToQueue(context, song, next: true);
   } else if (value == 'addQueue') {
     await _addToQueue(context, song, next: false);
+  } else if (value == 'info') {
+    await showSongInfoDialog(context, song.id);
   }
 }
 

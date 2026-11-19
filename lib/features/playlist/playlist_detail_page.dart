@@ -14,6 +14,7 @@ import '../../widgets/detail_header.dart';
 import '../../widgets/detail_top_bar.dart';
 import '../../widgets/play_all_button.dart';
 import '../../widgets/song_tile.dart';
+import '../song_info/song_info_dialog.dart';
 import 'add_songs_sheet.dart';
 import 'playlist_cover.dart';
 import 'playlist_io.dart';
@@ -424,12 +425,15 @@ class _PlaylistDetailPageState extends State<PlaylistDetailPage> {
           value: 'remove',
           child: Text(context.l10n.playlistRemoveFrom),
         ),
+        PopupMenuItem(value: 'info', child: Text(context.l10n.songInfoTitle)),
       ],
-      onMenuSelected: (song, value) {
+      onMenuSelected: (song, value) async {
         if (value == 'play') {
           ServiceLocator.player.playFromList(_songs, startIndex: index);
         } else if (value == 'remove') {
           _removeSong(song);
+        } else if (value == 'info') {
+          await showSongInfoDialog(context, song.id);
         }
       },
     );
