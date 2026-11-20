@@ -9,6 +9,7 @@ import '../../core/constants/motion.dart';
 import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/grid_layout.dart';
+import '../../core/utils/m3u_match.dart';
 import '../../core/utils/memoized_filter.dart';
 import '../../core/utils/search_util.dart';
 import '../../l10n/l10n.dart';
@@ -129,7 +130,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
     final filePath = files.isEmpty ? null : files.single.path;
     if (filePath == null || !mounted) return;
 
-    final M3uImportResult imported;
+    final M3uMatchReport imported;
     try {
       imported = await importM3uFromFile(filePath);
     } catch (e) {
@@ -161,7 +162,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
       showDragHandle: true,
       builder: (context) => _ImportTargetSheet(
         songs: imported.songs,
-        total: imported.total,
+        skipped: imported.skipped,
+        matchedByMetadata: imported.matchedByMetadata,
         defaultName: defaultName,
         playlists: _viewModel.playlists,
       ),
@@ -724,13 +726,15 @@ class _ImportTargetSheet extends StatelessWidget {
   static const int createNew = -1;
 
   final List<Song> songs;
-  final int total;
+  final int skipped;
+  final int matchedByMetadata;
   final String defaultName;
   final List<Playlist> playlists;
 
   const _ImportTargetSheet({
     required this.songs,
-    required this.total,
+    required this.skipped,
+    required this.matchedByMetadata,
     required this.defaultName,
     required this.playlists,
   });
@@ -738,6 +742,9 @@ class _ImportTargetSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final hintStyle = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -749,14 +756,20 @@ class _ImportTargetSheet extends StatelessWidget {
               style: theme.textTheme.titleMedium,
             ),
           ),
-          if (total > songs.length)
+          if (matchedByMetadata > 0)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text(
-                context.l10n.playlistImportUnmatched(total - songs.length),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+                context.l10n.playlistImportMatchedByMetadata(matchedByMetadata),
+                style: hintStyle,
+              ),
+            ),
+          if (skipped > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                context.l10n.playlistImportUnmatched(skipped),
+                style: hintStyle,
               ),
             ),
           ListTile(

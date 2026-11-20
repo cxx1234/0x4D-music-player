@@ -4,23 +4,10 @@ import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 
-import '../../core/database/database.dart';
 import '../../core/services/service_locator.dart';
 import '../../core/utils/logger.dart';
 import '../../core/utils/m3u.dart';
-
-/// M3U 导入结果。
-class M3uImportResult {
-  final List<Song> songs;
-
-  /// M3U 中解析出的路径条目总数。
-  final int total;
-
-  const M3uImportResult({required this.songs, required this.total});
-
-  /// 未匹配到库中歌曲的条目数。
-  int get skipped => total - songs.length;
-}
+import '../../core/utils/m3u_match.dart';
 
 /// 构建播放列表的 UTF-8 M3U8 字节内容（供 `file_picker` 的 `saveFile` 写入），
 /// 返回 (字节内容, 歌曲数)。
@@ -46,8 +33,11 @@ Future<int> exportPlaylistToFile(int playlistId, String filePath) async {
   return songs.length;
 }
 
-/// 从 [filePath] 导入 M3U/M3U8，按解析后的文件路径匹配库中歌曲。
-Future<M3uImportResult> importM3uFromFile(String filePath) async {
+/// 从 [filePath] 导入 M3U/M3U8，按「路径 → 名称 → 元数据」分级匹配库中歌曲。
+///
+/// 只为文件里的每条路径找出对应的**库中已有行**，不新增歌曲行、不改动文件。
+/// 匹配规则见 `matchM3uEntries`：跨设备路径不同时靠文件名与标签命中。
+Future<M3uMatchReport> importM3uFromFile(String filePath) async {
   List<int> bytes;
   try {
     bytes = await File(filePath).readAsBytes();
@@ -57,14 +47,32 @@ Future<M3uImportResult> importM3uFromFile(String filePath) async {
   }
   // 容错解码：非法 UTF-8 字节替换为 U+FFFD，避免解析崩溃。
   final content = utf8.decode(bytes, allowMalformed: true);
-  final rawPaths = parseM3u(content);
-  final baseDir = p.dirname(filePath);
+  final entries = parseM3u(content);
 
-  final songs = <Song>[];
-  for (final raw in rawPaths) {
-    final resolved = resolveM3uPath(raw, baseDir);
-    final song = await ServiceLocator.songRepo.getSongByFilePath(resolved);
-    if (song != null) songs.add(song);
+  // 一次取全库可用歌曲在内存建索引：替代逐条 SELECT，也顺带保证已删除文件
+  // （is_available = 0）不会被导入。
+  final library = await ServiceLocator.songRepo.getAvailableSongs();
+  final report = matchM3uEntries(
+    entries: entries,
+    library: library,
+    baseDir: p.dirname(filePath),
+    homeDir: Platform.environment['HOME'],
+  );
+
+  AppLogger.info(
+    'M3U',
+    'Import matched ${report.matches.length}/${report.total}: '
+        'path=${report.matchedByPath}, metadata=${report.matchedByMetadata}, '
+        'duplicates=${report.duplicates}, skipped=${report.skipped}',
+  );
+  for (final match in report.matches) {
+    // 非路径命中值得留痕：它能解释「为什么这首歌来自另一个路径」。
+    if (match.tier == M3uMatchTier.path) continue;
+    AppLogger.debug(
+      'M3U',
+      'Matched by ${match.tier.name}: ${match.entry.path} -> '
+          '${match.song.filePath}',
+    );
   }
-  return M3uImportResult(songs: songs, total: rawPaths.length);
+  return report;
 }

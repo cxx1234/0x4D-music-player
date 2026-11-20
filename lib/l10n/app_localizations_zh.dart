@@ -969,6 +969,16 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String playlistImportMatchedByMetadata(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 首按元数据匹配（路径不同）',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String playlistExported(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

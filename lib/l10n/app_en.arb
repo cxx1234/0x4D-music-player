@@ -1214,6 +1214,15 @@
       }
     }
   },
+  "playlistImportMatchedByMetadata": "{count, plural, =1{1 matched by metadata (path differs)} other{{count} matched by metadata (path differs)}}",
+  "@playlistImportMatchedByMetadata": {
+    "description": "Import target sheet: entries matched by tags because the file path differs on this device.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "playlistExported": "{count, plural, =1{Exported 1 song} other{Exported {count} songs}}",
   "@playlistExported": {
     "description": "SnackBar after exporting a playlist.",

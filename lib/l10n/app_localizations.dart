@@ -1700,6 +1700,12 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{Import 1 song} other{Import {count} songs}}'**
   String playlistImportSheetTitle(int count);
 
+  /// Import target sheet: entries matched by tags because the file path differs on this device.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 matched by metadata (path differs)} other{{count} matched by metadata (path differs)}}'**
+  String playlistImportMatchedByMetadata(int count);
+
   /// SnackBar after exporting a playlist.
   ///
   /// In en, this message translates to:

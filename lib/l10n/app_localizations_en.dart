@@ -1030,6 +1030,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String playlistImportMatchedByMetadata(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count matched by metadata (path differs)',
+      one: '1 matched by metadata (path differs)',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String playlistExported(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,

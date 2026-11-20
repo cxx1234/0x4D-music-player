@@ -44,9 +44,6 @@ class SongRepository {
   Future<List<Song>> getSongsByFolder(String folderPath) =>
       _db.getSongsByFolder(folderPath);
 
-  Future<Song?> getSongByFilePath(String filePath) =>
-      _db.getSongByFilePath(filePath);
-
   Future<Song?> getSongById(int id) => _db.getSongById(id);
 
   Future<int> getSongCount() => _db.getSongCount();

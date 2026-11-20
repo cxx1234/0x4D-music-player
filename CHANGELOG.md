@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Playlists can now be carried between devices. An exported `.m3u8` is a list of
+  absolute paths, and import matched them with a single exact `file_path` lookup,
+  so any difference in the music root - another user, another mount point, a
+  renamed folder - left every entry unmatched. Import now matches in tiers and
+  only accepts a tier when the candidate is unique: exact path; then a normalised
+  path (case-insensitive on macOS and Windows, with `~` and `file://` expanded);
+  then album folder plus file name with the extension ignored; then the metadata
+  fingerprint. Each tier falls through to the next instead of guessing, and
+  entries that stay ambiguous are reported as unmatched.
+- The same song can sit in a different container on each device (`.m4a` or mp3 on
+  the phone side, `.flac` at home). Path, extension, size and bitrate all differ
+  there, so matching ends at a fingerprint: the `#EXTINF` text compared
+  case- and punctuation-insensitively against `artist - title`, durations within
+  ±1 s with ±3 s as a fallback, and the album used to break ties. Exports now
+  write `#EXTINF:<secs>,Artist - Title` plus `#EXTART` / `#EXTALB` instead of the
+  title alone, and the parser keeps those lines, which gives the fingerprint
+  enough to work with.
+- When one logical song exists locally as several copies, a deterministic rule
+  picks one (lossless first, then the lowest id), so importing the same file
+  twice yields the same playlist.
+- The import sheet reports how many entries were matched by metadata rather than
+  by path, so "12 of 20 songs" no longer goes unexplained.
+
+### Changed
+- Import reads the library once and builds in-memory indexes instead of issuing
+  one `SELECT` per entry, which matters for long playlists on large libraries.
+
+### Fixed
+- Importing a playlist could silently add songs whose files were deleted. The
+  per-entry lookup ignored `is_available`, so a stale row matched and was
+  inserted, while the playlist view - which filters on `is_available = 1` - kept
+  it hidden. Matching now runs against available songs only.
+- Duplicate entries inside an `.m3u8` inflated the reported import count, because
+  the insert step skips songs already in the target playlist. They are now
+  de-duplicated before counting and reported separately from unmatched entries.
+
 ## [0.5.0] - 2026-11-19
 
 ### Added

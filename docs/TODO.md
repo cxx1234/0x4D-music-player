@@ -90,3 +90,63 @@
 - `lib/core/audio/platform_media_controls.dart` `create()` 加 Windows 分支
 - 验证：Windows 机器构建运行，任务栏媒体悬浮/系统媒体面板显示 Now Playing、媒体键控制播放
 - ⚠️ 风险：C++/WinRT 若 SDK 不含 `winrt` 头，改走 `cppwinrt` NuGet 或 `audio_service`
+
+## 4. 播放列表 M3U 导入的跨设备匹配（2026-11-03 登记，✅ 2026-11-20 完成）
+
+### 背景（当初的问题）
+- 导出只写 `#EXTINF:<秒>,<标题>` + 绝对路径，文件里没有库内 id / hash。
+- 导入把 `#` 行全丢掉，逐条走 `getSongByFilePath` 做 **file_path 字符串精确等值**，
+  路径不同即全部 unmatched（跨设备根目录、大小写、symlink、`~`、`file://`、
+  Windows 反斜杠）。
+- 同一首歌换容器（m4a / mp3 ↔ flac）时路径、扩展名、`file_size`、`bitrate`
+  全都不同，只有元数据与时长还能对上 —— 路径类匹配必然失效。
+
+### 已交付
+- `lib/core/utils/m3u.dart`：新增 `M3uEntry`（path / durationSeconds / label /
+  artist / album）；导出 `#EXTINF:<秒>,<歌手> - <标题>` 与 `#EXTART` / `#EXTALB`；
+  解析保留这些行（不再一律丢弃）；`resolveM3uPath` 支持 `~` 与 `file://`。
+- `lib/core/utils/m3u_match.dart`：分级匹配，每级只在候选唯一（或确认是同一首歌
+  的多份拷贝）时命中，否则落到下一级，最后计入未匹配：
+  1. 路径精确相等
+  2. 归一化路径（macOS / Windows 大小写不敏感）
+  3. 父目录名 + 去扩展名文件名（只换容器仍能命中）
+  4. 元数据指纹：标签归一化后比较（小写、折叠空白、去常见标点）；有 `#EXTART`
+     时按 歌手 + 标题；时长先 ±1s 再 ±3s 收窄；专辑用于去歧义
+  5. 标签只有标题时按标题匹配，**要求候选唯一**，否则判未匹配（不猜）
+- 多份拷贝的确定性取舍：无损（flac / alac / wav / aiff / ape / wv）优先，其次 id 最小。
+- 导入改为一次 `getAvailableSongs()` 建内存索引：替代逐条 SELECT，并保证
+  `is_available = 0`（文件已删）的行不会被导入。
+- 文件内重复条目去重后单独计数，不再虚报导入数、也不计入「未匹配」。
+- 导入弹层新增「N 首按元数据匹配（路径不同）」
+  （`playlistImportMatchedByMetadata`，中英两份 ARB）。
+
+### 未做（需产品决策，未列入本轮）
+- 导出增加「相对路径」选项：默认仍是绝对路径。
+- 每条多写一行自定义指纹注释（如 `#0X4D-FP:...`）做精确回环。`#EXTART` /
+  `#EXTALB` 已覆盖跨设备场景，暂不需要。
+- 若将来加 iOS target，无损优先会选到不可播格式，需按平台能力表调整。
+- 导出仍只写绝对路径：`fileSize` 类匹配需要磁盘 stat，跨设备拿不到，已放弃该层。
+
+### 验证
+- `flutter analyze`：无新增（仅既有 material 弃用 info 与 `tool/` 的 avoid_print）
+- `flutter test`：498 通过；新增用例见 `test/m3u_test.dart`（导出/解析/路径）
+  与 `test/m3u_match_test.dart`（分级优先级、唯一性、跨容器、多拷贝取舍、重复条目）
+
+## 5. 歌曲信息面板 — Phase 2（2026-11-19 登记，未实现）
+
+本轮只读、只用库内已有字段（见 `docs/UI-Rules.md` §18）。以下都要等
+`audio_metadata_reader` fork 或 schema 变更：
+
+- **位深 / 声道 / 编码**：`AudioMetadata` 不暴露。fork 内部已解析 FLAC 的位深
+  （STREAMINFO 的 5 bit 字段）与 ALAC magic cookie `offset 9`，但被丢弃；`.m4a`
+  的 `alac` / `mp4a` sample entry 类型也没有暴露 → 现在只能显示 `M4A`。
+  改 fork 后需升 pin + **强制重扫**（已有行的 `bitrate` / `sampleRate` 来自旧解析器）。
+- **音轨总数 / 碟总数 / 语言**：parser 有 `trackTotal` / `totalDisc` / `language`，
+  `songs` 表没存。加列要 schema v7，存量行需重扫回填；面板目前只显示 `3`，
+  回填后可在格式化层拼成 `3 / 12`。
+- **标签编辑**：fork 有 writer（ID3v2 / FLAC / MP4 / APE），但需要处理重扫、
+  封面缓存失效、`FolderWatcherService` 回声与失败回滚。
+- **在 Finder 中显示**：沙盒下 `Process.run('open')` 不可用，需原生
+  `NSWorkspace.shared.activateFileViewerSelecting` 通道。
+- **独立窗口**：Flutter 仍无官方桌面多窗口 API；迁移约束已写进
+  `docs/UI-Rules.md` §18（入口只传 songId、DTO 可序列化、View 不碰服务）。

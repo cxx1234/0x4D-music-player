@@ -148,10 +148,6 @@ class AppDatabase extends _$AppDatabase {
     return (select(songs)..where((t) => t.filePath.like(pattern))).get();
   }
 
-  Future<Song?> getSongByFilePath(String filePath) => (select(
-    songs,
-  )..where((t) => t.filePath.equals(filePath))).getSingleOrNull();
-
   /// 按 filePath 批量查询（restoreQueue 用，替代逐首单行 SELECT 的 N+1）。
   ///
   /// 返回顺序与 [filePaths] 一致，仅保留存在且可用的歌曲。
