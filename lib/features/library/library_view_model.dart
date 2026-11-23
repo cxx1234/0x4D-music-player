@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../../core/database/database.dart';
 import '../../core/database/song_sort_order.dart';
@@ -141,12 +142,20 @@ class LibraryViewModel extends PageViewModel {
       // 沙箱权限恢复已在 ServiceLocator.initialize() 完成（与 UI 解耦，
       // 见 ServiceLocator._restoreSandboxAccess）。
       _startWatching(folders);
+    }
+    // 歌曲走 watch 流，先让首屏出来。
+    safeNotify();
+
+    if (folders.isNotEmpty) {
+      // 首屏优先：quick sync 的同步段实测占住主 isolate 35–158ms，和首屏抢
+      // 就会表现为"启动后卡一下"。等这一帧画完再跑。
       // Quick check: scan without re-parsing existing files.
       // markMissing:false ensures we never falsely delete data even if
       // sandbox permissions happen to be unavailable.
+      await SchedulerBinding.instance.endOfFrame;
+      if (isDisposed) return;
       await _quickSync(folders);
     }
-    safeNotify();
   }
 
   /// 切换排序方式并持久化到设置（重新订阅新排序的查询）。

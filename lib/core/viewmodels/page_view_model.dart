@@ -20,6 +20,10 @@ abstract class PageViewModel extends ChangeNotifier {
   /// 是否正在首次加载（浏览页据此显示转圈；后续实时更新不置位避免闪烁）。
   bool get loading => _loading;
 
+  /// VM 是否已销毁：跨帧的异步流程（`endOfFrame` 之后再干活）据此早退。
+  @protected
+  bool get isDisposed => _disposed;
+
   @protected
   void setLoading(bool value) {
     _loading = value;

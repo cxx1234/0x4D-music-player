@@ -32,6 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by path, so "12 of 20 songs" no longer goes unexplained.
 
 ### Changed
+- The library paints before the quick sync instead of after it. That sync's
+  synchronous part measured 35-158 ms on a real library and competed with the
+  first frame on launch. The song list already comes from a live query, so the
+  first screen is notified before the work starts and the sync now runs once the
+  frame is done (guarded by `isDisposed`, since the view model can go away while
+  that frame is pending).
 - Lyrics are parsed on a background isolate now. The detection regexes, the
   bilingual split and the per-line parse all ran synchronously and held the UI
   isolate for tens of milliseconds right as the player page opened, which showed
