@@ -10,7 +10,6 @@
 | `docs/UI-Rules.md` | 改界面：布局、行高、当前播放高亮、HUD、菜单入口等约束 |
 | `docs/Architecture.md` | 分层与模块边界 |
 | `docs/Performance-Optimization.md` | 性能约束与已知热点 |
-| `docs/Lyrics-Rendering-Handover.md` | 动歌词渲染 / fork `flutter_lyric` 之前（实测数据 + 花钱点 + 验证方法） |
 | `docs/ErrorHandling.md` | 错误处理约定 |
 | `docs/I18n.md` | 改界面文案 / 新增语言 / ARB 与生成流程 |
 | `docs/TODO.md` | 未做的路线图 —— **不要顺手实现** |

@@ -77,6 +77,9 @@ app.*.map.json
 RESUME-NOTES.md
 FLUTTER-NOTES.md
 
+# 本地性能分析 / fork 交接文档（只在本机使用，不随仓库分发）
+docs/Lyrics-Rendering-Handover.md
+
 # Product / resume documents (PM portfolio material, not part of the app)
 docs/Product-PRD.md
 docs/Competitive-Analysis.md
