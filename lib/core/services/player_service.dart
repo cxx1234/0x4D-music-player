@@ -126,9 +126,8 @@ class PlayerService extends ChangeNotifier {
       const Duration(seconds: 1),
       (_) => _maybePersistPosition(),
     );
-    // 应用持久化的音量与循环设置（幂等）。
+    // 应用持久化的音量（幂等）。循环设置不需要同步给引擎——重复由本层实现。
     unawaited(_engine.setVolume(_volume));
-    unawaited(_engine.setLoopSingle(_repeatMode == PlayerRepeatMode.one));
   }
 
   final AudioEngine _engine;
@@ -242,6 +241,21 @@ class PlayerService extends ChangeNotifier {
     _engine.isPlaying,
   );
 
+  /// 播放意图（[isPlaying] 的真相），供 UI 低频重建。
+  ///
+  /// ⚠️ 三个播放态信号各有分工，**不要混用**：
+  /// * [playingNotifier]：引擎**真实**状态——换源空档、加载失败、完成回绕都会
+  ///   让它翻转；
+  /// * [playbackIntentNotifier]：**用户手势**脉冲，只给"后台恢复播放提示"这类
+  ///   必须由人手触发的功能使用；
+  /// * 本通知器：意图的**当前值**，用于 UI 重建。播放/暂停图标读的是意图
+  ///   （[isPlaying]），若 [uiListenable] 里没有它，就会出现"图标该翻转但
+  ///   没有任何订阅者被通知"——引擎态在完成回绕、淡出暂停时并不会跟着变，
+  ///   表现为按钮点了没反应。
+  late final ValueNotifier<bool> playIntentNotifier = ValueNotifier<bool>(
+    false,
+  );
+
   /// 用户播放意图翻转通知器（只在 [play] / [pause] 真正改变播放状态时触发）。
   ///
   /// ⚠️ 与 [playingNotifier] 分工不同，**不要混用**：[playingNotifier] 跟的是
@@ -253,13 +267,14 @@ class PlayerService extends ChangeNotifier {
 
   int _intentSeq = 0;
 
-  /// 供 UI 订阅的合并通知器：切歌 / 播放态翻转 / 队列结构变化。
+  /// 供 UI 订阅的合并通知器：切歌 / 引擎播放态 / 播放意图 / 队列结构变化。
   ///
   /// 播放进度（~200ms）**不**在此列——需要随进度刷新的 UI（如播放进度条）
   /// 应单独订阅本 service 或 [positionStream]，避免整页随进度连带重建。
   late final Listenable uiListenable = Listenable.merge([
     currentSongNotifier,
     playingNotifier,
+    playIntentNotifier,
     _playQueue,
   ]);
 
@@ -321,6 +336,17 @@ class PlayerService extends ChangeNotifier {
       playingNotifier.value = playing;
     }
     _notify();
+  }
+
+  /// 写入播放意图：所有 `_shouldPlay` 的赋值都必须走这里。
+  ///
+  /// 同步 [playIntentNotifier]（[uiListenable] 成员）是这条链的关键：
+  /// UI 的播放/暂停图标读的是意图，而"是否重建"由本通知器驱动。引擎态没变
+  /// （循环回绕、淡出暂停、完成事件之后）时，只有它能叫醒 UI。
+  void _setPlayIntent(bool value) {
+    if (_shouldPlay == value) return;
+    _shouldPlay = value;
+    playIntentNotifier.value = value;
   }
 
   // ─── 播放顺序表维护 ───────────────────────────────────
@@ -426,9 +452,8 @@ class PlayerService extends ChangeNotifier {
       final position = _resumePosition ?? Duration.zero;
       _resumePosition = null;
       // 记下本次的播放意图：跳过链 / 自动推进后续都以它为准（而非引擎的瞬时状态）。
-      _shouldPlay = autoPlay;
+      _setPlayIntent(autoPlay);
       await _engine.setVolume(_volume);
-      await _engine.setLoopSingle(_repeatMode == PlayerRepeatMode.one);
       await _engine.load(song.filePath, initialPosition: position);
       // 已被更新的一次加载取代（或队列已被切走）：放弃，由最新那次收尾。
       if (generation != _loadGeneration) return false;
@@ -464,30 +489,63 @@ class PlayerService extends ChangeNotifier {
 
   // ─── 引擎事件 ─────────────────────────────────────────
 
-  /// 单曲自然播完 → 推进队列。
+  /// 曲目播放完毕 → 按重复模式决定下一步。
+  ///
+  /// 引擎契约（[AudioEngine.completionStream]）：本事件表示"音频已停止、引擎不会
+  /// 自行恢复"。重复语义**全部**在这里实现——引擎永不循环。
   Future<void> _onCompleted() async {
     if (_advancing || _playQueue.isEmpty) return;
-    // 睡眠定时（「播完当前曲 / 播完当前播放列表」）的接管点。必须放在单曲循环
-    // 判定**之前**：这两者都是"在这一曲的末尾停下"，与重复模式无关。
+    // 睡眠定时（「播完当前曲 / 播完当前播放列表」）的接管点。必须放在重复模式
+    // 判定**之前**：两者都是"在这一曲的末尾停下"，与重复模式无关。
     final isLastInOrder = _currentSlot + 1 >= _order.length;
     if (onBeforeTrackAdvance?.call(isLastInOrder) ?? false) return;
-    // 单曲循环由引擎原生循环完成；部分引擎（audioplayers）仍会上报完成事件。
-    if (_repeatMode == PlayerRepeatMode.one) return;
+
     _advancing = true;
     try {
-      final slot = _currentSlot;
-      if (slot + 1 < _order.length) {
-        await _skipToSlot(slot + 1, autoPlay: true);
-      } else if (_repeatMode == PlayerRepeatMode.all) {
-        // 一轮播完：随机时重洗排列，从新排列的首曲继续。
-        if (_isShuffled) _rebuildOrder();
-        await _skipToSlot(0, autoPlay: true);
-      } else {
-        await _finishQueue();
+      switch (_repeatMode) {
+        case PlayerRepeatMode.one:
+          await _repeatCurrent();
+        case PlayerRepeatMode.all:
+          if (_currentSlot + 1 < _order.length) {
+            await _skipToSlot(_currentSlot + 1, autoPlay: true);
+          } else {
+            // 一轮播完：随机时重洗排列，从新排列的首曲继续。
+            if (_isShuffled) _rebuildOrder();
+            await _skipToSlot(0, autoPlay: true);
+          }
+        case PlayerRepeatMode.off:
+          if (_currentSlot + 1 < _order.length) {
+            await _skipToSlot(_currentSlot + 1, autoPlay: true);
+          } else {
+            await _finishQueue();
+          }
       }
     } finally {
       _advancing = false;
     }
+  }
+
+  /// 单曲循环的一遍重播：把当前曲目定位回开头再播放（不换源、不重建队列）。
+  ///
+  /// 刻意不走 [_loadCurrent]：同一文件重新 load 会多一次换源往返（空隙更长），
+  /// 还会制造一次"已加载 → 未加载 → 已加载"的窗口。
+  ///
+  /// 走 seek + play 这两个**正常入口**，才能让引擎自己把状态与进度流恢复
+  /// （`audioplayers` 在完成事件里会停掉进度定时器，而 resume() 会重新启动它）。
+  Future<void> _repeatCurrent() async {
+    final index = _loadedIndex;
+    if (index == null) return;
+    final generation = _loadGeneration;
+
+    await _engine.seek(Duration.zero);
+
+    // seek 期间用户可能切歌（加载代际变化）或暂停（意图变化）：过期就放弃。
+    if (generation != _loadGeneration || _loadedIndex != index) return;
+    if (!_shouldPlay) return;
+
+    await _engine.play();
+    // 立即通知一次：让进度条与歌词马上回到 0，不依赖引擎的下一个 tick。
+    notifyListeners();
   }
 
   /// 队尾播完（repeat off）收尾：停止播放、索引回到队列第一首、位置归零。
@@ -496,7 +554,7 @@ class PlayerService extends ChangeNotifier {
   /// 防御 macOS 上"seek 到已缓冲项后停在 completed"的中间事件）；现在只需释放
   /// 引擎并归零状态。
   Future<void> _finishQueue() async {
-    _shouldPlay = false;
+    _setPlayIntent(false);
     _markUnloaded();
     _resumePosition = Duration.zero;
     await _engine.release();
@@ -708,7 +766,7 @@ class PlayerService extends ChangeNotifier {
       _emitUserIntent(PlaybackIntent.play, wasAdvancing: wasAdvancing);
       return;
     }
-    _shouldPlay = true;
+    _setPlayIntent(true);
     await _engine.play();
     _emitUserIntent(PlaybackIntent.play, wasAdvancing: wasAdvancing);
   }
@@ -724,7 +782,7 @@ class PlayerService extends ChangeNotifier {
   /// 睡眠定时的淡出收尾也走这里：那不是用户手势，不该被"恢复播放提示"这类
   /// 订阅方当成一次暂停动作。
   Future<void> _pauseEngine() async {
-    _shouldPlay = false;
+    _setPlayIntent(false);
     await _engine.pause();
     // 暂停是最常见的"离开播放"动作，立即落盘当前位置。
     _persistPosition();
@@ -756,7 +814,7 @@ class PlayerService extends ChangeNotifier {
   }
 
   Future<void> stop() async {
-    _shouldPlay = false;
+    _setPlayIntent(false);
     _markUnloaded();
     _resumePosition = null;
     await _engine.release();
@@ -772,7 +830,7 @@ class PlayerService extends ChangeNotifier {
   /// 引擎只需提供 [AudioEngine.release]（停止且不可续），归零由本类负责；
   /// 这正是引擎接口“只做一件事”的收益。
   Future<void> stopPlayback() async {
-    _shouldPlay = false;
+    _setPlayIntent(false);
     _markUnloaded();
     _resumePosition = Duration.zero;
     await _engine.release();
@@ -955,12 +1013,14 @@ class PlayerService extends ChangeNotifier {
     _afterModeChanged();
   }
 
-  /// 模式变更后的统一收尾：落盘 + 重建顺序表 + 同步引擎循环设置。
+  /// 模式变更后的统一收尾：落盘 + 重建顺序表。
+  ///
+  /// 引擎无需同步任何"循环设置"——重复由本层在完成事件后实现
+  /// （见 [_onCompleted]/[_repeatCurrent]）。
   void _afterModeChanged() {
     _persistModes();
     // 随机开关变化 → 重建顺序表；当前曲目保持在首位（正在播的继续播）。
     _rebuildOrder(keepCurrentFirst: true);
-    unawaited(_engine.setLoopSingle(_repeatMode == PlayerRepeatMode.one));
     notifyListeners();
   }
 
@@ -1032,7 +1092,7 @@ class PlayerService extends ChangeNotifier {
 
   /// Clear the entire queue and stop playback.
   Future<void> clearQueue() async {
-    _shouldPlay = false;
+    _setPlayIntent(false);
     _playQueue.clear();
     _order = [];
     _markUnloaded();
@@ -1155,6 +1215,7 @@ class PlayerService extends ChangeNotifier {
     currentSongNotifier.dispose();
     loadedSongNotifier.dispose();
     playingNotifier.dispose();
+    playIntentNotifier.dispose();
     playbackIntentNotifier.dispose();
     super.dispose();
   }

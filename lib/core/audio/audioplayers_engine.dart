@@ -14,9 +14,11 @@ import 'audio_engine.dart';
 ///
 /// * **释放模式**：用 `ReleaseMode.stop` 而非默认的 `ReleaseMode.release`
 ///   —— 后者在播完后会释放资源并清空 source，导致"已加载"状态失真。
-/// * **完成事件**：`ReleaseMode.loop` 下 `onPlayerComplete` 仍会触发，这里**原样上报**
-///   ——"是否代表曲目结束"由调用方按重复模式判断（`PlayerService._onCompleted`
-///   在单曲循环时忽略它，而睡眠定时「播完当前曲」正好需要它）。
+/// * **不做循环**：恒定 `ReleaseMode.stop`。曾经的 `ReleaseMode.loop` 让音频
+///   继续播，但 audioplayers 自己的 complete 监听会把 Dart 侧状态置为
+///   `completed` 并 `_positionUpdater.stopAndUpdate()`（停掉进度定时器），
+///   而上层无从干预——表现为"有声音但进度/歌词/按钮冻结"。重复现在由
+///   `PlayerService` 用 seek + play 实现（不变量见 [AudioEngine.completionStream]）。
 /// * **seek 守卫**：没有 source 时引擎**不会**发送 `onSeekComplete`，而 Dart 侧
 ///   `seek()` 会等待该事件直到 30s 超时 —— 未加载时必须直接返回。
 /// * **进度节流**：默认 `FramePositionUpdater` 每帧调用一次原生方法（60 次/秒），
@@ -43,8 +45,8 @@ class AudioplayersEngine implements AudioEngine {
       (s) => _playingCtrl.add(s == PlayerState.playing),
     );
     _completionSub = _player.onPlayerComplete.listen((_) {
-      // ⚠️ 不做单曲循环过滤：调用方（PlayerService）本就按重复模式忽略完成事件，
-      // 而睡眠定时「播完当前曲」需要在单曲循环下也拿到这个事件。
+      // 恒定 ReleaseMode.stop，因此这里就是"音频已停止、不会自行恢复"，
+      // 与契约一致（见 AudioEngine.completionStream）。
       _completionCtrl.add(null);
     });
     _errorSub = _player.eventStream.listen(
@@ -73,7 +75,6 @@ class AudioplayersEngine implements AudioEngine {
       StreamController<AudioEngineError>.broadcast();
 
   String? _loadedPath;
-  bool _loopSingle = false;
 
   /// 释放模式是否已在原生侧应用过（免得每次切歌都重设一次）。
   bool _releaseModeApplied = false;
@@ -120,8 +121,8 @@ class AudioplayersEngine implements AudioEngine {
       // ⚠️ 无条件 pause：Dart 侧 state 会滞后（原生在播而 Dart 记为 paused），
       // 只按瞬时状态判断会在换源时留下交错的 playing/stopped 事件。
       await _player.pause();
-      // 释放模式必须先设：它决定播完后的行为。值未变时跳过（省一次原生
-      // 往返，正常由 PlayerService 在加载前调 setLoopSingle 维护）。
+      // 释放模式必须先设：它决定播完后的行为（恒定 stop，见类注释）。值未变时
+      // 跳过，省一次原生往返。
       await _applyReleaseMode();
       // ⚠️ 加载失败时 audioplayers 通过事件流报错（future 本身可能成功），
       // 因此这里不能只依赖 try/catch，还需 errorStream 兜底（已在构造中接线）。
@@ -203,29 +204,14 @@ class AudioplayersEngine implements AudioEngine {
     }
   }
 
-  @override
-  Future<void> setLoopSingle(bool loop) async {
-    // 值未变且已应用过 → 免去一次原生往返（每次切歌都会调本方法）。
-    if (loop == _loopSingle && _releaseModeApplied) return;
-    _loopSingle = loop;
-    try {
-      await _player.setReleaseMode(loop ? ReleaseMode.loop : ReleaseMode.stop);
-      _releaseModeApplied = true;
-    } catch (e, s) {
-      _emit('loop', e, s);
-    }
-  }
-
-  /// 惰性应用释放模式（[load] 里保证首次已有确定值，后续由 setLoopSingle 维护）。
+  /// 惰性应用释放模式：恒为 [ReleaseMode.stop]，只需成功一次。
   Future<void> _applyReleaseMode() async {
     if (_releaseModeApplied) return;
     try {
-      await _player.setReleaseMode(
-        _loopSingle ? ReleaseMode.loop : ReleaseMode.stop,
-      );
+      await _player.setReleaseMode(ReleaseMode.stop);
       _releaseModeApplied = true;
     } catch (e, s) {
-      _emit('loop', e, s);
+      _emit('releaseMode', e, s);
     }
   }
 

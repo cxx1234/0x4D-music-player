@@ -95,7 +95,7 @@ UI → PlayerViewModel → PlaybackService → AudioEngine → Platform implemen
 | `setAudioSources(..., initialIndex:, initialPosition:)` | `setSource(DeviceFileSource)` + `seek` + `resume` | 只能单曲 |
 | `addAudioSources` / `removeAudioSourceAt` / `insertAudioSources` / `moveAudioSource` | **无** | 退化为纯 `PlayQueue` 操作（✅ 本次收益） |
 | `seek(Duration.zero, index:)` / `seekToNext` / `seekToPrevious` | **无** | 自己实现（切 source） |
-| `LoopMode.off/one/all` | `ReleaseMode.stop/loop/stop` | 只有 one 可映射，off/all 自己判 |
+| `LoopMode.off/one/all` | `ReleaseMode.stop/loop/stop` | 全部自己判（2026-11-23 起 off/one/all 都走应用层，引擎恒定 `ReleaseMode.stop`，见附录 F） |
 | `setShuffleModeEnabled` + `shuffle()` + `effectiveIndices` | **无** | 自己维护排列 |
 | `playbackEventStream`（原子带 `currentIndex` + `processingState`） | `eventStream` / `onPlayerStateChanged` / `onPlayerComplete` | 事件模型不同，需重写状态机 |
 | `positionStream`（Dart 端 ~200ms） | `onPositionChanged`（默认**每帧**更新） | 必须换 `TimerPositionUpdater(200ms)` |
@@ -185,8 +185,8 @@ abstract class AudioEngine {
   Future<void> seek(Duration position);
   Future<void> setVolume(double volume);
 
-  /// 单曲循环由引擎实现（JustAudio 用原生 LoopMode.one；audioplayers 见 §8-Q2）。
-  Future<void> setLoopSingle(bool loop);
+  // 没有 setLoopSingle：引擎永不循环（2026-11-23 起）。重复由 PlayerService
+  // 在 completionStream 之后 seek(0) + play() 实现，见附录 F。
 
   bool get isPlaying;
   Duration get position;
@@ -285,9 +285,9 @@ abstract class AudioEngine {
 1. `pubspec.yaml`：`just_audio` / `just_audio_platform_interface` 改为 `audioplayers: ^6.8.1`（**保留 just_audio 至决策通过**，两者可共存，只在 A/B 阶段同时存在）。
 2. 新增 `lib/core/audio/audioplayers_engine.dart`，逐条处理附录 B 的坑：
    * `positionUpdater = TimerPositionUpdater(interval: 200ms)`
-   * `ReleaseMode.stop`（**不要用默认的 `release`**）+ 单曲循环用 `ReleaseMode.loop`；
-     loop 下的 completion **照原样上报**，由 `PlayerService` 按重复模式忽略（2026-09-19：
-     睡眠定时「播完当前曲」也依赖这个事件）
+   * `ReleaseMode.stop`（**不要用默认的 `release`**）；单曲循环**不交给引擎**
+     （2026-11-23 修正：`ReleaseMode.loop` 会让 Dart 侧停在 completed 并停掉进度
+     定时器，见附录 B #4 与附录 F）
    * `seek` 前置守卫（未加载 → 只记 pending，不调引擎）
    * 完成瞬间位置归零屏蔽（`_completedAt`）
    * 错误三路归并（`eventStream.onError` / `setSource*` future / `play()` future）→ `errorStream`
@@ -346,6 +346,7 @@ abstract class AudioEngine {
 **队列语义**
 - [ ] 队尾 repeat off 收尾：播完停、索引回 0、进度归零、**不自动播放**
 - [ ] repeat one（单曲循环）：无缝衔接、不误跳下一首
+- [ ] repeat one 回绕后：进度条继续走、歌词继续跟、播放/暂停按钮可点、控制中心进度不停
 - [ ] repeat all：末曲 → 首曲
 - [ ] 随机 + 随机循环：每轮重洗、回绕不重复、队列视图顺序 = 实际播放顺序
 - [ ] 队列视图自动定位到当前曲（`effectiveIndex` 契约）
@@ -398,7 +399,7 @@ abstract class AudioEngine {
 | # | 问题 | 建议 |
 |---|---|---|
 | Q1 | ~~gapless 是否是硬需求？~~ **已确认（2026-09-16）：非硬需求**（曲库中没有连续型专辑） | 不作为通过门槛；仍必须检查尾部截断与 padding（§0.4） |
-| Q2 | 单曲循环放引擎还是应用层？ | 接口保留 `setLoopSingle`；JustAudio 用原生 `LoopMode.one`；audioplayers 若 `ReleaseMode.loop` 有可闻空隙，则退化为应用层 `completion → seek 0 → play`，并在 ADR 里记录差异 |
+| Q2 | 单曲循环放引擎还是应用层？ | ~~接口保留 `setLoopSingle`~~ **已定（2026-11-23）：应用层**。`audioplayers` 从未声明 gapless，而原生循环的完成事件会触发它自己的 `state = completed` + `positionUpdater.stopAndUpdate()`，上层无法干预；详见附录 F |
 | Q3 | 「随机开启时隐藏『播放下一首』」这条规则 | 现在的依据是 just_audio 的随机槽位行为；Phase 2 后需按新排列语义重新定义（`song_actions.dart` 注释同步） |
 | Q4 | 是否顺手把 `PlayerService` 拆分？ | 建议：`PlayerService`（对外 API 不变）+ 内部队列状态机（`lib/core/services/queue_playback.dart`），便于单测 |
 | Q5 | 是否引入 Windows/Linux 支持？ | audioplayers 自带实现（Windows: Media Foundation；Linux: GStreamer，需系统开发库），属**额外收益**，但当前无 Windows 媒体控制实现，不构成本次迁移理由 |
@@ -449,7 +450,7 @@ abstract class AudioEngine {
 | 1 | 无队列：`AudioPlayer` 一次只能有一个 source | 官方 getting_started | 架构按 §4 单曲接口设计 |
 | 2 | darwin 用单 `AVPlayer` + `replaceCurrentItem`，**无预取、无 gapless** | `audioplayers_darwin/.../WrappedMediaPlayer.swift` | Q1 决策；否则双 player 方案 |
 | 3 | `onPlayerComplete` 内部先 `_platform.stop()`（位置归零），`ReleaseMode.release` 下还 `release()` 并置 `_source = null` | `audioplayers/lib/src/audioplayer.dart` | 完成态屏蔽 `_completedAt`；用 `ReleaseMode.stop` |
-| 4 | `ReleaseMode.loop` **也会**触发 `onPlayerComplete` | 同上（文档明示） | 引擎**不过滤**、原样上报；调用方按重复模式判断是否推进（`PlayerService._onCompleted` 在 one 时忽略，睡眠定时需要它） |
+| 4 | `ReleaseMode.loop` **也会**触发 `onPlayerComplete`，而**它自己的监听**会把 Dart 侧置为 `completed` 并 `positionUpdater.stopAndUpdate()` —— 原生循环仍在出声，Dart 侧的进度定时器却已停掉 | `audioplayers/lib/src/audioplayer.dart` 构造函数 + `audioplayers_darwin/.../WrappedMediaPlayer.swift onSoundComplete()` | ~~引擎原样上报、调用方忽略~~ **已废止**。忽略事件不等于忽略副作用：状态与定时器都在我们的回调之前就改了。现在循环由应用层实现（附录 F） |
 | 5 | `seek()` 会 `await onSeekComplete.first.timeout(30s)`；darwin 在**无 currentItem 时直接 return 且不发该事件** → 未加载时 seek 会挂到超时 | `audioplayer.dart` + `WrappedMediaPlayer.swift` | 引擎层加守卫：未加载只记 pending |
 | 6 | `onPositionChanged` 默认 `FramePositionUpdater`（**每帧一次平台调用**） | `audioplayer.dart` 构造函数 | 换 `TimerPositionUpdater(200ms)`，保住现有性能假设 |
 | 7 | `setSourceUrl` 失败走 event stream 的 `onError`，**future 仍成功**；`preparationTimeout` / `seekingTimeout` 是静态 30s | darwin 插件 `catch` 分支 | 错误三路归并；必要时调小 timeout |
@@ -527,7 +528,7 @@ class PreloadingAudioEngine implements AudioEngine { /* ... */ }
 `QueueView` 挂载时用 `uiState.queueScrollOffset`（上次会话遗留、属于 **65 首**的队列）去初始化
 一个只有 **42 首**的 `ScrollController`：偏移超出新内容范围 → 在 layout 中走
 `correctForNewDimensions` 纠正路径；同时点歌时引擎连发多次通知
-（`setVolume` → `setLoopSingle` → `load` → `duration` → `state` → `play`），放大了重建密度。
+（`setVolume` → `load` → `duration` → `state` → `play`），放大了重建密度。
 
 ### 加固（三处）
 
@@ -624,3 +625,61 @@ audioplayers 的 Dart 侧状态**滞后于原生**：`setSourceDeviceFile` 在"�
 
 > ⚠️ P2 属引擎时序问题，**无法用假引擎单测覆盖**（依赖 audioplayers 的真实状态机），
 > 只能靠真机复测；若再次出现，优先怀疑"状态滞后"这一类竞态。
+
+## 附录 F：重复语义归位到应用层（2026-11-23）
+
+### 事故
+
+单曲循环第一遍播完后，第二遍**有声音**，但进度条与歌词不动、播放/暂停按钮
+点一下没反应。根因链与实测细节见 `docs/Pitfalls.md` C18；要点是：把循环交给
+`audioplayers` 的 `ReleaseMode.loop` 后，它**自己的**完成监听先把 Dart 侧置为
+`completed` 并 `_positionUpdater.stopAndUpdate()`，而 `PlayerService` 照旧
+"按重复模式忽略完成事件"——没有人重启那条已经停掉的进度流。同时引擎态与
+播放意图分叉，而 `uiListenable` 只覆盖引擎态，于是 UI 永不重建。
+
+`just_audio` 时代不会暴露这个问题：它的 `lmLoopOne` 分支只 `seek` 并置
+`_justAdvanced`，**不上报 completed**，`playing` 与 Dart 侧进度流始终存活。
+
+### 决策
+
+**引擎永不循环；重复语义 100% 在 `PlayerService`。** `AudioEngine.setLoopSingle`
+已删除，`AudioplayersEngine` 恒定 `ReleaseMode.stop`。
+
+不选"每个适配器各自修好原生循环"的原因：那会把各家引擎的内部副作用固化进
+契约，换引擎时必须以"它循环时会不会上报、状态是否自洽"为前提逐个验证——
+这正是本次事故的成因。
+
+### 引擎契约不变量（换引擎必须逐条核对）
+
+| # | 不变量 | 违反时的症状 |
+|---|---|---|
+| I1 | `completionStream` = **音频已停止，且引擎不会自行恢复**；引擎不得自行循环 | 上层按"播完"推进队列，而声音还在响 |
+| I2 | 音频推进时 `positionStream` 必须持续上报；`completionStream` 之后的 `seek`/`play` 必须恢复上报 | 进度条/歌词冻结，媒体控制进度停摆 |
+| I3 | `isPlaying` 反映**真实**播放状态 | UI 与声音不一致（图标/按钮失效） |
+| I4 | 引擎没有 loop 能力 | 重复语义分裂成两套实现 |
+
+### 应用层循环的实现位置
+
+`PlayerService._onCompleted` → `_repeatCurrent`：`seek(Duration.zero)` →（校验
+加载代际与播放意图）→ `play()`。刻意**不**重新 `load`（省一次换源往返、避免
+"已加载 → 未加载"窗口），并复用既有的 `_loadGeneration` 挡住"重播尚未起播时
+用户切歌/暂停"的竞态。
+
+### 将来要 gapless 重复怎么办
+
+`mpv` 提供 `--gapless-audio`（默认 `weak`）与 `--loop-file=inf`（**seek 实现**，
+不重载），单曲循环场景大概率无缝。但它不是契约保证（原文明确写"设备保持打开的
+条件是实现细节，可能随版本变化"），且 `weak` 只保证编码参数一致时无缝，`yes`
+会把后续文件重采样到第一首的格式（对 Hi-Res 曲库不可接受）。
+
+因此若将来要吃这个能力，**必须扩展契约而不是偷用**：
+
+```dart
+/// 仅当实现同时保证「每遍结束仍上报 lap 事件」与「跨 lap position 连续存活」
+/// 时才允许返回 true；返回 true 时 PlayerService 关闭自己的重播逻辑。
+bool get supportsSeamlessRepeat => false;
+```
+
+mpv 的 lap 事件需由适配器合成（`loop-file` 的 seek 会发 `playback-restart`，
+或观察 `time-pos` 回绕）。`audioplayers` 永远返回 `false`。睡眠定时
+「播完当前曲」依赖 lap 事件，因此这是该扩展的硬前提。

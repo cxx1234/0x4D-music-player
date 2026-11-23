@@ -29,6 +29,8 @@ class AudioEngineError {
 /// * **刻意不含队列**：队列（顺序、索引、随机排列、重复模式、队尾收尾）全部由
 ///   `PlayQueue` / `PlayerService` 负责。引擎只负责"播放一个文件"，这正是消除
 ///   "引擎镜像队列"的结构性前提。
+/// * **永不循环**：引擎没有 loop 能力（重复由 `PlayerService` 在完成事件后用
+///   [seek] + [play] 实现）。不变量见 [completionStream] 与 [positionStream]。
 /// * **实现不得抛异常**：所有失败一律经 [errorStream] 上报，使调用方只有一条
 ///   错误处理路径。（调用方仍可防御性 try/catch，但不应依赖。）
 /// * **实现必须可多实例化**：构造函数无副作用、[dispose] 干净。将来若要做
@@ -41,7 +43,7 @@ abstract class AudioEngine {
   /// 当前已加载的文件路径；`null` 表示尚未加载（此时 [play] / [seek] 为 no-op）。
   String? get loadedPath;
 
-  /// 是否正在播放。
+  /// 是否正在播放（**真实**播放状态，不含播放意图）。
   bool get isPlaying;
 
   /// 当前位置；未加载时返回 [Duration.zero]。
@@ -79,14 +81,12 @@ abstract class AudioEngine {
   /// 设置音量（0.0~1.0）。应记住该值并在重新 [load] 后保持有效。
   Future<void> setVolume(double volume);
 
-  /// 单曲循环（对应 `RepeatMode.one`）。
-  ///
-  /// 允许实现用原生循环能力（无间隙）；此时**完成事件是否上报因引擎而异**
-  /// （`audioplayers` 的 `ReleaseMode.loop` 仍会上报），调用方需按重复模式自行
-  /// 忽略完成事件。
-  Future<void> setLoopSingle(bool loop);
-
   /// 播放进度（~200ms 量级）。
+  ///
+  /// ⚠️ **不变量**：音频在推进时必须持续上报；[completionStream] 之后调用方
+  /// 重新 [seek] / [play]，本流必须恢复上报。实现不得依赖"完成事件之后状态
+  /// 仍然自洽"以外的任何假设——上层（进度条、歌词、位置落盘）完全依赖这条流
+  /// 判断"播放是否还在走"。
   Stream<Duration> get positionStream;
 
   /// 时长变化（加载后可解析出时上报）。
@@ -95,10 +95,16 @@ abstract class AudioEngine {
   /// 播放/暂停状态翻转。
   Stream<bool> get playingStream;
 
-  /// 单曲**自然播完**（切歌 / 暂停 / 释放**不会**触发）。
+  /// 曲目播放完毕：**音频已停止，且引擎不会自行恢复**。
   ///
-  /// 单曲循环（[setLoopSingle]）下**每一遍结束仍会上报**：调用方需按重复模式
-  /// 自行决定是否推进队列（`PlayerService` 已处理）。
+  /// ⚠️ **不变量**：这不是"曲目结束"，而是"需要调用方决定下一步"。引擎
+  /// **永不自行循环**（重复语义全部由 `PlayerService` 负责）；收到本事件后
+  /// 引擎处于"已加载但未播放"的可重播状态，调用方可以 [seek] 回开头再 [play]。
+  ///
+  /// 这条约束是刻意收紧的：曾把单曲循环交给 `audioplayers` 的
+  /// `ReleaseMode.loop`，它虽然让音频继续播，却让 Dart 侧停在 completed 并
+  /// 停掉进度定时器，表现为"有声音但进度/歌词/按钮全冻住"（见
+  /// `docs/Pitfalls.md` C18）。
   Stream<void> get completionStream;
 
   /// 加载 / 播放 / 跳转失败。

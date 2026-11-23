@@ -48,6 +48,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one `SELECT` per entry, which matters for long playlists on large libraries.
 
 ### Fixed
+- Repeat-one stopped updating the interface after the first pass. The native
+  loop kept the audio playing, but `audioplayers` marks its own player as
+  `completed` on every lap and stops the position updater, so the progress bar
+  and the lyrics froze while the sound went on. The play/pause button also
+  stopped reacting: it shows the play *intent*, while the UI only rebuilt on the
+  engine's state, which had already gone false. Single-track repeat now lives in
+  `PlayerService` (seek to zero, then play) and the engine no longer loops, so
+  the position stream and the player state are restored through the normal
+  entry points. Repeat is therefore identical across engines, and `AudioEngine`
+  lost its `setLoopSingle` capability. The player UI now also rebuilds whenever
+  the play intent changes, not only when the engine state does.
 - Importing a playlist could silently add songs whose files were deleted. The
   per-entry lookup ignored `is_available`, so a stale row matched and was
   inserted, while the playlist view - which filters on `is_available = 1` - kept

@@ -225,7 +225,7 @@
 - ~~5.4 `settings.json` 写无串行化与非原子写（改**串行写链** + temp/rename **原子写**；2026-09-17 ✅）~~
 - ~~5.8 `settings.json` 解析零容错（损坏则备份为 `.corrupt` 并用默认设置继续启动；2026-09-17 ✅）~~
 - ~~5.6 切歌加载无串行/代际（新增 `_loadGeneration`：过期加载在 await 后直接丢弃；2026-09-17 ✅）~~
-- ~~5.7 引擎迁移沉淀问题（load 起始清空 `_duration/_position` + `_loadedIndex` 延后到加载成功；切歌先清零持久化位置；`setLoopSingle`/释放模式去重；`load()` 无条件 pause；`isPlaying`/`togglePlay` 改用播放意图 `_shouldPlay`；2026-09-17 ✅）~~
+- ~~5.7 引擎迁移沉淀问题（load 起始清空 `_duration/_position` + `_loadedIndex` 延后到加载成功；切歌先清零持久化位置；释放模式去重；`load()` 无条件 pause；`isPlaying`/`togglePlay` 改用播放意图 `_shouldPlay`；2026-09-17 ✅）~~
 
 ### 5.3 位置每几秒整份重写 `play_queue.json`
 - 位置：`PlayerService` 的位置落盘（1s tick → 5s 节流）；`PlayQueue.save()` 每次写全部 `filePaths`（千首歌可百 KB）。

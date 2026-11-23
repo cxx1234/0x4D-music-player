@@ -93,18 +93,66 @@ void main() {
     expect(player.isPlaying, isTrue);
   });
 
-  test('repeat one：完成事件被忽略（循环由引擎原生能力完成）', () async {
+  test('repeat one：完成事件后由应用层定位回开头并重新起播', () async {
     await player.playFromList([_song(1), _song(2)]);
     player.toggleSingleRepeat();
-    expect(engine.loopSingle, isTrue);
 
     final loadsBefore = engine.loads.length;
+    final playsBefore = engine.playCalls;
+    final positions = <Duration>[];
+    final positionSub = player.positionStream.listen(positions.add);
+    addTearDown(positionSub.cancel);
+
     engine.complete();
     await pumpEventQueue();
 
     expect(player.currentIndex, 0);
-    expect(engine.loads.length, loadsBefore, reason: '不应因完成事件重新加载');
-    expect(engine.loopSingle, isTrue);
+    expect(engine.loads.length, loadsBefore, reason: '重播不应重新加载同一文件');
+    expect(engine.seeks.last, Duration.zero, reason: '应定位回开头');
+    expect(engine.playCalls, playsBefore + 1, reason: '应重新起播');
+    expect(player.isPlaying, isTrue);
+    expect(player.playingNotifier.value, isTrue, reason: '引擎播放态应恢复');
+    expect(player.isAdvancing, isTrue);
+
+    // 关键回归：真实引擎播完会停掉进度上报，重播后必须重新存活。
+    positions.clear();
+    engine.setPosition(const Duration(seconds: 3));
+    await pumpEventQueue();
+    expect(positions, [const Duration(seconds: 3)]);
+    expect(player.position, const Duration(seconds: 3));
+  });
+
+  test('repeat one：重播定位途中用户切歌 → 过期的重播被放弃', () async {
+    await player.playFromList([_song(1), _song(2)]);
+    player.toggleSingleRepeat();
+
+    engine.seekDelay = const Duration(milliseconds: 40);
+    engine.complete();
+    await player.next();
+    final playsAfterNext = engine.playCalls;
+
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await pumpEventQueue();
+
+    expect(player.currentIndex, 1);
+    expect(engine.loads.last, '/music/2.mp3');
+    expect(engine.playCalls, playsAfterNext, reason: '过期重播不应再起播');
+  });
+
+  test('repeat one：重播定位途中用户暂停 → 不重新起播', () async {
+    await player.playFromList([_song(1), _song(2)]);
+    player.toggleSingleRepeat();
+
+    engine.seekDelay = const Duration(milliseconds: 40);
+    engine.complete();
+    await player.pause();
+    final playsAfterPause = engine.playCalls;
+
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    await pumpEventQueue();
+
+    expect(player.isPlaying, isFalse);
+    expect(engine.playCalls, playsAfterPause, reason: '暂停后不应被重播顶回播放');
   });
 
   test('随机：任意编辑操作后播放顺序仍是一组合法排列', () async {

@@ -54,8 +54,5 @@ class SilentAudioEngine implements AudioEngine {
   Future<void> setVolume(double volume) async => this.volume = volume;
 
   @override
-  Future<void> setLoopSingle(bool loop) async {}
-
-  @override
   Future<void> dispose() async {}
 }

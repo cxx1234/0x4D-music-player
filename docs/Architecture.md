@@ -156,8 +156,21 @@ The UI must never directly call the audio library or any platform API.
 
 Implemented as a single-track `AudioEngine` (`lib/core/audio/audio_engine.dart`,
 with `AudioplayersEngine` as the only implementation). The engine plays **one file
-at a time**; queue sequencing, shuffle order, repeat modes and auto-skip live in
-`PlayerService`. See `AudioEngine-Migration.md`.
+at a time** and **never loops**; queue sequencing, shuffle order, repeat modes and
+auto-skip live in `PlayerService`. See `AudioEngine-Migration.md`.
+
+The engine contract carries two invariants that the rest of the app relies on:
+
+* `completionStream` means "audio has stopped and the engine will not resume on
+  its own". Repeat is implemented above it: on a completion in repeat-one,
+  `PlayerService` seeks to zero and plays the same file again.
+* `positionStream` must keep reporting while audio advances, and must come back
+  after a `seek`/`play` that follows a completion.
+
+Do not push looping back into an engine: `audioplayers`' native loop keeps the
+audio going while leaving its Dart side in `completed` and stopping the position
+updater, so progress, lyrics and the play button all freeze (see
+`Pitfalls.md` C18).
 
 ### Sleep timer (session-only)
 
@@ -172,10 +185,10 @@ kinds and is **never persisted** (重启即失效):
   the button then shows no countdown, it shows the waiting mode.
 * **end of track / end of queue** — registers
   `PlayerService.onBeforeTrackAdvance`, which is consulted *before* the queue
-  advances and **before** the repeat-one check, so "停在这一曲末尾" also works
-  under 单曲循环. The engine reports `completionStream` even with
-  `ReleaseMode.loop`; deciding whether that means "track finished" is
-  `PlayerService`'s job, not the engine's.
+  advances and **before** the repeat mode is applied, so "停在这一曲末尾" also
+  works under 单曲循环. The hook sits before repeat precisely because repeat-one
+  now restarts the track from the app layer; ordering it later would restart
+  playback first.
 
 The UI (`SleepTimerButton` in the player page's `PlayerBar`) and the notice
 SnackBar (`app.dart`) only read `ServiceLocator.sleepTimer` state — they contain no

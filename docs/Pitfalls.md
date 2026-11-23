@@ -490,6 +490,33 @@
 - **复发提示**：任何新界面要显示码率，先过这个函数；若 fork 以后修正了 FLAC 的
   `bitrate` 语义，只改函数内部，不改调用点。
 
+### C18. 2026-11-23 audioplayers 原生循环：声音在放，Dart 侧却停在 completed
+
+- **症状**：单曲循环第一遍播完，第二遍有声音，但**进度条与歌词冻结**、
+  播放/暂停按钮一直显示「暂停」且点一下没反应（点第二下才生效）。
+- **根因**（两层，互相独立）：
+  1. `audioplayers` 的 `AudioPlayer` 构造函数里注册了**它自己的**完成监听：
+     `state = PlayerState.completed` + `_positionUpdater?.stopAndUpdate()`。
+     `ReleaseMode.loop` 下原生（`WrappedMediaPlayer.onSoundComplete()`）只是
+     `seek(0)` + `resume()` 继续出声，**Dart 侧不知情**，进度定时器于是永久停摆
+     （只有 `resume()` 会重新 `start()`）。`PlayerService` 在单曲循环时按设计
+     忽略完成事件，因此也没有人重启它。
+  2. `isPlaying`/按钮图标读的是播放**意图**（`_shouldPlay`），而 UI 重建的触发源
+     `uiListenable` 只有引擎态 `playingNotifier`。完成事件把引擎态置为 false 后，
+     用户点暂停得到的是 false → false，通知器不变 → ViewModel 不重建 → 图标不动。
+- **修法**：
+  1. 删除 `AudioEngine.setLoopSingle`，引擎恒定 `ReleaseMode.stop`；单曲循环由
+     `PlayerService._repeatCurrent` 用 `seek(0)` + `play()` 实现（走正常入口，
+     引擎自己会恢复状态与进度流）。
+  2. 新增 `playIntentNotifier`（`_shouldPlay` 的镜像）并加入 `uiListenable`。
+- **护栏**：`AudioEngine.completionStream` 的不变量注释；
+  `test/player_service_queue_test.dart` 的 repeat-one 三条用例；
+  `test/player_service_ui_listenable_test.dart`；
+  假引擎 `FakeAudioEngine.complete()` 复现"停进度上报"。
+- **复发提示**：任何"把循环交给引擎"的想法先看
+  `docs/AudioEngine-Migration.md` 附录 F。判据只有一条：**完成事件之后，
+  引擎的 Dart 侧状态与进度流还活着吗？** 如果不确定，就不该把语义交给它。
+
 ## D. 领域事故索引（细节留在原文档）
 
 | 症状 | 出处 |
