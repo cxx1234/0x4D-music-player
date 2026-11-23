@@ -32,6 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by path, so "12 of 20 songs" no longer goes unexplained.
 
 ### Changed
+- Lyrics are parsed on a background isolate now. The detection regexes, the
+  bilingual split and the per-line parse all ran synchronously and held the UI
+  isolate for tens of milliseconds right as the player page opened, which showed
+  up as a visible gap before its first frame. A result that arrives after the
+  song changed is discarded, and an environment that refuses isolates falls back
+  to parsing inline, so lyrics never go missing.
 - Import reads the library once and builds in-memory indexes instead of issuing
   one `SELECT` per entry, which matters for long playlists on large libraries.
 

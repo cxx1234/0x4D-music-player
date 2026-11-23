@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_lyric/flutter_lyric.dart';
@@ -225,7 +226,8 @@ class LyricsViewModel with WidgetsBindingObserver {
       controller.progressSource = _progressSource;
     }
 
-    _loadLyricText(content);
+    await _loadLyricText(content, generation: generation);
+    if (generation != _loadGeneration) return;
     loadStateNotifier.value = LyricLoadState.ready;
   }
 
@@ -304,16 +306,36 @@ class LyricsViewModel with WidgetsBindingObserver {
     }
   }
 
-  /// 把歌词文本加载进 flutter_lyric。
-  void _loadLyricText(String content) {
-    final parsed = parseLyricContent(
-      content,
-      // 翻译副行：翻译开关开启 且 界面语言为中文才显示（英文界面暂未提供
-      // 英文翻译源，隐藏中文翻译副行）。
-      includeTranslation: _showTranslation && _isChineseUi(),
-    );
+  /// 把歌词文本加载进 flutter_lyric；解析放到后台 isolate。
+  ///
+  /// 正则探测 + 双语拆分 + 逐行 parse 全是同步的，实测会在**帧外**占住 UI
+  /// isolate 数十毫秒（进播放页那一下的 `gap`），而这一步与渲染无关。
+  /// `LyricDocument` / `LyricLine` / `LyricWord` 都是纯数据，可跨 isolate 传递。
+  Future<void> _loadLyricText(String content, {required int generation}) async {
+    // 翻译副行：翻译开关开启 且 界面语言为中文才显示（英文界面暂未提供
+    // 英文翻译源，隐藏中文翻译副行）。
+    final includeTranslation = _showTranslation && _isChineseUi();
+    final parsed = await _parseOffIsolate(content, includeTranslation);
+    // 解析期间切歌 / 重载了翻译：丢弃过期结果。
+    if (generation != _loadGeneration) return;
     hasTranslationNotifier.value = parsed.hasTranslation;
     controller.loadDocument(parsed.document);
+  }
+
+  /// 后台 isolate 解析；起不来（受限环境）时退回同步，保证歌词不会丢。
+  Future<({LyricDocument document, bool hasTranslation})> _parseOffIsolate(
+    String content,
+    bool includeTranslation,
+  ) async {
+    try {
+      return await Isolate.run(
+        () =>
+            parseLyricContent(content, includeTranslation: includeTranslation),
+      );
+    } catch (e, s) {
+      AppLogger.warning('Lyric', 'Isolate parse failed, parsing inline', e, s);
+      return parseLyricContent(content, includeTranslation: includeTranslation);
+    }
   }
 
   /// 读取内嵌歌词，带内存缓存 + 文件修改时间时效。
